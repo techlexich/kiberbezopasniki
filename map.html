@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Навигатор по городу (OpenStreetMap)</title>
+    <!-- Подключение Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        #panel {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Навигатор по городу (OpenStreetMap)</h1>
+    <div id="map"></div>
+    <div id="panel">
+        <label for="start">Начальная точка:</label>
+        <input type="text" id="start" placeholder="Введите начальную точку">
+        <label for="end">Конечная точка:</label>
+        <input type="text" id="end" placeholder="Введите конечную точку">
+        <button onclick="calculateRoute()">Построить маршрут</button>
+    </div>
+
+    <!-- Подключение Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Подключение Leaflet Routing Machine -->
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script>
+        let map;
+        let control;
+
+        function initMap() {
+            // Инициализация карты
+            map = L.map('map').setView([55.7558, 37.6176], 12); // Центр карты (Москва)
+
+            // Добавление слоя OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+        }
+
+        function calculateRoute() {
+            const start = document.getElementById("start").value;
+            const end = document.getElementById("end").value;
+
+            // Удаляем предыдущий маршрут, если он есть
+            if (control) {
+                map.removeControl(control);
+            }
+
+            // Используем Leaflet Routing Machine для построения маршрута
+            control = L.Routing.control({
+                waypoints: [
+                    L.latLng(start.split(',')[0], start.split(',')[1]), // Начальная точка
+                    L.latLng(end.split(',')[0], end.split(',')[1])     // Конечная точка
+                ],
+                routeWhileDragging: true,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1' // Используем OSRM
+                })
+            }).addTo(map);
+        }
+
+        // Инициализация карты при загрузке страницы
+        initMap();
+    </script>
+</body>
+</html>
