@@ -3,45 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Навигатор по городу (OpenStreetMap)</title>
-    <!-- Подключение Leaflet CSS -->
+    <title>Навигатор с прозрачным интерфейсом</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #helpBtn {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 25px;
+            background: transparent;
+            border: 2px solid #333;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 16px;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+        
+        #helpBtn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        #instructionModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 1001;
+            backdrop-filter: blur(1px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        #closeBtn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: transparent;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #333;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+        
+        #closeBtn:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        
         #map {
-            height: 500px;
+            height: 100vh;
             width: 100%;
         }
-        #panel {
-            margin-top: 10px;
+        
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            background: rgba(245, 245, 245, 1);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        #controls input {
+            padding: 10px 15px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            min-width: 220px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        #controls button {
+            padding: 10px 25px;
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        #controls button:hover {
+            background: rgba(69, 160, 73, 0.9);
+        }
+        
+        .instruction-content {
+            padding: 10px;
+            line-height: 1.7;
+        }
+        
+        .instruction-content h2 {
+            margin-top: 5px;
+            color: #333;
+        }
+        
+        .instruction-content p {
+            margin: 12px 0;
+            color: #444;
         }
     </style>
 </head>
 <body>
-    <h1>Навигатор по городу (OpenStreetMap)</h1>
+    <button id="helpBtn">Инструкция</button>
+    
+    <div id="instructionModal">
+        <button id="closeBtn">✕</button>
+        <div class="instruction-content">
+            <h2>Инструкция по использованию навигатора</h2>
+            <p>1. Введите координаты начальной точки в формате "широта,долгота" (например: 55.7558,37.6176)</p>
+            <p>2. Введите координаты конечной точки в том же формате</p>
+            <p>3. Нажмите кнопку "Построить маршрут"</p>
+            <p>4. На карте отобразится оптимальный маршрут между точками</p>
+            <p>5. Вы можете перетаскивать точки маршрута для его изменения</p>
+        </div>
+    </div>
+    
     <div id="map"></div>
-    <div id="panel">
-        <label for="start">Начальная точка:</label>
-        <input type="text" id="start" placeholder="Введите начальную точку">
-        <label for="end">Конечная точка:</label>
-        <input type="text" id="end" placeholder="Введите конечную точку">
+    <div id="controls">
+        <input type="text" id="start" placeholder="Начальная точка (широта,долгота)">
+        <input type="text" id="end" placeholder="Конечная точка (широта,долгота)">
         <button onclick="calculateRoute()">Построить маршрут</button>
     </div>
 
-    <!-- Подключение Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Подключение Leaflet Routing Machine -->
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <script>
-        let map;
-        let control;
+        let map, routeControl;
 
         function initMap() {
-            // Инициализация карты
-            map = L.map('map').setView([55.7558, 37.6176], 12); // Центр карты (Москва)
-
-            // Добавление слоя OpenStreetMap
+            map = L.map('map').setView([55.7558, 37.6176], 12);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution: '© OpenStreetMap'
             }).addTo(map);
         }
 
@@ -49,25 +167,46 @@
             const start = document.getElementById("start").value;
             const end = document.getElementById("end").value;
 
-            // Удаляем предыдущий маршрут, если он есть
-            if (control) {
-                map.removeControl(control);
+            if (!start || !end) {
+                alert("Пожалуйста, введите начальную и конечную точки");
+                return;
             }
 
-            // Используем Leaflet Routing Machine для построения маршрута
-            control = L.Routing.control({
-                waypoints: [
-                    L.latLng(start.split(',')[0], start.split(',')[1]), // Начальная точка
-                    L.latLng(end.split(',')[0], end.split(',')[1])     // Конечная точка
-                ],
-                routeWhileDragging: true,
-                router: L.Routing.osrmv1({
-                    serviceUrl: 'https://router.project-osrm.org/route/v1' // Используем OSRM
-                })
-            }).addTo(map);
+            try {
+                if (routeControl) map.removeControl(routeControl);
+                
+                routeControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(start.split(',')[0], start.split(',')[1]),
+                        L.latLng(end.split(',')[0], end.split(',')[1])
+                    ],
+                    routeWhileDragging: true,
+                    router: L.Routing.osrmv1({
+                        serviceUrl: 'https://router.project-osrm.org/route/v1'
+                    }),
+                    lineOptions: {
+                        styles: [{color: '#3388ff', opacity: 0.7, weight: 6}]
+                    },
+                    show: false
+                }).addTo(map);
+                
+                routeControl.show();
+            } catch (e) {
+                alert("Неправильный формат координат. Пример: 55.7558,37.6176");
+            }
         }
 
-        // Инициализация карты при загрузке страницы
+        // Управление модальным окном
+        const helpBtn = document.getElementById('helpBtn');
+        const modal = document.getElementById('instructionModal');
+        const closeBtn = document.getElementById('closeBtn');
+        
+        helpBtn.addEventListener('click', () => modal.style.display = 'block');
+        closeBtn.addEventListener('click', () => modal.style.display = 'none');
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
+
         initMap();
     </script>
 </body>
