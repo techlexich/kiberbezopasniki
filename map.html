@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Навигатор с прозрачным интерфейсом</title>
+    <title>Навигатор с прозрачным интерфейсом и метками</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body {
@@ -39,12 +39,12 @@
             transform: translate(-50%, -50%);
             width: 80%;
             max-width: 500px;
-            background: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.75);
             border-radius: 15px;
             padding: 25px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             z-index: 1001;
-            backdrop-filter: blur(1px);
+            backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
         
@@ -80,15 +80,22 @@
             bottom: 0;
             left: 0;
             right: 0;
-            padding: 15px;
-            background: rgba(245, 245, 245, 1);
+            padding: 15px 10px;
+            background: rgba(245, 245, 245, 0.85);
             display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
+            flex-direction: column;
             gap: 12px;
             z-index: 1000;
             backdrop-filter: blur(2px);
             border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         
         #controls input {
@@ -141,20 +148,28 @@
             <p>3. Нажмите кнопку "Построить маршрут"</p>
             <p>4. На карте отобразится оптимальный маршрут между точками</p>
             <p>5. Вы можете перетаскивать точки маршрута для его изменения</p>
+            <p>6. Для добавления метки введите координаты и нажмите "Добавить метку"</p>
         </div>
     </div>
     
     <div id="map"></div>
     <div id="controls">
-        <input type="text" id="start" placeholder="Начальная точка (широта,долгота)">
-        <input type="text" id="end" placeholder="Конечная точка (широта,долгота)">
-        <button onclick="calculateRoute()">Построить маршрут</button>
+        <div class="input-group">
+            <input type="text" id="start" placeholder="Начальная точка (широта,долгота)">
+            <input type="text" id="end" placeholder="Конечная точка (широта,долгота)">
+            <button onclick="calculateRoute()">Построить маршрут</button>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="markerPosition" placeholder="Координаты метки (широта,долгота)">
+            <button onclick="addMarker()">Добавить метку</button>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <script>
-        let map, routeControl;
+        let map, routeControl, markers = [];
 
         function initMap() {
             map = L.map('map').setView([55.7558, 37.6176], 12);
@@ -196,7 +211,45 @@
             }
         }
 
-        // Управление модальным окном
+        function addMarker() {
+            const coords = document.getElementById("markerPosition").value;
+            
+            if (!coords) {
+                alert("Введите координаты для метки");
+                return;
+            }
+            
+            try {
+                const [lat, lng] = coords.split(',').map(Number);
+                
+                clearMarkers();
+                
+                const marker = L.marker([lat, lng], {
+                    draggable: true
+                }).addTo(map);
+                
+                marker.bindPopup(`Метка<br>Широта: ${lat.toFixed(6)}<br>Долгота: ${lng.toFixed(6)}`).openPopup();
+                
+                map.setView([lat, lng], 15);
+                
+                markers.push(marker);
+                
+                marker.on('dragend', function() {
+                    const newPos = marker.getLatLng();
+                    marker.setPopupContent(`Метка<br>Широта: ${newPos.lat.toFixed(6)}<br>Долгота: ${newPos.lng.toFixed(6)}`);
+                    document.getElementById("markerPosition").value = `${newPos.lat},${newPos.lng}`;
+                });
+                
+            } catch (e) {
+                alert("Неправильный формат координат. Пример: 55.7558,37.6176");
+            }
+        }
+        
+        function clearMarkers() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+        }
+
         const helpBtn = document.getElementById('helpBtn');
         const modal = document.getElementById('instructionModal');
         const closeBtn = document.getElementById('closeBtn');
