@@ -214,7 +214,7 @@
 <body>
     <div id="map"></div>
     
-    <button id="feed-button" class="control-button">Лента</button>
+    <form action="/app/frontend/tape.html"><button id="feed-button" class="control-button">Лента</button></form>
     <button id="filters-button" class="control-button">Фильтры</button>
     <button id="profile-button" class="control-button">Профиль</button>
     
@@ -390,13 +390,6 @@
             registerPassword.value = '';
             registerPasswordRepeat.value = '';
         }
-        
-        feedButton.addEventListener('click', () => {
-            // Закрываем все модальные окна при нажатии на ленту
-            hideModal(filtersModal);
-            hideModal(profileModal);
-            alert('Лента будет здесь!');
-        });
         
         filtersButton.addEventListener('click', () => {
             // Переключаем модальное окно фильтров
