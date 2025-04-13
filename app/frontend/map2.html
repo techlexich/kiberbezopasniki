@@ -38,7 +38,7 @@
         }
         
         #feed-button {
-            left: calc(55px); /* Половина расстояния от кнопки фильтров */
+            left: calc(55px);
         }
         
         #filters-button {
@@ -72,7 +72,8 @@
         }
         
         #filters-modal {
-            left: calc(20px + 2.5 * 90px);
+            left: 140px; /* Под кнопкой "Фильтры" */
+            width: 300px;
         }
         
         #profile-modal {
@@ -300,26 +301,26 @@
         <div id="login-form" class="auth-form">
             <button class="back-button" id="back-from-login">&larr; Назад</button>
             <h3>Вход</h3>
-            <input type="text" placeholder="Email или логин">
-            <input type="password" placeholder="Пароль">
-            <button>Войти</button>
+            <input type="text" placeholder="Email или логин" id="login-email">
+            <input type="password" placeholder="Пароль" id="login-password">
+            <button id="login-button">Войти</button>
         </div>
         
         <div id="register-form" class="auth-form">
             <button class="back-button" id="back-from-register">&larr; Назад</button>
             <h3>Регистрация</h3>
-            <input type="text" placeholder="Email">
-            <input type="text" placeholder="Логин">
-            <input type="password" placeholder="Пароль">
-            <input type="password" placeholder="Повторите пароль">
-            <button>Зарегистрироваться</button>
+            <input type="text" placeholder="Email" id="register-email">
+            <input type="text" placeholder="Логин" id="register-login">
+            <input type="password" placeholder="Пароль" id="register-password">
+            <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
+            <button id="register-button">Зарегистрироваться</button>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Инициализация карты
-        const map = L.map('map').setView([55.751244, 37.618423], 13);
+        const map = L.map('map').setView([56.835184, 60.609573], 13);
         
         // Добавление слоя OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -343,6 +344,16 @@
         const registerForm = document.getElementById('register-form');
         const backFromLogin = document.getElementById('back-from-login');
         const backFromRegister = document.getElementById('back-from-register');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        
+        // Поля ввода
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const registerEmail = document.getElementById('register-email');
+        const registerLogin = document.getElementById('register-login');
+        const registerPassword = document.getElementById('register-password');
+        const registerPasswordRepeat = document.getElementById('register-password-repeat');
         
         function showModal(modal) {
             modal.style.display = 'block';
@@ -358,24 +369,47 @@
             }, 300);
         }
         
+        function toggleModal(modal) {
+            if (modal.style.display === 'block' && modal.classList.contains('show')) {
+                hideModal(modal);
+            } else {
+                showModal(modal);
+            }
+        }
+        
         function resetAuthForms() {
             authOptions.style.display = 'block';
             loginForm.classList.remove('active');
             registerForm.classList.remove('active');
+            
+            // Очищаем поля ввода
+            loginEmail.value = '';
+            loginPassword.value = '';
+            registerEmail.value = '';
+            registerLogin.value = '';
+            registerPassword.value = '';
+            registerPasswordRepeat.value = '';
         }
         
         feedButton.addEventListener('click', () => {
+            // Закрываем все модальные окна при нажатии на ленту
+            hideModal(filtersModal);
+            hideModal(profileModal);
             alert('Лента будет здесь!');
         });
         
         filtersButton.addEventListener('click', () => {
+            // Переключаем модальное окно фильтров
+            toggleModal(filtersModal);
+            // Закрываем профиль, если он открыт
             hideModal(profileModal);
-            showModal(filtersModal);
         });
         
         profileButton.addEventListener('click', () => {
+            // Переключаем модальное окно профиля
+            toggleModal(profileModal);
+            // Закрываем фильтры, если они открыты
             hideModal(filtersModal);
-            showModal(profileModal);
             resetAuthForms();
         });
         
@@ -404,6 +438,23 @@
         
         backFromRegister.addEventListener('click', () => {
             resetAuthForms();
+        });
+        
+        // Очистка полей при нажатии кнопок "Войти" и "Зарегистрироваться"
+        loginButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Здесь должна быть логика входа
+            alert('Вход выполнен!');
+            resetAuthForms();
+            hideModal(profileModal);
+        });
+        
+        registerButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Здесь должна быть логика регистрации
+            alert('Регистрация завершена!');
+            resetAuthForms();
+            hideModal(profileModal);
         });
         
         // Закрытие модальных окон при клике вне их области
