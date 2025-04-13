@@ -11,12 +11,13 @@ from sqlalchemy.orm import sessionmaker
                             #localhost:5432 — адрес сервера и порт
 
                             #auth_db — название базы данных
-# Подключение к auth_db
+                            # Подключение к auth_db
 AUTH_DATABASE_URL = "postgresql://app_user:password@localhost:5432/auth_db"
 auth_engine = create_engine(AUTH_DATABASE_URL) ## Создание движка для content_db
 AuthSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=auth_engine)
-
-# Подключение к content_db
+                            #если надо подключиться более безопасно лучше пароль хранить 
+                            # в переменной окружения
+                            # Подключение к content_db
 CONTENT_DATABASE_URL = "postgresql://app_user:password@localhost:5432/content_db"
 content_engine = create_engine(CONTENT_DATABASE_URL)
 ContentSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=content_engine)
