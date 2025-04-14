@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON MAP | Интерактивная карта</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+            filter: brightness(0.8) contrast(1.2) hue-rotate(-5deg) saturate(1.5);
+        }
+
+        /* Стили для перекрашивания карты */
+        .leaflet-tile {
+            filter: hue-rotate(180deg) invert(90%) contrast(120%) brightness(0.7) saturate(1.2) !important;
+        }
+
+        .leaflet-container {
+            background-color: #000 !important;
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(0, 0, 0, 0.7) !important;
+            color: #aaa !important;
+        }
+
+        .leaflet-control-attribution a {
+            color: #ff00aa !important;
+        }
+
+        .control-button {
+            position: absolute;
+            top: 20px;
+            padding: 10px 20px;
+            background-color: rgba(20, 20, 20, 0.8);
+            border: 1px solid #ff00aa;
+            border-radius: 25px;
+            color: #ff00aa;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(255, 0, 170, 0.3);
+            text-shadow: 0 0 5px rgba(255, 0, 170, 0.3);
+            backdrop-filter: blur(5px);
+        }
+
+        .control-button:hover {
+            background-color: rgba(255, 0, 170, 0.2);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 0, 170, 0.5);
+        }
+
+        #feed-button {
+            left: 20px;
+        }
+
+        #filters-button {
+            left: 120px;
+        }
+
+        #profile-button {
+            right: 20px;
+        }
+
+        .modal {
+            display: none;
+            position: absolute;
+            top: 70px;
+            background-color: rgba(30, 30, 30, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(255, 0, 170, 0.4);
+            z-index: 1001;
+            width: 300px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            border: 1px solid #ff00aa;
+        }
+
+        .modal.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #filters-modal {
+            left: 120px;
+        }
+
+        #profile-modal {
+            right: 20px;
+        }
+
+        .modal h3 {
+            color: #ff00aa;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px rgba(255, 0, 170, 0.3);
+        }
+
+        .filter-group {
+            margin-bottom: 20px;
+        }
+
+        .filter-title {
+            font-weight: bold;
+            margin-bottom: 12px;
+            display: block;
+            color: #ff00aa;
+            text-shadow: 0 0 3px rgba(255, 0, 170, 0.3);
+        }
+
+        .filter-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .filter-option {
+            display: inline-block;
+        }
+
+        .filter-option input {
+            display: none;
+        }
+
+        .filter-option label {
+            display: inline-block;
+            padding: 8px 12px;
+            background-color: rgba(20, 20, 20, 0.8);
+            color: #ff00aa;
+            border-radius: 20px;
+            box-shadow: 0 0 10px rgba(255, 0, 170, 0.2);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #ff00aa;
+        }
+
+        .filter-option input:checked + label {
+            background-color: #ff00aa;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 0, 170, 0.7);
+        }
+
+        .filter-option label:hover {
+            background-color: rgba(255, 0, 170, 0.2);
+        }
+
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #ff00aa;
+            transition: transform 0.2s ease;
+        }
+
+        .close-button:hover {
+            transform: rotate(90deg);
+            color: #fff;
+        }
+
+        .auth-option {
+            display: inline-block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            text-align: center;
+            background-color: rgba(20, 20, 20, 0.8);
+            color: #ff00aa;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid #ff00aa;
+            box-shadow: 0 0 10px rgba(255, 0, 170, 0.2);
+        }
+
+        .auth-option:hover {
+            background-color: rgba(255, 0, 170, 0.2);
+            box-shadow: 0 0 15px rgba(255, 0, 170, 0.4);
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+        }
+
+        .auth-form input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background-color: rgba(20, 20, 20, 0.8);
+            border: 1px solid #ff00aa;
+            border-radius: 25px;
+            color: #fff;
+            box-sizing: border-box;
+            outline: none;
+            box-shadow: 0 0 10px rgba(255, 0, 170, 0.1);
+            transition: all 0.3s;
+        }
+
+        .auth-form input:focus {
+            border-color: #fff;
+            box-shadow: 0 0 15px rgba(255, 0, 170, 0.5);
+        }
+
+        .auth-form input::placeholder {
+            color: #888;
+        }
+
+        .auth-form button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: linear-gradient(45deg, #ff00aa, #ff0066);
+            color: #000;
+            font-weight: bold;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 15px rgba(255, 0, 170, 0.3);
+        }
+
+        .auth-form button:hover {
+            box-shadow: 0 0 25px rgba(255, 0, 170, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .back-button {
+            background: none;
+            border: none;
+            color: #ff00aa;
+            cursor: pointer;
+            margin-bottom: 15px;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .back-button:hover {
+            color: #fff;
+        }
+
+        /* Анимация неонового свечения */
+        @keyframes neonGlow {
+            0%, 100% {
+                text-shadow: 0 0 5px #ff00aa, 0 0 10px #ff00aa;
+            }
+            50% {
+                text-shadow: 0 0 10px #ff00aa, 0 0 20px #ff00aa, 0 0 30px #ff0066;
+            }
+        }
+
+        .neon-title {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff00aa;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1000;
+            animation: neonGlow 2s infinite alternate;
+            pointer-events: none;
+        }
+
+        /* Стили для маркеров */
+        .neon-marker {
+            background: radial-gradient(circle, #ff00aa 0%, transparent 70%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ff00aa, 0 0 20px #ff00aa;
+            position: relative;
+        }
+
+        .neon-marker::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px;
+            height: 6px;
+            background: #fff;
+            border-radius: 50%;
+        }
+
+        /* Стили для попапов */
+        .leaflet-popup-content-wrapper {
+            background: rgba(30, 30, 30, 0.9) !important;
+            border: 1px solid #ff00aa !important;
+            box-shadow: 0 0 20px rgba(255, 0, 170, 0.5) !important;
+            color: #fff !important;
+            border-radius: 10px !important;
+        }
+
+        .leaflet-popup-content {
+            margin: 10px !important;
+            font-size: 14px !important;
+        }
+
+        .leaflet-popup-content h3 {
+            color: #ff00aa !important;
+            margin-bottom: 5px !important;
+            font-size: 16px !important;
+        }
+
+        .leaflet-popup-tip-container {
+            display: none !important;
+        }
+
+        .leaflet-popup-close-button {
+            color: #ff00aa !important;
+            font-size: 18px !important;
+            transition: all 0.3s !important;
+        }
+
+        .leaflet-popup-close-button:hover {
+            color: #fff !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="neon-title">NEON MAP</div>
+    <div id="map"></div>
+    
+    <button id="feed-button" class="control-button">
+        <i class="fas fa-stream"></i> Лента
+    </button>
+    <button id="filters-button" class="control-button">
+        <i class="fas fa-filter"></i> Фильтры
+    </button>
+    <button id="profile-button" class="control-button">
+        <i class="fas fa-user"></i> Профиль
+    </button>
+    
+    <div id="filters-modal" class="modal">
+        <button class="close-button" id="close-filters">&times;</button>
+        <h3>Фильтры</h3>
+        
+        <div class="filter-group">
+            <span class="filter-title">Время:</span>
+            <div class="filter-options">
+                <div class="filter-option">
+                    <input type="checkbox" id="time-morning" name="time" value="morning">
+                    <label for="time-morning">Утро</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="time-day" name="time" value="day">
+                    <label for="time-day">День</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="time-evening" name="time" value="evening">
+                    <label for="time-evening">Вечер</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="time-night" name="time" value="night">
+                    <label for="time-night">Ночь</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-title">Время года:</span>
+            <div class="filter-options">
+                <div class="filter-option">
+                    <input type="checkbox" id="season-winter" name="season" value="winter">
+                    <label for="season-winter">Зима</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="season-spring" name="season" value="spring">
+                    <label for="season-spring">Весна</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="season-summer" name="season" value="summer">
+                    <label for="season-summer">Лето</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="season-autumn" name="season" value="autumn">
+                    <label for="season-autumn">Осень</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-title">Тэг:</span>
+            <div class="filter-options">
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-new" name="tag" value="new_architecture">
+                    <label for="tag-new">Новая архитектура</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-old" name="tag" value="old_town">
+                    <label for="tag-old">Старый город</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-monument" name="tag" value="monument">
+                    <label for="tag-monument">Памятник</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-fountain" name="tag" value="fountain">
+                    <label for="tag-fountain">Фонтан</label>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="profile-modal" class="modal">
+        <button class="close-button" id="close-profile">&times;</button>
+        
+        <div id="auth-options">
+            <h3>Вход в профиль</h3>
+            <div class="auth-option" id="login-option">
+                <i class="fas fa-sign-in-alt"></i> Аутентификация
+            </div>
+            <div class="auth-option" id="register-option">
+                <i class="fas fa-user-plus"></i> Регистрация
+            </div>
+        </div>
+        
+        <div id="login-form" class="auth-form">
+            <button class="back-button" id="back-from-login">&larr; Назад</button>
+            <h3>Вход</h3>
+            <input type="text" placeholder="Email или логин" id="login-email">
+            <input type="password" placeholder="Пароль" id="login-password">
+            <button id="login-button">Войти</button>
+        </div>
+        
+        <div id="register-form" class="auth-form">
+            <button class="back-button" id="back-from-register">&larr; Назад</button>
+            <h3>Регистрация</h3>
+            <input type="text" placeholder="Email" id="register-email">
+            <input type="text" placeholder="Логин" id="register-login">
+            <input type="password" placeholder="Пароль" id="register-password">
+            <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
+            <button id="register-button">Зарегистрироваться</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
+    <script>
+        // Инициализация карты
+        const map = L.map('map').setView([56.835184, 60.609573], 13);
+        
+        // Добавление слоя OpenStreetMap с фильтрами для неонового стиля
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            className: 'neon-map-tiles'
+        }).addTo(map);
+
+        // Создаем кастомные неоновые маркеры
+        const NeonIcon = L.DivIcon.extend({
+            createIcon: function() {
+                const icon = L.DivIcon.prototype.createIcon.call(this);
+                icon.className = 'neon-marker';
+                return icon;
+            }
+        });
+
+        const neonIcon = new NeonIcon({
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+            popupAnchor: [0, -10]
+        });
+
+        // Добавляем маркеры с неоновым эффектом
+        const locations = [
+            {
+                coords: [56.8379, 60.6129],
+                title: "Неоновое кафе",
+                desc: "Лучший кофе в городе с неоновой подсветкой"
+            },
+            {
+                coords: [56.8321, 60.6053],
+                title: "Арт-пространство",
+                desc: "Галерея современного искусства"
+            },
+            {
+                coords: [56.8385, 60.5972],
+                title: "Техно-клуб",
+                desc: "Место для любителей электронной музыки"
+            }
+        ];
+
+        locations.forEach(loc => {
+            L.marker(loc.coords, {icon: neonIcon}).addTo(map)
+                .bindPopup(`<h3>${loc.title}</h3><p>${loc.desc}</p>`);
+        });
+
+        // Управление модальными окнами
+        const feedButton = document.getElementById('feed-button');
+        const filtersButton = document.getElementById('filters-button');
+        const profileButton = document.getElementById('profile-button');
+        const filtersModal = document.getElementById('filters-modal');
+        const profileModal = document.getElementById('profile-modal');
+        const closeFilters = document.getElementById('close-filters');
+        const closeProfile = document.getElementById('close-profile');
+        
+        // Элементы авторизации
+        const authOptions = document.getElementById('auth-options');
+        const loginOption = document.getElementById('login-option');
+        const registerOption = document.getElementById('register-option');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const backFromLogin = document.getElementById('back-from-login');
+        const backFromRegister = document.getElementById('back-from-register');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        
+        // Поля ввода
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const registerEmail = document.getElementById('register-email');
+        const registerLogin = document.getElementById('register-login');
+        const registerPassword = document.getElementById('register-password');
+        const registerPasswordRepeat = document.getElementById('register-password-repeat');
+        
+        function showModal(modal) {
+            modal.style.display = 'block';
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+        }
+        
+        function hideModal(modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+        
+        function toggleModal(modal) {
+            if (modal.style.display === 'block' && modal.classList.contains('show')) {
+                hideModal(modal);
+            } else {
+                showModal(modal);
+            }
+        }
+        
+        function resetAuthForms() {
+            authOptions.style.display = 'block';
+            loginForm.classList.remove('active');
+            registerForm.classList.remove('active');
+            
+            // Очищаем поля ввода
+            loginEmail.value = '';
+            loginPassword.value = '';
+            registerEmail.value = '';
+            registerLogin.value = '';
+            registerPassword.value = '';
+            registerPasswordRepeat.value = '';
+        }
+        
+        feedButton.addEventListener('click', () => {
+            // Закрываем все модальные окна при нажатии на ленту
+            hideModal(filtersModal);
+            hideModal(profileModal);
+            alert('Лента будет здесь!');
+        });
+        
+        filtersButton.addEventListener('click', () => {
+            // Переключаем модальное окно фильтров
+            toggleModal(filtersModal);
+            // Закрываем профиль, если он открыт
+            hideModal(profileModal);
+        });
+        
+        profileButton.addEventListener('click', () => {
+            // Переключаем модальное окно профиля
+            toggleModal(profileModal);
+            // Закрываем фильтры, если они открыты
+            hideModal(filtersModal);
+            resetAuthForms();
+        });
+        
+        closeFilters.addEventListener('click', () => {
+            hideModal(filtersModal);
+        });
+        
+        closeProfile.addEventListener('click', () => {
+            hideModal(profileModal);
+        });
+        
+        // Обработчики для авторизации
+        loginOption.addEventListener('click', () => {
+            authOptions.style.display = 'none';
+            loginForm.classList.add('active');
+        });
+        
+        registerOption.addEventListener('click', () => {
+            authOptions.style.display = 'none';
+            registerForm.classList.add('active');
+        });
+        
+        backFromLogin.addEventListener('click', () => {
+            resetAuthForms();
+        });
+        
+        backFromRegister.addEventListener('click', () => {
+            resetAuthForms();
+        });
+        
+        // Очистка полей при нажатии кнопок "Войти" и "Зарегистрироваться"
+        loginButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Здесь должна быть логика входа
+            alert('Вход выполнен!');
+            resetAuthForms();
+            hideModal(profileModal);
+        });
+        
+        registerButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Здесь должна быть логика регистрации
+            alert('Регистрация завершена!');
+            resetAuthForms();
+            hideModal(profileModal);
+        });
+        
+        // Закрытие модальных окон при клике вне их области
+        window.addEventListener('click', (event) => {
+            if (event.target === filtersModal) {
+                hideModal(filtersModal);
+            }
+            if (event.target === profileModal) {
+                hideModal(profileModal);
+            }
+        });
+    </script>
+</body>
+</html>
