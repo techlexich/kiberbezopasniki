@@ -320,145 +320,164 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Инициализация карты
-        const map = L.map('map').setView([56.835184, 60.609573], 13);
-        
-        // Добавление слоя OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        
-        // Управление модальными окнами
-        const feedButton = document.getElementById('feed-button');
-        const filtersButton = document.getElementById('filters-button');
-        const profileButton = document.getElementById('profile-button');
-        const filtersModal = document.getElementById('filters-modal');
-        const profileModal = document.getElementById('profile-modal');
-        const closeFilters = document.getElementById('close-filters');
-        const closeProfile = document.getElementById('close-profile');
-        
-        // Элементы авторизации
-        const authOptions = document.getElementById('auth-options');
-        const loginOption = document.getElementById('login-option');
-        const registerOption = document.getElementById('register-option');
-        const loginForm = document.getElementById('login-form');
-        const registerForm = document.getElementById('register-form');
-        const backFromLogin = document.getElementById('back-from-login');
-        const backFromRegister = document.getElementById('back-from-register');
-        const loginButton = document.getElementById('login-button');
-        const registerButton = document.getElementById('register-button');
-        
-        // Поля ввода
-        const loginEmail = document.getElementById('login-email');
-        const loginPassword = document.getElementById('login-password');
-        const registerEmail = document.getElementById('register-email');
-        const registerLogin = document.getElementById('register-login');
-        const registerPassword = document.getElementById('register-password');
-        const registerPasswordRepeat = document.getElementById('register-password-repeat');
-        
-        function showModal(modal) {
-            modal.style.display = 'block';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
+const map = L.map('map').setView([56.835184, 60.609573], 13);
+
+// Добавление слоя OpenStreetMap
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+// Управление модальными окнами
+const filtersButton = document.getElementById('filters-button');
+const profileButton = document.getElementById('profile-button');
+const filtersModal = document.getElementById('filters-modal');
+const profileModal = document.getElementById('profile-modal');
+const closeFilters = document.getElementById('close-filters');
+const closeProfile = document.getElementById('close-profile');
+
+// Элементы авторизации
+const authOptions = document.getElementById('auth-options');
+const loginOption = document.getElementById('login-option');
+const registerOption = document.getElementById('register-option');
+const loginForm = document.getElementById('login-form');
+const registerForm = document.getElementById('register-form');
+const backFromLogin = document.getElementById('back-from-login');
+const backFromRegister = document.getElementById('back-from-register');
+const loginButton = document.getElementById('login-button');
+const registerButton = document.getElementById('register-button');
+
+// Поля ввода
+const loginEmail = document.getElementById('login-email');
+const loginPassword = document.getElementById('login-password');
+const registerEmail = document.getElementById('register-email');
+const registerLogin = document.getElementById('register-login');
+const registerPassword = document.getElementById('register-password');
+const registerPasswordRepeat = document.getElementById('register-password-repeat');
+
+// Базовый URL API (FastAPI бэкенд)
+const API_URL = 'http://localhost:8000';
+
+// Функции для модальных окон
+function showModal(modal) {
+    modal.style.display = 'block';
+    setTimeout(() => modal.classList.add('show'), 10);
+}
+
+function hideModal(modal) {
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+function resetAuthForms() {
+    authOptions.style.display = 'block';
+    loginForm.classList.remove('active');
+    registerForm.classList.remove('active');
+    loginEmail.value = '';
+    loginPassword.value = '';
+    registerEmail.value = '';
+    registerLogin.value = '';
+    registerPassword.value = '';
+    registerPasswordRepeat.value = '';
+}
+
+// Обработчики кнопок
+filtersButton.addEventListener('click', () => {
+    showModal(filtersModal);
+    hideModal(profileModal);
+});
+
+profileButton.addEventListener('click', () => {
+    showModal(profileModal);
+    hideModal(filtersModal);
+    resetAuthForms();
+});
+
+closeFilters.addEventListener('click', () => hideModal(filtersModal));
+closeProfile.addEventListener('click', () => hideModal(profileModal));
+
+// Переключение форм авторизации/регистрации
+loginOption.addEventListener('click', () => {
+    authOptions.style.display = 'none';
+    loginForm.classList.add('active');
+});
+
+registerOption.addEventListener('click', () => {
+    authOptions.style.display = 'none';
+    registerForm.classList.add('active');
+});
+
+backFromLogin.addEventListener('click', resetAuthForms);
+backFromRegister.addEventListener('click', resetAuthForms);
+
+// Регистрация (отправка данных на /register)
+registerButton.addEventListener('click', async (e) => {
+    e.preventDefault();
+    
+    if (registerPassword.value !== registerPasswordRepeat.value) {
+        alert('Пароли не совпадают!');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: registerEmail.value,
+                username: registerLogin.value,
+                password: registerPassword.value,
+                password_repeat: registerPasswordRepeat.value
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка регистрации');
         }
-        
-        function hideModal(modal) {
-            modal.classList.remove('show');
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
+
+        const data = await response.json();
+        alert(`Регистрация успешна! Добро пожаловать, ${data.username}`);
+        resetAuthForms();
+        hideModal(profileModal);
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+// Вход (отправка данных на /token)
+loginButton.addEventListener('click', async (e) => {
+    e.preventDefault();
+
+    try {
+        const response = await fetch(`${API_URL}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                username: loginEmail.value,
+                password: loginPassword.value
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Неверный email или пароль');
         }
-        
-        function toggleModal(modal) {
-            if (modal.style.display === 'block' && modal.classList.contains('show')) {
-                hideModal(modal);
-            } else {
-                showModal(modal);
-            }
-        }
-        
-        function resetAuthForms() {
-            authOptions.style.display = 'block';
-            loginForm.classList.remove('active');
-            registerForm.classList.remove('active');
-            
-            // Очищаем поля ввода
-            loginEmail.value = '';
-            loginPassword.value = '';
-            registerEmail.value = '';
-            registerLogin.value = '';
-            registerPassword.value = '';
-            registerPasswordRepeat.value = '';
-        }
-        
-        filtersButton.addEventListener('click', () => {
-            // Переключаем модальное окно фильтров
-            toggleModal(filtersModal);
-            // Закрываем профиль, если он открыт
-            hideModal(profileModal);
-        });
-        
-        profileButton.addEventListener('click', () => {
-            // Переключаем модальное окно профиля
-            toggleModal(profileModal);
-            // Закрываем фильтры, если они открыты
-            hideModal(filtersModal);
-            resetAuthForms();
-        });
-        
-        closeFilters.addEventListener('click', () => {
-            hideModal(filtersModal);
-        });
-        
-        closeProfile.addEventListener('click', () => {
-            hideModal(profileModal);
-        });
-        
-        // Обработчики для авторизации
-        loginOption.addEventListener('click', () => {
-            authOptions.style.display = 'none';
-            loginForm.classList.add('active');
-        });
-        
-        registerOption.addEventListener('click', () => {
-            authOptions.style.display = 'none';
-            registerForm.classList.add('active');
-        });
-        
-        backFromLogin.addEventListener('click', () => {
-            resetAuthForms();
-        });
-        
-        backFromRegister.addEventListener('click', () => {
-            resetAuthForms();
-        });
-        
-        // Очистка полей при нажатии кнопок "Войти" и "Зарегистрироваться"
-        loginButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            // Здесь должна быть логика входа
-            alert('Вход выполнен!');
-            resetAuthForms();
-            hideModal(profileModal);
-        });
-        
-        registerButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            // Здесь должна быть логика регистрации
-            alert('Регистрация завершена!');
-            resetAuthForms();
-            hideModal(profileModal);
-        });
-        
-        // Закрытие модальных окон при клике вне их области
-        window.addEventListener('click', (event) => {
-            if (event.target === filtersModal) {
-                hideModal(filtersModal);
-            }
-            if (event.target === profileModal) {
-                hideModal(profileModal);
-            }
-        });
+
+        const { access_token } = await response.json();
+        localStorage.setItem('access_token', access_token);
+        alert('Вход выполнен!');
+        resetAuthForms();
+        hideModal(profileModal);
+    } catch (error) {
+        alert(error.message);
+    }
+});
+
+// Закрытие модалок при клике вне их области
+window.addEventListener('click', (e) => {
+    if (e.target === filtersModal) hideModal(filtersModal);
+    if (e.target === profileModal) hideModal(profileModal);
+});
     </script>
 </body>
 </html>
