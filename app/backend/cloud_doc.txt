@@ -1,0 +1,3 @@
+API = 446273476755966
+Secret API = c23Cw6sFek7cnGA382EP4CjIQWc
+cloud name = dvsjvxm8q

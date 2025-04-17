@@ -1,19 +1,20 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr  # Исправлено Emailstr → EmailStr
+from pydantic import BaseModel, EmailStr 
 from pydantic import field_validator
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from jose import JWTError, jwt  # Исправлено JMTError → JWTError
+from jose import JWTError, jwt  
 from typing import Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
-
-# Загрузка переменных окружения
+from datetime import datetime
+import locale
 load_dotenv()
+locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 
 # Конфигурация
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -21,16 +22,30 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Настройки базы данных
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Подключение к базе данных
-def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+AUTH_DATABASE_URL = os.getenv("AUTH_DATABASE_URL")
+CONNECT_DATABASE_URL = os.getenv("CONNECT_DATABASE_URL")
+# Подключение к базе данных auth
+def get_db_auth():
+    conn = psycopg2.connect(
+        AUTH_DATABASE_URL,
+        cursor_factory=RealDictCursor,
+        client_encoding='utf-8'  # Явно указываем кодировку
+    )
     try:
         yield conn
     finally:
         conn.close()
-
+# Подключение к базе данных connect
+def get_db_connect():
+    conn = psycopg2.connect(
+        CONNECT_DATABASE_URL,
+        cursor_factory=RealDictCursor,
+        client_encoding='utf-8'  # Явно указываем кодировку
+    )
+    try:
+        yield conn
+    finally:
+        conn.close()
 # Модели данных
 class UserBase(BaseModel):
     email: EmailStr
@@ -55,6 +70,14 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+    
+    
+# Модель для входящих данных
+class ImagePostRequest(BaseModel):
+    image_url: str
+    #description: Optional[str] = None
+    
+
 
 # Настройки безопасности
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -103,7 +126,7 @@ async def authenticate_user(db, username: str, password: str):
         return False
     return user
 
-async def get_current_user(db = Depends(get_db), token: str = Depends(oauth2_scheme)):
+async def get_current_user(db = Depends(get_db_auth), token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Неверные учетные данные",
@@ -124,7 +147,7 @@ async def get_current_user(db = Depends(get_db), token: str = Depends(oauth2_sch
 
 # Роуты
 @app.post("/register", response_model=UserBase)
-async def register(user: UserCreate, db = Depends(get_db)):
+async def register(user: UserCreate, db = Depends(get_db_auth)):
     # Проверка существования пользователя
     cur = db.cursor()
     cur.execute("SELECT * FROM users WHERE email = %s OR username = %s", 
@@ -153,7 +176,7 @@ async def register(user: UserCreate, db = Depends(get_db)):
 @app.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
-    db = Depends(get_db)
+    db = Depends(get_db_auth)
 ):
     user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -171,6 +194,33 @@ async def login_for_access_token(
 @app.get("/users/me", response_model=UserBase)
 async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
     return current_user
+
+@app.post("/api/save-image-url")
+async def save_image_url(post_data: ImagePostRequest, db = Depends(get_db_connect)):
+    try:
+        # Проверяем кодировку URL и описания
+        try:
+            photo_url = post_data.image_url.encode('utf-8').decode('utf-8')
+            description = post_data.description.encode('utf-8').decode('utf-8') if post_data.description else None
+        except UnicodeError:
+            raise HTTPException(status_code=400, detail="Invalid encoding in input data")
+
+        with db.cursor() as cur:
+            cur.execute(
+                """INSERT INTO posts (photo_url, user_id, created_at, description)
+                   VALUES (%s, %s, %s, %s) RETURNING post_id""",
+                (photo_url, 1, datetime.utcnow(), description)
+            )
+            post_id = cur.fetchone()["post_id"]
+            db.commit()
+        
+        return {"status": "success", "post_id": post_id, "image_url": photo_url}
+    
+    except psycopg2.DatabaseError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Запуск сервера
 if __name__ == "__main__":
