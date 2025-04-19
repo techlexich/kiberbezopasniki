@@ -1,24 +1,22 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from typing import Optional
 import ftplib
 import uuid
 import os
-from io import BytesIO
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Конфигурация
-FTP_HOST = os.getenv("FTP_HOST", "localhost")
-FTP_USER = os.getenv("FTP_USER", "user")
-FTP_PASS = os.getenv("FTP_PASS", "password")
-FTP_UPLOAD_DIR = os.getenv("FTP_UPLOAD_DIR", "/uploads")
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
+FTP_HOST = os.getenv("FTP_HOST")
+FTP_USER = os.getenv("FTP_USER")
+FTP_PASS = os.getenv("FTP_PASS")
+FTP_UPLOAD_DIR = os.getenv("FTP_UPLOAD_DIR")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -34,6 +32,7 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+# Функция загрузки на FTP
 def save_to_ftp(file: UploadFile, description: Optional[str] = None):
     try:
         file_ext = file.filename.split('.')[-1].lower()
@@ -54,46 +53,14 @@ def save_to_ftp(file: UploadFile, description: Optional[str] = None):
         return {
             "status": "success",
             "filename": filename,
+            "url": f"ftp://{FTP_HOST}{FTP_UPLOAD_DIR}/{filename}",
             "description": description
         }
+        
     except Exception as e:
         raise HTTPException(500, detail=f"FTP error: {str(e)}")
 
-@app.get("/get-image/{filename}")
-async def get_image(filename: str):
-    def iter_file():
-        with ftplib.FTP(FTP_HOST) as ftp:
-            ftp.login(FTP_USER, FTP_PASS)
-            ftp.cwd(FTP_UPLOAD_DIR)
-            with BytesIO() as buffer:
-                ftp.retrbinary(f"RETR {filename}", buffer.write)
-                buffer.seek(0)
-                yield from buffer
-    
-    # Определяем Content-Type по расширению файла
-    if filename.lower().endswith('.png'):
-        media_type = "image/png"
-    elif filename.lower().endswith(('.jpg', '.jpeg')):
-        media_type = "image/jpeg"
-    elif filename.lower().endswith('.gif'):
-        media_type = "image/gif"
-    else:
-        media_type = "application/octet-stream"
-    
-    return StreamingResponse(iter_file(), media_type=media_type)
-
-@app.get("/list")
-async def list_files():
-    try:
-        with ftplib.FTP(FTP_HOST) as ftp:
-            ftp.login(FTP_USER, FTP_PASS)
-            ftp.cwd(FTP_UPLOAD_DIR)
-            files = ftp.nlst()
-            images = [f for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
-            return {"files": images}
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
-
+# Эндпоинты
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -102,10 +69,21 @@ async def upload_file(
 ):
     try:
         jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        result = save_to_ftp(file, description)
-        return result
+        return save_to_ftp(file, description)
     except JWTError:
         raise HTTPException(401, detail="Invalid token")
+
+@app.get("/list")
+async def list_files():
+    try:
+        with ftplib.FTP(FTP_HOST) as ftp:
+            ftp.login(FTP_USER, FTP_PASS)
+            ftp.cwd(FTP_UPLOAD_DIR)
+            files = ftp.nlst()
+            images = [f for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            return {"files": images}
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
 
 @app.post("/token")
 async def login_for_token(username: str = Form(...), password: str = Form(...)):
