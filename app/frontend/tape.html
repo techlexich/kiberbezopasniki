@@ -3,20 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Feed | Лента</title>
+    <title>Clean Feed | Лента</title>
     <style>
+        :root {
+            --primary: #4361ee;
+            --primary-light: #4895ef;
+            --secondary: #7209b7;
+            --text: #2b2d42;
+            --text-light: #8d99ae;
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --border: #e9ecef;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Arial', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
-            background-color: #0a0a0a;
-            color: #fff;
+            background-color: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             padding: 20px;
+            line-height: 1.5;
         }
 
         .header {
@@ -24,36 +37,39 @@
             justify-content: space-between;
             align-items: center;
             padding: 15px 0;
-            margin-bottom: 30px;
-            border-bottom: 1px solid #ff00aa;
-            box-shadow: 0 0 15px rgba(255, 0, 170, 0.3);
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background-color: var(--bg);
+            z-index: 10;
         }
 
         .logo {
-            font-size: 28px;
-            font-weight: bold;
-            background: linear-gradient(90deg, #ff00aa, #ff0066);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            text-shadow: 0 0 10px rgba(255, 0, 170, 0.5);
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.5px;
         }
 
         .nav-button {
-            background: none;
-            border: 1px solid #ff00aa;
-            color: #ff00aa;
-            padding: 8px 20px;
-            border-radius: 20px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s;
-            box-shadow: 0 0 10px rgba(255, 0, 170, 0.3);
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: var(--shadow);
         }
 
         .nav-button:hover {
-            background: rgba(255, 0, 170, 0.2);
-            box-shadow: 0 0 15px rgba(255, 0, 170, 0.5);
+            background: #f1f6fe;
+            border-color: var(--primary-light);
         }
 
         .feed-container {
@@ -62,180 +78,211 @@
         }
 
         .post {
-            background: rgba(20, 20, 20, 0.8);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 25px;
-            border: 1px solid #333;
-            box-shadow: 0 0 20px rgba(255, 0, 170, 0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
+            background: var(--card);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
             position: relative;
             overflow: hidden;
         }
 
         .post:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 25px rgba(255, 0, 170, 0.3);
-            border: 1px solid #ff00aa;
-        }
-
-        .post::before {
-            content: '';
-            position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            z-index: -1;
-            background: linear-gradient(45deg, #ff00aa, #ff0066, #ff00aa);
-            background-size: 200%;
-            border-radius: 16px;
-            opacity: 0;
-            transition: 0.5s;
-            animation: animate 2s linear infinite;
-        }
-
-        .post:hover::before {
-            opacity: 0.5;
-        }
-
-        @keyframes animate {
-            0% {
-                background-position: 0 0;
-            }
-            50% {
-                background-position: 300% 0;
-            }
-            100% {
-                background-position: 0 0;
-            }
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
         }
 
         .post-header {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 14px;
         }
 
         .avatar {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
-            background: linear-gradient(45deg, #ff00aa, #ff0066);
-            margin-right: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            margin-right: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: bold;
+            font-weight: 500;
+            font-size: 15px;
+        }
+
+        .user-info {
+            flex-grow: 1;
         }
 
         .username {
-            font-weight: bold;
-            color: #ff00aa;
-            text-shadow: 0 0 5px rgba(255, 0, 170, 0.3);
+            font-weight: 600;
+            color: var(--text);
+            font-size: 15px;
         }
 
         .post-time {
             font-size: 12px;
-            color: #888;
-            margin-left: auto;
+            color: var(--text-light);
+            margin-top: 2px;
         }
 
         .post-image {
             width: 100%;
             border-radius: 10px;
-            margin: 15px 0;
-            border: 1px solid #333;
-            transition: all 0.3s;
+            margin: 16px 0;
+            display: block;
+            background: #f1f3f5;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            transition: transform 0.3s ease;
         }
 
-        .post-image:hover {
-            border: 1px solid #ff00aa;
-            box-shadow: 0 0 20px rgba(255, 0, 170, 0.3);
+        .post:hover .post-image {
+            transform: scale(0.98);
         }
 
         .post-text {
-            margin-bottom: 15px;
-            line-height: 1.5;
+            margin-bottom: 14px;
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.6;
         }
 
         .post-tags {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin-bottom: 15px;
+            margin-bottom: 14px;
         }
 
         .tag {
-            background: rgba(255, 0, 170, 0.1);
-            color: #ff00aa;
-            padding: 5px 10px;
-            border-radius: 15px;
+            background: #f1f6fe;
+            color: var(--primary);
+            padding: 5px 12px;
+            border-radius: 20px;
             font-size: 12px;
-            border: 1px solid rgba(255, 0, 170, 0.3);
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .tag:hover {
+            background: #e0ebff;
+            transform: translateY(-1px);
         }
 
         .post-actions {
             display: flex;
             justify-content: space-between;
-            border-top: 1px solid #333;
-            padding-top: 15px;
+            border-top: 1px solid var(--border);
+            padding-top: 14px;
         }
 
         .action-button {
             background: none;
             border: none;
-            color: #888;
+            color: var(--text-light);
             display: flex;
             align-items: center;
             cursor: pointer;
-            transition: color 0.3s;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
         }
 
         .action-button:hover {
-            color: #ff00aa;
+            background: #f1f3f5;
+            color: var(--text);
         }
 
         .action-button i {
-            margin-right: 5px;
-            font-size: 18px;
+            font-size: 16px;
         }
 
         .like-button.liked {
-            color: #ff00aa;
+            color: #ff4757;
         }
 
         .new-post-button {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
-            background: linear-gradient(45deg, #ff00aa, #ff0066);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
             border: none;
             color: white;
             font-size: 24px;
             cursor: pointer;
-            box-shadow: 0 0 20px rgba(255, 0, 170, 0.5);
-            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .new-post-button:hover {
-            transform: scale(1.1);
-            box-shadow: 0 0 30px rgba(255, 0, 170, 0.8);
+            transform: scale(1.05) translateY(-3px);
+            box-shadow: 0 6px 16px rgba(67, 97, 238, 0.4);
+        }
+
+        /* Разнообразие цветов для постов */
+        .post:nth-child(odd) .avatar {
+            background: linear-gradient(135deg, #7209b7, #4361ee);
+        }
+        
+        .post:nth-child(even) .avatar {
+            background: linear-gradient(135deg, #4895ef, #3f37c9);
+        }
+        
+        .post:nth-child(3n) .avatar {
+            background: linear-gradient(135deg, #4cc9f0, #4361ee);
+        }
+
+        /* Анимация загрузки */
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        .loading {
+            background: linear-gradient(to right, #f1f3f5 4%, #e9ecef 25%, #f1f3f5 36%);
+            background-size: 1000px 100%;
+            animation: shimmer 1.5s infinite linear;
+        }
+
+        /* Минималистичные разделители */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 24px 0;
+            position: relative;
+        }
+
+        .divider-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--card);
+            padding: 0 12px;
+            font-size: 12px;
+            color: var(--text-light);
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="feed-container">
         <header class="header">
-            <div class="logo">NEON FEED</div>
+            <div class="logo">Clean Feed</div>
             <form action="/app/frontend/map2.html"><button class="nav-button">
                 <i class="fas fa-map-marker-alt"></i> Карта
             </button></form>
@@ -244,30 +291,32 @@
         <div class="post">
             <div class="post-header">
                 <div class="avatar">A</div>
-                <div class="username">Anna_Neon</div>
-                <div class="post-time">2 часа назад</div>
+                <div class="user-info">
+                    <div class="username">Anna Clean</div>
+                    <div class="post-time">2 часа назад</div>
+                </div>
             </div>
             <div class="post-text">
-                Нашла это потрясающее место в центре города! Неоновая вывеска создает удивительную атмосферу ночью. Обязательно вернусь сюда снова!
+                Нашла это потрясающее место в центре города! Чистые линии и продуманное пространство создают удивительную атмосферу гармонии.
             </div>
-            <img src="https://source.unsplash.com/random/600x400/?neon,sign" alt="Неоновая вывеска" class="post-image">
+            <img src="https://source.unsplash.com/random/600x400/?minimal,architecture" alt="Минималистичная архитектура" class="post-image loading">
             <div class="post-tags">
-                <span class="tag">#неон</span>
-                <span class="tag">#ночной_город</span>
                 <span class="tag">#архитектура</span>
+                <span class="tag">#гармония</span>
+                <span class="tag">#пространство</span>
             </div>
             <div class="post-actions">
                 <button class="action-button like-button">
-                    <i class="far fa-heart"></i> 124
+                    <i class="far fa-heart"></i> <span>124</span>
                 </button>
                 <button class="action-button">
-                    <i class="far fa-comment"></i> 23
+                    <i class="far fa-comment"></i> <span>23</span>
                 </button>
                 <button class="action-button">
                     <i class="fas fa-share-alt"></i>
                 </button>
                 <button class="action-button">
-                    <i class="fas fa-bookmark"></i>
+                    <i class="far fa-bookmark"></i>
                 </button>
             </div>
         </div>
@@ -275,55 +324,63 @@
         <div class="post">
             <div class="post-header">
                 <div class="avatar">M</div>
-                <div class="username">Mike_Glow</div>
-                <div class="post-time">5 часов назад</div>
+                <div class="user-info">
+                    <div class="username">Mike Simple</div>
+                    <div class="post-time">5 часов назад</div>
+                </div>
             </div>
             <div class="post-text">
-                Киберпанк становится реальностью! Эти неоновые огни в дожде... просто волшебство. 📸
+                Простота - это сложная вещь. Эти чистые линии и отсутствие лишних деталей завораживают. Как вам такой подход к дизайну?
             </div>
-            <img src="https://source.unsplash.com/random/600x400/?cyberpunk,night" alt="Киберпанк город" class="post-image">
+            <img src="https://source.unsplash.com/random/600x400/?minimal,design" alt="Минималистичный дизайн" class="post-image loading">
             <div class="post-tags">
-                <span class="tag">#киберпанк</span>
-                <span class="tag">#дождь</span>
-                <span class="tag">#городские_пейзажи</span>
+                <span class="tag">#дизайн</span>
+                <span class="tag">#простота</span>
+                <span class="tag">#эстетика</span>
             </div>
             <div class="post-actions">
                 <button class="action-button like-button">
-                    <i class="far fa-heart"></i> 89
+                    <i class="far fa-heart"></i> <span>89</span>
                 </button>
                 <button class="action-button">
-                    <i class="far fa-comment"></i> 14
+                    <i class="far fa-comment"></i> <span>14</span>
                 </button>
                 <button class="action-button">
                     <i class="fas fa-share-alt"></i>
                 </button>
                 <button class="action-button">
-                    <i class="fas fa-bookmark"></i>
+                    <i class="far fa-bookmark"></i>
                 </button>
             </div>
         </div>
 
+        <div class="divider">
+            <span class="divider-text">Новые публикации</span>
+        </div>
+
         <div class="post">
             <div class="post-header">
-                <div class="avatar">T</div>
-                <div class="username">Techno_Club</div>
-                <div class="post-time">вчера</div>
+                <div class="avatar">D</div>
+                <div class="user-info">
+                    <div class="username">Design Studio</div>
+                    <div class="post-time">сегодня</div>
+                </div>
             </div>
             <div class="post-text">
-                Наш новый неоновый дизайн для вечеринки в эту пятницу! Кто будет? 🔥
+                Наш новый проект в стиле минимализм. Меньше - значит больше. Каждый элемент продуман и несет свою функцию. Что вы думаете о таком подходе?
             </div>
-            <img src="https://source.unsplash.com/random/600x400/?club,neon" alt="Неоновый клуб" class="post-image">
+            <img src="https://source.unsplash.com/random/600x400/?minimal,interior" alt="Минималистичный интерьер" class="post-image loading">
             <div class="post-tags">
-                <span class="tag">#вечеринка</span>
-                <span class="tag">#техно</span>
-                <span class="tag">#ночная_жизнь</span>
+                <span class="tag">#интерьер</span>
+                <span class="tag">#проект</span>
+                <span class="tag">#функциональность</span>
             </div>
             <div class="post-actions">
                 <button class="action-button like-button liked">
-                    <i class="fas fa-heart"></i> 256
+                    <i class="fas fa-heart"></i> <span>256</span>
                 </button>
                 <button class="action-button">
-                    <i class="far fa-comment"></i> 42
+                    <i class="far fa-comment"></i> <span>42</span>
                 </button>
                 <button class="action-button">
                     <i class="fas fa-share-alt"></i>
@@ -343,25 +400,34 @@
         // Логика для лайков
         document.querySelectorAll('.like-button').forEach(button => {
             button.addEventListener('click', function() {
-                this.classList.toggle('liked');
                 const icon = this.querySelector('i');
-                const count = parseInt(this.textContent.trim().split(' ')[1]) || 0;
+                const countSpan = this.querySelector('span');
+                let count = parseInt(countSpan.textContent) || 0;
                 
                 if (this.classList.contains('liked')) {
-                    icon.classList.replace('far', 'fas');
-                    this.innerHTML = `<i class="fas fa-heart"></i> ${count + 1}`;
-                } else {
                     icon.classList.replace('fas', 'far');
-                    this.innerHTML = `<i class="far fa-heart"></i> ${count - 1}`;
+                    countSpan.textContent = count - 1;
+                    this.classList.remove('liked');
+                } else {
+                    icon.classList.replace('far', 'fas');
+                    countSpan.textContent = count + 1;
+                    this.classList.add('liked');
                 }
             });
         });
 
         // Кнопка нового поста
         document.querySelector('.new-post-button').addEventListener('click', function() {
-            alert('Создание нового поста!');
+            alert('Форма создания нового поста будет здесь');
         });
 
+        // Имитация загрузки изображений
+        document.querySelectorAll('.post-image').forEach(img => {
+            setTimeout(() => {
+                img.src = img.getAttribute('src');
+                img.classList.remove('loading');
+            }, 1000 + Math.random() * 2000);
+        });
     </script>
 </body>
 </html>
