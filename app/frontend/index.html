@@ -18,6 +18,7 @@
             --card: #ffffff;
             --border: #e9ecef;
             --shadow: 0 2px 8px rgba(0,0,0,0.05);
+            --error: #dc3545;
         }
         
         body {
@@ -74,7 +75,7 @@
         .modal {
             display: none;
             position: absolute;
-            top: 80px; /* Смещаем ниже кнопок */
+            top: 80px;
             background-color: var(--card);
             padding: 18px;
             border-radius: 12px;
@@ -114,9 +115,66 @@
         #profile-modal {
             right: 20px;
             max-height: 80vh;
-            overflow-y: auto; /* Добавляем прокрутку если контент не помещается */
+            overflow-y: auto;
         }
         
+        /* Стили для системы авторизации */
+        .auth-state { display: none; }
+        .guest-state { display: block; }
+        
+        body.authenticated .auth-state { display: block; }
+        body.authenticated .guest-state { display: none; }
+        
+        .profile-info {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        
+        .profile-info p {
+            margin: 8px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .profile-info .email {
+            font-weight: 500;
+            color: var(--text);
+        }
+        
+        #logout-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 16px;
+            background-color: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        #logout-btn:hover {
+            background-color: #f1f3f5;
+            color: var(--error);
+            border-color: var(--error);
+        }
+        
+        .auth-error {
+            color: var(--error);
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+        
+        /* Остальные ваши стили остаются без изменений */
         .filter-group {
             margin-bottom: 20px;
         }
@@ -194,7 +252,7 @@
             transition: all 0.2s ease;
             border: 1px solid var(--border);
             font-weight: 500;
-            box-sizing: border-box; /* Учитываем padding в ширине */
+            box-sizing: border-box;
         }
         
         .auth-option:hover {
@@ -276,12 +334,10 @@
             color: var(--text);
         }
         
-        /* Скрываем украинский флаг */
         .leaflet-control-attribution {
             display: none !important;
         }
         
-        /* Оптимизация для мобильных устройств */
         @media (max-width: 768px) {
             #feed-button, #filters-button, #profile-button {
                 padding: 8px 12px;
@@ -415,7 +471,19 @@
             </button>
         </div>
         
-        <div id="auth-options">
+        <!-- Авторизованный вид -->
+        <div id="authenticated-view" class="auth-state">
+            <div class="profile-info">
+                <p><i class="fas fa-user"></i> <span id="profile-username"></span></p>
+                <p class="email"><i class="fas fa-envelope"></i> <span id="profile-email"></span></p>
+            </div>
+            <button id="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Выйти
+            </button>
+        </div>
+        
+        <!-- Гостевой вид -->
+        <div id="auth-options" class="guest-state">
             <div class="auth-option primary" id="login-option">
                 <i class="fas fa-sign-in-alt"></i> Войти
             </div>
@@ -424,17 +492,18 @@
             </div>
         </div>
         
-        <div id="login-form" class="auth-form">
+        <div id="login-form" class="auth-form guest-state">
             <button class="back-button" id="back-from-login">
                 <i class="fas fa-arrow-left"></i> Назад
             </button>
             <h3 class="modal-title">Вход в аккаунт</h3>
             <input type="text" placeholder="Email или логин" id="login-email">
             <input type="password" placeholder="Пароль" id="login-password">
+            <div id="login-error" class="auth-error"></div>
             <button id="login-button">Войти</button>
         </div>
         
-        <div id="register-form" class="auth-form">
+        <div id="register-form" class="auth-form guest-state">
             <button class="back-button" id="back-from-register">
                 <i class="fas fa-arrow-left"></i> Назад
             </button>
@@ -443,20 +512,20 @@
             <input type="text" placeholder="Логин" id="register-login">
             <input type="password" placeholder="Пароль" id="register-password">
             <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
+            <div id="register-error" class="auth-error"></div>
             <button id="register-button">Зарегистрироваться</button>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Оптимизированная инициализация карты
+        // Инициализация карты
         const map = L.map('map', {
             zoomControl: true,
             preferCanvas: true,
             attributionControl: false
         }).setView([56.835184, 60.609573], 13);
 
-        // Оптимизированный слой карты
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             minZoom: 2,
@@ -465,10 +534,13 @@
             detectRetina: true
         }).addTo(map);
 
-        // Перемещаем кнопки zoom в правый нижний угол
         map.zoomControl.setPosition('bottomright');
 
-        // Управление модальными окнами
+        // Настройки API
+        const API_URL = 'http://localhost:8000';
+        let currentUser = null;
+
+        // Элементы интерфейса
         const filtersButton = document.getElementById('filters-button');
         const profileButton = document.getElementById('profile-button');
         const filtersModal = document.getElementById('filters-modal');
@@ -486,6 +558,7 @@
         const backFromRegister = document.getElementById('back-from-register');
         const loginButton = document.getElementById('login-button');
         const registerButton = document.getElementById('register-button');
+        const logoutButton = document.getElementById('logout-btn');
 
         // Поля ввода
         const loginEmail = document.getElementById('login-email');
@@ -495,10 +568,11 @@
         const registerPassword = document.getElementById('register-password');
         const registerPasswordRepeat = document.getElementById('register-password-repeat');
 
-        // Базовый URL API (FastAPI бэкенд)
-        const API_URL = 'http://localhost:8000';
+        // Сообщения об ошибках
+        const loginError = document.getElementById('login-error');
+        const registerError = document.getElementById('register-error');
 
-        // Функции для модальных окон
+        // Функции для работы с модальными окнами
         function showModal(modal) {
             modal.style.display = 'block';
             setTimeout(() => modal.classList.add('show'), 10);
@@ -519,9 +593,55 @@
             registerLogin.value = '';
             registerPassword.value = '';
             registerPasswordRepeat.value = '';
+            loginError.style.display = 'none';
+            registerError.style.display = 'none';
         }
 
-        // Обработчики кнопок
+        // Функции для работы с авторизацией
+        async function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (!token) return null;
+            
+            try {
+                const response = await fetch(`${API_URL}/users/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+            }
+            
+            localStorage.removeItem('access_token');
+            return null;
+        }
+
+        async function updateAuthUI() {
+            currentUser = await checkAuth();
+            
+            if (currentUser) {
+                document.body.classList.add('authenticated');
+                document.getElementById('profile-username').textContent = currentUser.username;
+                document.getElementById('profile-email').textContent = currentUser.email;
+                document.getElementById('profile-button').innerHTML = 
+                    `<i class="fas fa-user"></i> ${currentUser.username}`;
+            } else {
+                document.body.classList.remove('authenticated');
+                document.getElementById('profile-button').innerHTML = 
+                    '<i class="fas fa-user"></i> Профиль';
+            }
+        }
+
+        function showError(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+        }
+
+        // Обработчики событий
         filtersButton.addEventListener('click', () => {
             showModal(filtersModal);
             hideModal(profileModal);
@@ -536,7 +656,6 @@
         closeFilters.addEventListener('click', () => hideModal(filtersModal));
         closeProfile.addEventListener('click', () => hideModal(profileModal));
 
-        // Переключение форм авторизации/регистрации
         loginOption.addEventListener('click', () => {
             authOptions.style.display = 'none';
             loginForm.classList.add('active');
@@ -550,12 +669,13 @@
         backFromLogin.addEventListener('click', resetAuthForms);
         backFromRegister.addEventListener('click', resetAuthForms);
 
-        // Регистрация (отправка данных на /register)
+        // Регистрация
         registerButton.addEventListener('click', async (e) => {
             e.preventDefault();
+            registerError.style.display = 'none';
             
             if (registerPassword.value !== registerPasswordRepeat.value) {
-                alert('Пароли не совпадают!');
+                showError(registerError, 'Пароли не совпадают');
                 return;
             }
 
@@ -577,17 +697,19 @@
                 }
 
                 const data = await response.json();
-                alert(`Регистрация успешна! Добро пожаловать, ${data.username}`);
+                localStorage.setItem('access_token', data.access_token);
+                await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
             } catch (error) {
-                alert(error.message);
+                showError(registerError, error.message);
             }
         });
 
-        // Вход (отправка данных на /token)
+        // Вход
         loginButton.addEventListener('click', async (e) => {
             e.preventDefault();
+            loginError.style.display = 'none';
 
             try {
                 const response = await fetch(`${API_URL}/token`, {
@@ -606,12 +728,19 @@
 
                 const { access_token } = await response.json();
                 localStorage.setItem('access_token', access_token);
-                alert('Вход выполнен!');
+                await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
             } catch (error) {
-                alert(error.message);
+                showError(loginError, error.message);
             }
+        });
+
+        // Выход
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('access_token');
+            updateAuthUI();
+            hideModal(profileModal);
         });
 
         // Закрытие модалок при клике вне их области
@@ -620,16 +749,21 @@
             if (e.target === profileModal) hideModal(profileModal);
         });
 
-        // Оптимизация производительности карты
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateAuthUI();
+            
+            // Оптимизация для мобильных устройств
+            if (/Mobi|Android/i.test(navigator.userAgent)) {
+                map.options.preferCanvas = true;
+                map.options.fadeAnimation = false;
+            }
+        });
+
+        // Обновление размера карты при изменении окна
         window.addEventListener('resize', () => {
             map.invalidateSize();
         });
-
-        // Отключаем некоторые эффекты на мобильных устройствах для производительности
-        if (/Mobi|Android/i.test(navigator.userAgent)) {
-            map.options.preferCanvas = true;
-            map.options.fadeAnimation = false;
-        }
     </script>
 </body>
 </html>
