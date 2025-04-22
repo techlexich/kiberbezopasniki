@@ -120,7 +120,7 @@
         
         /* Стили для системы авторизации */
         .auth-state { display: none; }
-        .guest-state { display: block; }
+        .guest-state { display: flex; flex-direction: column; gap: 8px; }
         
         body.authenticated .auth-state { display: block; }
         body.authenticated .guest-state { display: none; }
@@ -367,8 +367,29 @@
                 transform: translateX(-50%) translateY(0);
             }
         }
+        /* Добавляем стиль для новой кнопки */
+        .profile-redirect-btn {
+            width: 100%;
+            padding: 12px;
+            margin: 16px 0 8px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+        }
+        
+        .profile-redirect-btn:hover {
+            background-color: var(--primary-light);
+        }
     </style>
 </head>
+
 <body>
     <div id="map"></div>
     
@@ -471,49 +492,55 @@
             </button>
         </div>
         
-        <!-- Авторизованный вид -->
-        <div id="authenticated-view" class="auth-state">
-            <div class="profile-info">
-                <p><i class="fas fa-user"></i> <span id="profile-username"></span></p>
-                <p class="email"><i class="fas fa-envelope"></i> <span id="profile-email"></span></p>
+        <div id="profile-content">
+            <!-- Авторизованный вид -->
+            <div id="authenticated-view" class="auth-state">
+                <div class="profile-info">
+                    <p><i class="fas fa-user"></i> <span id="profile-username"></span></p>
+                    <p class="email"><i class="fas fa-envelope"></i> <span id="profile-email"></span></p>
+                </div>
+                <a href="#" id="go-to-profile" class="profile-redirect-btn">
+                    <i class="fas fa-user-circle"></i> Перейти в профиль
+                </a>
+                <button id="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Выйти
+                </button>
             </div>
-            <button id="logout-btn">
-                <i class="fas fa-sign-out-alt"></i> Выйти
-            </button>
-        </div>
-        
-        <!-- Гостевой вид -->
-        <div id="auth-options" class="guest-state">
-            <div class="auth-option primary" id="login-option">
-                <i class="fas fa-sign-in-alt"></i> Войти
+            
+            <!-- Гостевой вид -->
+            <div id="guest-view" class="guest-state">
+                <button id="login-option" class="auth-option primary">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+                <button id="register-option" class="auth-option">
+                    <i class="fas fa-user-plus"></i> Зарегистрироваться
+                </button>
             </div>
-            <div class="auth-option" id="register-option">
-                <i class="fas fa-user-plus"></i> Зарегистрироваться
+            
+            <!-- Формы авторизации -->
+            <div id="login-form" class="auth-form">
+                <button class="back-button" id="back-from-login">
+                    <i class="fas fa-arrow-left"></i> Назад
+                </button>
+                <h3 class="modal-title">Вход в аккаунт</h3>
+                <input type="text" placeholder="Email или логин" id="login-email">
+                <input type="password" placeholder="Пароль" id="login-password">
+                <div id="login-error" class="auth-error"></div>
+                <button id="login-button">Войти</button>
             </div>
-        </div>
-        
-        <div id="login-form" class="auth-form guest-state">
-            <button class="back-button" id="back-from-login">
-                <i class="fas fa-arrow-left"></i> Назад
-            </button>
-            <h3 class="modal-title">Вход в аккаунт</h3>
-            <input type="text" placeholder="Email или логин" id="login-email">
-            <input type="password" placeholder="Пароль" id="login-password">
-            <div id="login-error" class="auth-error"></div>
-            <button id="login-button">Войти</button>
-        </div>
-        
-        <div id="register-form" class="auth-form guest-state">
-            <button class="back-button" id="back-from-register">
-                <i class="fas fa-arrow-left"></i> Назад
-            </button>
-            <h3 class="modal-title">Создать аккаунт</h3>
-            <input type="text" placeholder="Email" id="register-email">
-            <input type="text" placeholder="Логин" id="register-login">
-            <input type="password" placeholder="Пароль" id="register-password">
-            <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
-            <div id="register-error" class="auth-error"></div>
-            <button id="register-button">Зарегистрироваться</button>
+            
+            <div id="register-form" class="auth-form">
+                <button class="back-button" id="back-from-register">
+                    <i class="fas fa-arrow-left"></i> Назад
+                </button>
+                <h3 class="modal-title">Создать аккаунт</h3>
+                <input type="text" placeholder="Email" id="register-email">
+                <input type="text" placeholder="Логин" id="register-login">
+                <input type="password" placeholder="Пароль" id="register-password">
+                <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
+                <div id="register-error" class="auth-error"></div>
+                <button id="register-button">Зарегистрироваться</button>
+            </div>
         </div>
     </div>
 
@@ -584,18 +611,25 @@
         }
 
         function resetAuthForms() {
-            authOptions.style.display = 'block';
-            loginForm.classList.remove('active');
-            registerForm.classList.remove('active');
-            loginEmail.value = '';
-            loginPassword.value = '';
-            registerEmail.value = '';
-            registerLogin.value = '';
-            registerPassword.value = '';
-            registerPasswordRepeat.value = '';
-            loginError.style.display = 'none';
-            registerError.style.display = 'none';
+            document.getElementById('guest-view').style.display = 'flex';
+            document.getElementById('login-form').classList.remove('active');
+            document.getElementById('register-form').classList.remove('active');
+            document.getElementById('login-email').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('register-email').value = '';
+            document.getElementById('register-login').value = '';
+            document.getElementById('register-password').value = '';
+            document.getElementById('register-password-repeat').value = '';
+            document.getElementById('login-error').style.display = 'none';
+            document.getElementById('register-error').style.display = 'none';
         }
+
+        // Обновленный обработчик открытия профиля
+        profileButton.addEventListener('click', () => {
+    showModal(profileModal);
+    hideModal(filtersModal);
+    resetAuthForms(); // Сбрасываем формы при каждом открытии
+});
 
         // Функции для работы с авторизацией
         async function checkAuth() {
@@ -624,17 +658,34 @@
             currentUser = await checkAuth();
             
             if (currentUser) {
+                // Показываем авторизованный интерфейс
                 document.body.classList.add('authenticated');
                 document.getElementById('profile-username').textContent = currentUser.username;
                 document.getElementById('profile-email').textContent = currentUser.email;
                 document.getElementById('profile-button').innerHTML = 
                     `<i class="fas fa-user"></i> ${currentUser.username}`;
+                
+                // Сбрасываем формы авторизации
+                resetAuthForms();
             } else {
+                // Показываем гостевой интерфейс
                 document.body.classList.remove('authenticated');
                 document.getElementById('profile-button').innerHTML = 
                     '<i class="fas fa-user"></i> Профиль';
             }
         }
+
+        // Обработчики кнопок входа/регистрации (добавляем показ соответствующих форм)
+        document.getElementById('login-option')?.addEventListener('click', () => {
+            document.getElementById('guest-view').style.display = 'none';
+            document.getElementById('login-form').classList.add('active');
+        });
+        
+        document.getElementById('register-option')?.addEventListener('click', () => {
+            document.getElementById('guest-view').style.display = 'none';
+            document.getElementById('register-form').classList.add('active');
+        });
+
 
         function showError(element, message) {
             element.textContent = message;
