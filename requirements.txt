@@ -5,3 +5,4 @@ gunicorn==21.2.0
 python-jose[cryptography]==3.3.0  # для JWT токенов
 passlib[bcrypt]==1.7.4  # для хеширования паролей
 psycopg2-binary>=2.9.9
+python-dotenv==1.0.0

@@ -1,6 +1,9 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr 
 from pydantic import field_validator
 from passlib.context import CryptContext
@@ -108,6 +111,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 app = FastAPI()
 
+# Подключение статических файлов
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Настройка шаблонов
+templates = Jinja2Templates(directory="templates")
+
 # Настройка CORS
 app.add_middleware(
     CORSMiddleware,
@@ -176,6 +185,10 @@ async def get_current_user(db = Depends(get_db_auth), token: str = Depends(oauth
     return user
 
 # Роуты
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
 @app.post("/register", response_model=UserBase)
 async def register(user: UserCreate, db = Depends(get_db_auth)):
     try:
