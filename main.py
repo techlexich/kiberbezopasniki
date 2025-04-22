@@ -11,44 +11,67 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
-from datetime import datetime
 import locale
+
+# Загрузка переменных окружения
 load_dotenv()
+
+# Установка локали (безопасный вариант)
 try:
     locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 except locale.Error:
-    locale.setlocale(locale.LC_ALL, 'C.UTF-8')  # Альтернатива
+    locale.setlocale(locale.LC_ALL, '')
+
+# Проверка обязательных переменных окружения
+SECRET_KEY = os.getenv("SECRET_KEY")
+AUTH_DATABASE_URL = os.getenv("AUTH_DATABASE_URL")
+CONNECT_DATABASE_URL = os.getenv("CONNECT_DATABASE_URL")
+
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY не установлен в переменных окружения")
+if not AUTH_DATABASE_URL:
+    raise ValueError("AUTH_DATABASE_URL не установлен в переменных окружения")
+if not CONNECT_DATABASE_URL:
+    raise ValueError("CONNECT_DATABASE_URL не установлен в переменных окружения")
 
 # Конфигурация
-SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Настройки базы данных
-AUTH_DATABASE_URL = os.getenv("AUTH_DATABASE_URL")
-CONNECT_DATABASE_URL = os.getenv("CONNECT_DATABASE_URL")
-# Подключение к базе данных authя
+# Подключение к базе данных auth
 def get_db_auth():
-    conn = psycopg2.connect(
-        AUTH_DATABASE_URL,
-        cursor_factory=RealDictCursor,
-        client_encoding='utf-8'  # Явно указываем кодировку
-    )
     try:
+        conn = psycopg2.connect(
+            AUTH_DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            client_encoding='utf-8'
+        )
         yield conn
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка подключения к базе данных: {str(e)}"
+        )
     finally:
         conn.close()
+
 # Подключение к базе данных connect
 def get_db_connect():
-    conn = psycopg2.connect(
-        CONNECT_DATABASE_URL,
-        cursor_factory=RealDictCursor,
-        client_encoding='utf-8'  # Явно указываем кодировку
-    )
     try:
+        conn = psycopg2.connect(
+            CONNECT_DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            client_encoding='utf-8'
+        )
         yield conn
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка подключения к базе данных: {str(e)}"
+        )
     finally:
         conn.close()
+
 # Модели данных
 class UserBase(BaseModel):
     email: EmailStr
@@ -63,6 +86,7 @@ class UserCreate(UserBase):
         if 'password' in info.data and v != info.data['password']:
             raise ValueError('Пароли не совпадают')
         return v
+
 class UserInDB(UserBase):
     id: int
     password_hash: str
@@ -73,14 +97,10 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
-    
-    
-# Модель для входящих данных
+
 class ImagePostRequest(BaseModel):
     image_url: str
-    #description: Optional[str] = None
-    
-
+    description: Optional[str] = None
 
 # Настройки безопасности
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -115,11 +135,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 async def get_user(db, username: str):
-    cur = db.cursor()
-    cur.execute("SELECT * FROM users WHERE username = %s", (username,))
-    user = cur.fetchone()
-    cur.close()
-    return user
+    try:
+        cur = db.cursor()
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        return user
+    finally:
+        cur.close()
 
 async def authenticate_user(db, username: str, password: str):
     user = await get_user(db, username)
@@ -141,8 +163,13 @@ async def get_current_user(db = Depends(get_db_auth), token: str = Depends(oauth
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Ошибка проверки токена: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     user = await get_user(db, username=token_data.username)
     if user is None:
         raise credentials_exception
@@ -151,37 +178,43 @@ async def get_current_user(db = Depends(get_db_auth), token: str = Depends(oauth
 # Роуты
 @app.post("/register", response_model=UserBase)
 async def register(user: UserCreate, db = Depends(get_db_auth)):
-    # Проверка существования пользователя
-    cur = db.cursor()
-    cur.execute("SELECT * FROM users WHERE email = %s OR username = %s", 
-               (user.email, user.username))
-    existing_user = cur.fetchone()
-    if existing_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Email или имя пользователя уже заняты",
+    try:
+        cur = db.cursor()
+        cur.execute(
+            "SELECT * FROM users WHERE email = %s OR username = %s", 
+            (user.email, user.username)
         )
-    
-    # Хеширование пароля
-    hashed_password = get_password_hash(user.password)
-    
-    # Создание пользователя
-    cur.execute(
-        "INSERT INTO users (email, username, password_hash) VALUES (%s, %s, %s) RETURNING id, email, username",
-        (user.email, user.username, hashed_password)
-    )
-    new_user = cur.fetchone()
-    db.commit()
-    cur.close()
-    
-    return new_user
+        existing_user = cur.fetchone()
+        
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Email или имя пользователя уже заняты",
+            )
+        
+        hashed_password = get_password_hash(user.password)
+        
+        cur.execute(
+            "INSERT INTO users (email, username, password_hash) VALUES (%s, %s, %s) RETURNING id, email, username",
+            (user.email, user.username, hashed_password)
+        )
+        new_user = cur.fetchone()
+        db.commit()
+        return new_user
+    except psycopg2.Error as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка базы данных: {str(e)}"
+        )
+    finally:
+        cur.close()
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db = Depends(get_db_auth)
 ):
-    # Аутентификация пользователя
     user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -190,39 +223,31 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Создание токена
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username},  # Используем user.username вместо user["username"]
+        data={"sub": user["username"]},
         expires_delta=access_token_expires
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me", response_model=UserBase)
-async def read_users_me(current_user: UserInDBnds(get_current_user)):
+async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
     return current_user
 
 @app.post("/api/save-image-url")
 async def save_image_url(post_data: ImagePostRequest, db = Depends(get_db_connect)):
     try:
-        # Проверяем кодировку URL и описания
-        try:
-            photo_url = post_data.image_url.encode('utf-8').decode('utf-8')
-            description = post_data.description.encode('utf-8').decode('utf-8') if post_data.description else None
-        except UnicodeError:
-            raise HTTPException(status_code=400, detail="Invalid encoding in input data")
-
         with db.cursor() as cur:
             cur.execute(
                 """INSERT INTO posts (photo_url, user_id, created_at, description)
                    VALUES (%s, %s, %s, %s) RETURNING post_id""",
-                (photo_url, 1, datetime.utcnow(), description)
+                (post_data.image_url, 1, datetime.utcnow(), post_data.description)
             )
             post_id = cur.fetchone()["post_id"]
             db.commit()
         
-        return {"status": "success", "post_id": post_id, "image_url": photo_url}
+        return {"status": "success", "post_id": post_id, "image_url": post_data.image_url}
     
     except psycopg2.DatabaseError as e:
         db.rollback()
@@ -233,4 +258,4 @@ async def save_image_url(post_data: ImagePostRequest, db = Depends(get_db_connec
 # Запуск сервера
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
