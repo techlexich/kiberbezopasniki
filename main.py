@@ -15,6 +15,11 @@ from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
 import locale
+from pathlib import Path
+
+# Создание необходимых директорий
+Path("static").mkdir(exist_ok=True)
+Path("templates").mkdir(exist_ok=True)
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -44,11 +49,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # Инициализация FastAPI
 app = FastAPI()
 
-# Подключение статических файлов
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Подключение статических файлов (если директория существует)
+if Path("static").exists():
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Настройка шаблонов
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="templates") if Path("templates").exists() else None
 
 # CORS
 app.add_middleware(
@@ -179,6 +185,11 @@ async def get_current_user(db = Depends(get_db_auth), token: str = Depends(oauth
 # Роуты
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
+    if not templates:
+        raise HTTPException(
+            status_code=500,
+            detail="Шаблоны не настроены. Проверьте наличие директории 'templates'"
+        )
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/register", response_model=UserBase)
