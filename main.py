@@ -14,7 +14,10 @@ from dotenv import load_dotenv
 from datetime import datetime
 import locale
 load_dotenv()
-locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+try:
+    locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+except locale.Error:
+    locale.setlocale(locale.LC_ALL, 'C.UTF-8')  # Альтернатива
 
 # Конфигурация
 SECRET_KEY = os.getenv("SECRET_KEY")
