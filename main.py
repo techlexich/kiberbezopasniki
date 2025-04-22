@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr 
 from pydantic import field_validator
 from passlib.context import CryptContext
@@ -16,61 +19,45 @@ import locale
 # Загрузка переменных окружения
 load_dotenv()
 
-# Установка локали (безопасный вариант)
+# Установка локали
 try:
     locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 except locale.Error:
     locale.setlocale(locale.LC_ALL, '')
 
-# Проверка обязательных переменных окружения
+# Проверка переменных окружения
 SECRET_KEY = os.getenv("SECRET_KEY")
 AUTH_DATABASE_URL = os.getenv("AUTH_DATABASE_URL")
 CONNECT_DATABASE_URL = os.getenv("CONNECT_DATABASE_URL")
 
 if not SECRET_KEY:
-    raise ValueError("SECRET_KEY не установлен в переменных окружения")
+    raise ValueError("SECRET_KEY не установлен")
 if not AUTH_DATABASE_URL:
-    raise ValueError("AUTH_DATABASE_URL не установлен в переменных окружения")
+    raise ValueError("AUTH_DATABASE_URL не установлен")
 if not CONNECT_DATABASE_URL:
-    raise ValueError("CONNECT_DATABASE_URL не установлен в переменных окружения")
+    raise ValueError("CONNECT_DATABASE_URL не установлен")
 
 # Конфигурация
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Подключение к базе данных auth
-def get_db_auth():
-    try:
-        conn = psycopg2.connect(
-            AUTH_DATABASE_URL,
-            cursor_factory=RealDictCursor,
-            client_encoding='utf-8'
-        )
-        yield conn
-    except psycopg2.Error as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Ошибка подключения к базе данных: {str(e)}"
-        )
-    finally:
-        conn.close()
+# Инициализация FastAPI
+app = FastAPI()
 
-# Подключение к базе данных connect
-def get_db_connect():
-    try:
-        conn = psycopg2.connect(
-            CONNECT_DATABASE_URL,
-            cursor_factory=RealDictCursor,
-            client_encoding='utf-8'
-        )
-        yield conn
-    except psycopg2.Error as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Ошибка подключения к базе данных: {str(e)}"
-        )
-    finally:
-        conn.close()
+# Подключение статических файлов
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Настройка шаблонов
+templates = Jinja2Templates(directory="templates")
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Модели данных
 class UserBase(BaseModel):
@@ -106,21 +93,38 @@ class ImagePostRequest(BaseModel):
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-app = FastAPI()
+# Подключение к БД
+def get_db_auth():
+    try:
+        conn = psycopg2.connect(
+            AUTH_DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            client_encoding='utf-8'
+        )
+        yield conn
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка подключения к базе данных: {str(e)}"
+        )
+    finally:
+        conn.close()
 
-# Убрал StaticFiles и Jinja2Templates, так как они не используются в API
-# Если вам нужны статические файлы или шаблоны, создайте соответствующие директории:
-# - static/ для статических файлов (CSS, JS, изображения)
-# - templates/ для HTML-шаблонов
-
-# Настройка CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def get_db_connect():
+    try:
+        conn = psycopg2.connect(
+            CONNECT_DATABASE_URL,
+            cursor_factory=RealDictCursor,
+            client_encoding='utf-8'
+        )
+        yield conn
+    except psycopg2.Error as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка подключения к базе данных: {str(e)}"
+        )
+    finally:
+        conn.close()
 
 # Вспомогательные функции
 def verify_password(plain_password: str, hashed_password: str):
@@ -136,23 +140,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_user(db, username: str):
     try:
         cur = db.cursor()
         cur.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cur.fetchone()
-        return user
+        return cur.fetchone()
     finally:
         cur.close()
 
 async def authenticate_user(db, username: str, password: str):
     user = await get_user(db, username)
-    if not user:
-        return False
-    if not verify_password(password, user["password_hash"]):
+    if not user or not verify_password(password, user["password_hash"]):
         return False
     return user
 
@@ -165,25 +165,21 @@ async def get_current_user(db = Depends(get_db_auth), token: str = Depends(oauth
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
-        if username is None:
+        if not username:
             raise credentials_exception
         token_data = TokenData(username=username)
-    except JWTError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Ошибка проверки токена: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    except JWTError:
+        raise credentials_exception
     
     user = await get_user(db, username=token_data.username)
-    if user is None:
+    if not user:
         raise credentials_exception
     return user
 
 # Роуты
-@app.get("/")
-async def read_root():
-    return {"message": "Добро пожаловать в API"}
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/register", response_model=UserBase)
 async def register(user: UserCreate, db = Depends(get_db_auth)):
@@ -193,16 +189,10 @@ async def register(user: UserCreate, db = Depends(get_db_auth)):
             "SELECT * FROM users WHERE email = %s OR username = %s", 
             (user.email, user.username)
         )
-        existing_user = cur.fetchone()
-        
-        if existing_user:
-            raise HTTPException(
-                status_code=400,
-                detail="Email или имя пользователя уже заняты",
-            )
+        if cur.fetchone():
+            raise HTTPException(400, "Email или имя пользователя уже заняты")
         
         hashed_password = get_password_hash(user.password)
-        
         cur.execute(
             "INSERT INTO users (email, username, password_hash) VALUES (%s, %s, %s) RETURNING id, email, username",
             (user.email, user.username, hashed_password)
@@ -212,10 +202,7 @@ async def register(user: UserCreate, db = Depends(get_db_auth)):
         return new_user
     except psycopg2.Error as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Ошибка базы данных: {str(e)}"
-        )
+        raise HTTPException(500, f"Ошибка базы данных: {str(e)}")
     finally:
         cur.close()
 
@@ -232,10 +219,9 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user["username"]},
-        expires_delta=access_token_expires
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
@@ -255,16 +241,11 @@ async def save_image_url(post_data: ImagePostRequest, db = Depends(get_db_connec
             )
             post_id = cur.fetchone()["post_id"]
             db.commit()
-        
-        return {"status": "success", "post_id": post_id, "image_url": post_data.image_url}
-    
+        return {"status": "success", "post_id": post_id}
     except psycopg2.DatabaseError as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(500, f"Database error: {str(e)}")
 
-# Запуск сервера
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
