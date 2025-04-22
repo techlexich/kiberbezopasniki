@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Интерактивная карта</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-light: #4895ef;
+            --secondary: #7209b7;
+            --text: #2b2d42;
+            --text-light: #8d99ae;
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --border: #e9ecef;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text);
+            background-color: var(--bg);
+        }
+        
+        #map {
+            width: 100%;
+            height: 100vh;
+            background-color: #e6e6e6;
+        }
+        
+        .control-button {
+            position: absolute;
+            top: 20px;
+            padding: 10px 16px;
+            background-color: var(--card);
+            border: 1px solid var(--border);
+            color: var(--primary);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-button:hover {
+            background-color: #f1f6fe;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        #feed-button {
+            left: 20px;
+        }
+        
+        #filters-button {
+            left: 120px;
+        }
+        
+        #profile-button {
+            right: 20px;
+        }
+        
+        .modal {
+            display: none;
+            position: absolute;
+            top: 80px; /* Смещаем ниже кнопок */
+            background-color: var(--card);
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            z-index: 1001;
+            width: 300px;
+            max-width: calc(100% - 40px);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            border: 1px solid var(--border);
+        }
+        
+        .modal.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0;
+        }
+        
+        #filters-modal {
+            left: 120px;
+        }
+        
+        #profile-modal {
+            right: 20px;
+            max-height: 80vh;
+            overflow-y: auto; /* Добавляем прокрутку если контент не помещается */
+        }
+        
+        .filter-group {
+            margin-bottom: 20px;
+        }
+        
+        .filter-title {
+            font-weight: 500;
+            margin-bottom: 12px;
+            display: block;
+            color: var(--text);
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .filter-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+            justify-content: center;
+        }
+        
+        .filter-option {
+            display: inline-block;
+        }
+        
+        .filter-option input {
+            display: none;
+        }
+        
+        .filter-option label {
+            display: inline-block;
+            padding: 8px 14px;
+            background-color: var(--bg);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .filter-option input:checked + label {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .filter-option label:hover {
+            background-color: #f1f3f5;
+        }
+        
+        .close-button {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+        
+        .close-button:hover {
+            background-color: #f1f3f5;
+            color: var(--text);
+        }
+        
+        .auth-option {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            text-align: center;
+            background-color: var(--bg);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border);
+            font-weight: 500;
+            box-sizing: border-box; /* Учитываем padding в ширине */
+        }
+        
+        .auth-option:hover {
+            background-color: #f1f3f5;
+        }
+        
+        .auth-option.primary {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .auth-option.primary:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .auth-form {
+            display: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .auth-form.active {
+            display: block;
+        }
+        
+        .auth-form input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s ease;
+        }
+        
+        .auth-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+        }
+        
+        .auth-form button {
+            width: 100%;
+            padding: 12px;
+            margin: 16px 0 8px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            box-sizing: border-box;
+        }
+        
+        .auth-form button:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .back-button {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            margin-bottom: 16px;
+            font-size: 14px;
+            transition: color 0.2s ease;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0;
+        }
+        
+        .back-button:hover {
+            color: var(--text);
+        }
+        
+        /* Скрываем украинский флаг */
+        .leaflet-control-attribution {
+            display: none !important;
+        }
+        
+        /* Оптимизация для мобильных устройств */
+        @media (max-width: 768px) {
+            #feed-button, #filters-button, #profile-button {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            
+            #filters-button {
+                left: 110px;
+            }
+            
+            .modal {
+                width: 280px;
+                left: 50%;
+                transform: translateX(-50%) translateY(-10px);
+            }
+            
+            .modal.show {
+                transform: translateX(-50%) translateY(0);
+            }
+            
+            #filters-modal {
+                left: 50%;
+                transform: translateX(-50%) translateY(-10px);
+            }
+            
+            #filters-modal.show {
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <form action="/app/frontend/tape.html">
+        <button id="feed-button" class="control-button">
+            <i class="fas fa-stream"></i> Лента
+        </button>
+    </form>
+    <button id="filters-button" class="control-button">
+        <i class="fas fa-filter"></i> Фильтры
+    </button>
+    <button id="profile-button" class="control-button">
+        <i class="fas fa-user"></i> Профиль
+    </button>
+    
+    <div id="filters-modal" class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Фильтры</h3>
+            <button class="close-button" id="close-filters">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-title">Время суток</span>
+            <div class="filter-options">
+                <div class="filter-option">
+                    <input type="checkbox" id="time-morning" name="time" value="morning">
+                    <label for="time-morning">Утро</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="time-day" name="time" value="day">
+                    <label for="time-day">День</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="time-evening" name="time" value="evening">
+                    <label for="time-evening">Вечер</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="time-night" name="time" value="night">
+                    <label for="time-night">Ночь</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-title">Время года</span>
+            <div class="filter-options">
+                <div class="filter-option">
+                    <input type="checkbox" id="season-winter" name="season" value="winter">
+                    <label for="season-winter">Зима</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="season-spring" name="season" value="spring">
+                    <label for="season-spring">Весна</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="season-summer" name="season" value="summer">
+                    <label for="season-summer">Лето</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="season-autumn" name="season" value="autumn">
+                    <label for="season-autumn">Осень</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-title">Категории</span>
+            <div class="filter-options">
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-new" name="tag" value="new_architecture">
+                    <label for="tag-new">Архитектура</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-old" name="tag" value="old_town">
+                    <label for="tag-old">История</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-monument" name="tag" value="monument">
+                    <label for="tag-monument">Памятники</label>
+                </div>
+                <div class="filter-option">
+                    <input type="checkbox" id="tag-fountain" name="tag" value="fountain">
+                    <label for="tag-fountain">Фонтаны</label>
+                </div>
+            </div>
+        </div>
+        
+        <button class="auth-option primary" style="margin-top: 12px;">
+            Применить фильтры
+        </button>
+    </div>
+    
+    <div id="profile-modal" class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Профиль</h3>
+            <button class="close-button" id="close-profile">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div id="auth-options">
+            <div class="auth-option primary" id="login-option">
+                <i class="fas fa-sign-in-alt"></i> Войти
+            </div>
+            <div class="auth-option" id="register-option">
+                <i class="fas fa-user-plus"></i> Зарегистрироваться
+            </div>
+        </div>
+        
+        <div id="login-form" class="auth-form">
+            <button class="back-button" id="back-from-login">
+                <i class="fas fa-arrow-left"></i> Назад
+            </button>
+            <h3 class="modal-title">Вход в аккаунт</h3>
+            <input type="text" placeholder="Email или логин" id="login-email">
+            <input type="password" placeholder="Пароль" id="login-password">
+            <button id="login-button">Войти</button>
+        </div>
+        
+        <div id="register-form" class="auth-form">
+            <button class="back-button" id="back-from-register">
+                <i class="fas fa-arrow-left"></i> Назад
+            </button>
+            <h3 class="modal-title">Создать аккаунт</h3>
+            <input type="text" placeholder="Email" id="register-email">
+            <input type="text" placeholder="Логин" id="register-login">
+            <input type="password" placeholder="Пароль" id="register-password">
+            <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
+            <button id="register-button">Зарегистрироваться</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Оптимизированная инициализация карты
+        const map = L.map('map', {
+            zoomControl: true,
+            preferCanvas: true,
+            attributionControl: false
+        }).setView([56.835184, 60.609573], 13);
+
+        // Оптимизированный слой карты
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            minZoom: 2,
+            reuseTiles: true,
+            updateWhenIdle: true,
+            detectRetina: true
+        }).addTo(map);
+
+        // Перемещаем кнопки zoom в правый нижний угол
+        map.zoomControl.setPosition('bottomright');
+
+        // Управление модальными окнами
+        const filtersButton = document.getElementById('filters-button');
+        const profileButton = document.getElementById('profile-button');
+        const filtersModal = document.getElementById('filters-modal');
+        const profileModal = document.getElementById('profile-modal');
+        const closeFilters = document.getElementById('close-filters');
+        const closeProfile = document.getElementById('close-profile');
+
+        // Элементы авторизации
+        const authOptions = document.getElementById('auth-options');
+        const loginOption = document.getElementById('login-option');
+        const registerOption = document.getElementById('register-option');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const backFromLogin = document.getElementById('back-from-login');
+        const backFromRegister = document.getElementById('back-from-register');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+
+        // Поля ввода
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const registerEmail = document.getElementById('register-email');
+        const registerLogin = document.getElementById('register-login');
+        const registerPassword = document.getElementById('register-password');
+        const registerPasswordRepeat = document.getElementById('register-password-repeat');
+
+        // Базовый URL API (FastAPI бэкенд)
+        const API_URL = 'http://localhost:8000';
+
+        // Функции для модальных окон
+        function showModal(modal) {
+            modal.style.display = 'block';
+            setTimeout(() => modal.classList.add('show'), 10);
+        }
+
+        function hideModal(modal) {
+            modal.classList.remove('show');
+            setTimeout(() => modal.style.display = 'none', 200);
+        }
+
+        function resetAuthForms() {
+            authOptions.style.display = 'block';
+            loginForm.classList.remove('active');
+            registerForm.classList.remove('active');
+            loginEmail.value = '';
+            loginPassword.value = '';
+            registerEmail.value = '';
+            registerLogin.value = '';
+            registerPassword.value = '';
+            registerPasswordRepeat.value = '';
+        }
+
+        // Обработчики кнопок
+        filtersButton.addEventListener('click', () => {
+            showModal(filtersModal);
+            hideModal(profileModal);
+        });
+
+        profileButton.addEventListener('click', () => {
+            showModal(profileModal);
+            hideModal(filtersModal);
+            resetAuthForms();
+        });
+
+        closeFilters.addEventListener('click', () => hideModal(filtersModal));
+        closeProfile.addEventListener('click', () => hideModal(profileModal));
+
+        // Переключение форм авторизации/регистрации
+        loginOption.addEventListener('click', () => {
+            authOptions.style.display = 'none';
+            loginForm.classList.add('active');
+        });
+
+        registerOption.addEventListener('click', () => {
+            authOptions.style.display = 'none';
+            registerForm.classList.add('active');
+        });
+
+        backFromLogin.addEventListener('click', resetAuthForms);
+        backFromRegister.addEventListener('click', resetAuthForms);
+
+        // Регистрация (отправка данных на /register)
+        registerButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            if (registerPassword.value !== registerPasswordRepeat.value) {
+                alert('Пароли не совпадают!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: registerEmail.value,
+                        username: registerLogin.value,
+                        password: registerPassword.value,
+                        password_repeat: registerPasswordRepeat.value
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка регистрации');
+                }
+
+                const data = await response.json();
+                alert(`Регистрация успешна! Добро пожаловать, ${data.username}`);
+                resetAuthForms();
+                hideModal(profileModal);
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // Вход (отправка данных на /token)
+        loginButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            try {
+                const response = await fetch(`${API_URL}/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        username: loginEmail.value,
+                        password: loginPassword.value
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Неверный email или пароль');
+                }
+
+                const { access_token } = await response.json();
+                localStorage.setItem('access_token', access_token);
+                alert('Вход выполнен!');
+                resetAuthForms();
+                hideModal(profileModal);
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // Закрытие модалок при клике вне их области
+        window.addEventListener('click', (e) => {
+            if (e.target === filtersModal) hideModal(filtersModal);
+            if (e.target === profileModal) hideModal(profileModal);
+        });
+
+        // Оптимизация производительности карты
+        window.addEventListener('resize', () => {
+            map.invalidateSize();
+        });
+
+        // Отключаем некоторые эффекты на мобильных устройствах для производительности
+        if (/Mobi|Android/i.test(navigator.userAgent)) {
+            map.options.preferCanvas = true;
+            map.options.fadeAnimation = false;
+        }
+    </script>
+</body>
+</html>
