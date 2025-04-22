@@ -260,3 +260,12 @@ async def save_image_url(post_data: ImagePostRequest, db = Depends(get_db_connec
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@app.get("/tape", response_class=HTMLResponse)
+async def read_tape(request: Request):
+    if not templates:
+        raise HTTPException(
+            status_code=500,
+            detail="Шаблоны не настроены. Проверьте наличие директории 'templates'"
+        )
+    return templates.TemplateResponse("tape.html", {"request": request})
