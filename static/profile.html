@@ -405,10 +405,24 @@
             try {
                 // 1. Загружаем данные профиля
                 const profileResponse = await fetch(`/users/${username}`);
-                if (!profileResponse.ok) {
-                    window.location.href = '/404';
-                    return;
+                
+                // Проверяем, что ответ JSON, а не HTML
+                const contentType = profileResponse.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Invalid response format');
                 }
+                
+                if (!profileResponse.ok) {
+                    // Если 404 - перенаправляем на страницу 404
+                    if (profileResponse.status === 404) {
+                        window.location.href = '/404';
+                        return;
+                    }
+                    // Для других ошибок показываем сообщение
+                    const errorData = await profileResponse.json();
+                    throw new Error(errorData.message || 'Failed to load profile');
+                }
+                
                 const user = await profileResponse.json();
                 
                 // 2. Заполняем данные
@@ -434,6 +448,14 @@
                             headers: {'Authorization': `Bearer ${token}`}
                         });
                         
+                        // Проверяем content-type для /users/me
+                        const meContentType = meResponse.headers.get('content-type');
+                        if (!meContentType || !meContentType.includes('application/json')) {
+                            localStorage.removeItem('access_token');
+                            editBtn.style.display = 'none';
+                            return;
+                        }
+                        
                         if (meResponse.ok) {
                             currentUser = await meResponse.json();
                             if (currentUser.username === username) {
@@ -442,9 +464,16 @@
                             } else {
                                 editBtn.style.display = 'none';
                             }
+                        } else {
+                            // Если ошибка авторизации - удаляем токен
+                            if (meResponse.status === 401) {
+                                localStorage.removeItem('access_token');
+                            }
+                            editBtn.style.display = 'none';
                         }
                     } catch (e) {
                         console.error('Auth check failed:', e);
+                        localStorage.removeItem('access_token');
                         editBtn.style.display = 'none';
                     }
                 } else {
@@ -453,6 +482,8 @@
                 
             } catch (error) {
                 console.error('Profile load error:', error);
+                // Показываем пользователю сообщение об ошибке
+                alert('Ошибка загрузки профиля. Пожалуйста, попробуйте позже.');
             }
         }
         
