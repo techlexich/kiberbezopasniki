@@ -420,105 +420,73 @@
     </div>
 
     <script>
-        // Настройки API
-        const API_URL = window.location.origin; // Используем текущий хост
-        
         // Получаем username из URL
-        const username = window.location.pathname.split('/profile/')[1];
-        let currentUser = null;
+        const pathParts = window.location.pathname.split('/profile/');
+        const username = pathParts.length > 1 ? pathParts[1] : '';
         
         // Загружаем данные профиля
         async function loadProfile() {
+            if (!username) return;
+            
             try {
-                // Проверяем авторизацию
-                const token = localStorage.getItem('access_token');
-                if (token) {
-                    try {
-                        const response = await fetch(`${API_URL}/users/me`, {
-                            headers: {'Authorization': `Bearer ${token}`}
-                        });
-                        if (response.ok) {
-                            currentUser = await response.json();
-                        }
-                    } catch (error) {
-                        console.error("Ошибка проверки авторизации:", error);
-                    }
-                }
-                
-                // Загружаем данные профиля
-                const response = await fetch(`${API_URL}/users/${username}`);
-                if (!response.ok) {
-                    // Если профиль не найден, сервер сам перенаправит на 404
+                // 1. Загружаем данные профиля
+                const profileResponse = await fetch(`/users/${username}`);
+                if (!profileResponse.ok) {
+                    window.location.href = '/404';
                     return;
                 }
+                const user = await profileResponse.json();
                 
-                const user = await response.json();
-                
-                // Заполняем данные профиля
+                // 2. Заполняем данные
                 document.getElementById('profileName').textContent = user.username;
                 document.getElementById('profileBio').textContent = user.profile.bio || "Пока ничего не рассказал о себе";
                 
-                // Устанавливаем аватар
-                const avatarElement = document.getElementById('profileAvatar');
-                avatarElement.textContent = user.username[0].toUpperCase();
-                
-                // Если есть URL аватара, используем его
-                if (user.profile.avatar && user.profile.avatar.startsWith('http')) {
-                    avatarElement.style.backgroundImage = `url(${user.profile.avatar})`;
-                    avatarElement.style.backgroundSize = 'cover';
-                    avatarElement.textContent = '';
-                } else {
-                    avatarElement.style.background = `linear-gradient(135deg, ${getRandomColor()}, ${getRandomColor()})`;
+                // 3. Настраиваем аватар
+                const avatar = document.getElementById('profileAvatar');
+                avatar.textContent = user.username[0].toUpperCase();
+                if (user.profile.avatar && !user.profile.avatar.startsWith('/')) {
+                    avatar.style.backgroundImage = `url(${user.profile.avatar})`;
+                    avatar.style.backgroundSize = 'cover';
+                    avatar.textContent = '';
                 }
                 
-                // Обновляем аватарки в постах
-                document.querySelectorAll('.post-avatar').forEach(el => {
-                    el.textContent = user.username[0].toUpperCase();
-                    el.style.background = `linear-gradient(135deg, ${getRandomColor()}, ${getRandomColor()})`;
-                });
+                // 4. Проверяем авторизацию
+                const token = localStorage.getItem('access_token');
+                const editBtn = document.getElementById('editProfileBtn');
                 
-                // Проверяем, это профиль текущего пользователя?
-                const editButton = document.getElementById('editProfileBtn');
-                if (currentUser && currentUser.username === username) {
-                    // Настраиваем кнопку редактирования
-                    editButton.style.display = 'block';
-                    editButton.addEventListener('click', () => {
-                        window.location.href = `/profile/${username}/edit`;
-                    });
+                if (token) {
+                    try {
+                        const meResponse = await fetch('/users/me', {
+                            headers: {'Authorization': `Bearer ${token}`}
+                        });
+                        
+                        if (meResponse.ok) {
+                            const currentUser = await meResponse.json();
+                            if (currentUser.username === username) {
+                                editBtn.style.display = 'block';
+                                editBtn.onclick = () => openEditModal(user);
+                            } else {
+                                editBtn.style.display = 'none';
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Auth check failed:', e);
+                        editBtn.style.display = 'none';
+                    }
                 } else {
-                    // Скрываем кнопку редактирования для чужих профилей
-                    editButton.style.display = 'none';
+                    editBtn.style.display = 'none';
                 }
                 
             } catch (error) {
-                console.error("Ошибка загрузки профиля:", error);
+                console.error('Profile load error:', error);
             }
         }
-    
-        // Вспомогательная функция для генерации цвета
-        function getRandomColor() {
-            const colors = ['#4361ee', '#4895ef', '#7209b7', '#3a0ca3', '#4cc9f0'];
-            return colors[Math.floor(Math.random() * colors.length)];
+        
+        function openEditModal(user) {
+            // Здесь должна быть логика открытия модального окна редактирования
+            alert('Редактирование профиля для: ' + user.username);
+            // Или window.location.href = `/edit-profile/${user.username}`;
         }
-    
-        // Логика для лайков
-        document.querySelectorAll('.like-button').forEach(button => {
-            button.addEventListener('click', function() {
-                const icon = this.querySelector('i');
-                const countSpan = this.querySelector('span');
-                let count = parseInt(countSpan.textContent) || 0;
-                
-                if (this.classList.contains('liked')) {
-                    icon.classList.replace('fas', 'far');
-                    countSpan.textContent = count - 1;
-                    this.classList.remove('liked');
-                } else {
-                    icon.classList.replace('far', 'fas');
-                    countSpan.textContent = count + 1;
-                    this.classList.add('liked');
-                }
-            });
-        });
         
         // Загружаем профиль при открытии страницы
         window.addEventListener('DOMContentLoaded', loadProfile);
