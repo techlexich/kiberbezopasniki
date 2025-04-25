@@ -395,8 +395,8 @@
 <body>
     <div id="map"></div>
     
-    <!-- Измененная кнопка ленты - теперь просто ссылка на tape.html -->
-    <a href="/tape" id="feed-button" class="control-button">
+    <!-- Простая ссылка на ленту -->
+    <a href="/tape.html" id="feed-button" class="control-button">
         <i class="fas fa-stream"></i> Лента
     </a>
     
@@ -530,10 +530,7 @@
                 <button id="logout-btn">
                     <i class="fas fa-sign-out-alt"></i> Выйти
                 </button>
-
             </div>
-            
-
 
             <!-- Гостевой вид -->
             <div id="guest-view" class="guest-state">
@@ -594,6 +591,29 @@
         // Настройки API
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
+        let isApiAvailable = false;
+
+        // Проверка доступности API
+        async function checkApiAvailability() {
+            try {
+                const response = await fetch(`${API_URL}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    isApiAvailable = true;
+                    return true;
+                }
+            } catch (error) {
+                console.error('API недоступен:', error);
+                isApiAvailable = false;
+                return false;
+            }
+        }
 
         // Элементы интерфейса
         const filtersButton = document.getElementById('filters-button');
@@ -667,6 +687,8 @@
 
         // Функции для работы с авторизацией
         async function checkAuth() {
+            if (!isApiAvailable) return null;
+            
             const token = localStorage.getItem('access_token');
             if (!token) return null;
             
@@ -674,42 +696,48 @@
                 const response = await fetch(`${API_URL}/users/me`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
-                    }
+                    },
+                    timeout: 5000
                 });
                 
                 if (response.ok) {
                     return await response.json();
+                } else {
+                    localStorage.removeItem('access_token');
+                    return null;
                 }
             } catch (error) {
                 console.error('Auth check failed:', error);
+                return null;
             }
-            
-            localStorage.removeItem('access_token');
-            return null;
         }
 
         async function updateAuthUI() {
-            currentUser = await checkAuth();
-            const guestView = document.getElementById('guest-view');
-            const authView = document.getElementById('authenticated-view');
-            
-            if (currentUser) {
-                // Показываем авторизованный вид
-                document.getElementById('profile-username').textContent = currentUser.username;
-                document.getElementById('profile-email').textContent = currentUser.email;
-                document.getElementById('profile-button').innerHTML = 
-                    `<i class="fas fa-user"></i> ${currentUser.username}`;
+            try {
+                currentUser = await checkAuth();
+                const guestView = document.getElementById('guest-view');
+                const authView = document.getElementById('authenticated-view');
                 
-                // Жёстко переключаем видимость
-                guestView.style.display = 'none';
-                authView.style.display = 'block';
-                loginForm.classList.remove('active');
-                registerForm.classList.remove('active');
-            } else {
-                // Показываем гостевой вид
-                document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
-                guestView.style.display = 'flex';
-                authView.style.display = 'none';
+                if (currentUser) {
+                    // Показываем авторизованный вид
+                    document.getElementById('profile-username').textContent = currentUser.username || 'Пользователь';
+                    document.getElementById('profile-email').textContent = currentUser.email || 'Не указан';
+                    document.getElementById('profile-button').innerHTML = 
+                        `<i class="fas fa-user"></i> ${currentUser.username || 'Профиль'}`;
+                    
+                    // Жёстко переключаем видимость
+                    guestView.style.display = 'none';
+                    authView.style.display = 'block';
+                    loginForm.classList.remove('active');
+                    registerForm.classList.remove('active');
+                } else {
+                    // Показываем гостевой вид
+                    document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
+                    guestView.style.display = 'flex';
+                    authView.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Ошибка при обновлении UI:', error);
             }
         }
 
@@ -732,12 +760,13 @@
             if (path.startsWith('/profile/')) {
                 const username = path.split('/profile/')[1];
                 try {
-                    const response = await fetch(`${API_URL}/users/${username}`);
+                    const response = await fetch(`${API_URL}/users/${username}`, {
+                        timeout: 5000
+                    });
                     if (!response.ok) {
                         // Сервер сам перенаправит на 404
                         return;
                     }
-                    // Здесь можно загрузить данные профиля, если нужно
                 } catch (error) {
                     console.error("Ошибка:", error);
                 }
@@ -777,6 +806,11 @@
             e.preventDefault();
             registerError.style.display = 'none';
             
+            if (!isApiAvailable) {
+                showError(registerError, 'Сервис временно недоступен');
+                return;
+            }
+
             if (registerPassword.value !== registerPasswordRepeat.value) {
                 showError(registerError, 'Пароли не совпадают');
                 return;
@@ -791,21 +825,22 @@
                         username: registerLogin.value,
                         password: registerPassword.value,
                         password_repeat: registerPasswordRepeat.value
-                    })
+                    }),
+                    timeout: 10000
                 });
 
+                const data = await response.json();
+                
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Ошибка регистрации');
+                    throw new Error(data.detail || 'Ошибка регистрации');
                 }
 
-                const data = await response.json();
                 localStorage.setItem('access_token', data.access_token);
                 await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
             } catch (error) {
-                showError(registerError, error.message);
+                showError(registerError, error.message || 'Ошибка соединения');
             }
         });
 
@@ -814,6 +849,11 @@
             e.preventDefault();
             loginError.style.display = 'none';
 
+            if (!isApiAvailable) {
+                showError(loginError, 'Сервис временно недоступен');
+                return;
+            }
+
             try {
                 const response = await fetch(`${API_URL}/token`, {
                     method: 'POST',
@@ -821,50 +861,33 @@
                     body: new URLSearchParams({
                         username: loginEmail.value,
                         password: loginPassword.value
-                    })
+                    }),
+                    timeout: 10000
                 });
 
+                const data = await response.json();
+                
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Неверный email или пароль');
+                    throw new Error(data.detail || 'Неверный email или пароль');
                 }
 
-                const { access_token } = await response.json();
-                localStorage.setItem('access_token', access_token);
+                localStorage.setItem('access_token', data.access_token);
                 await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
             } catch (error) {
-                showError(loginError, error.message);
+                showError(loginError, error.message || 'Ошибка соединения');
             }
-        });
-
-        // Редактирование профиля
-        document.getElementById('go-to-profile').addEventListener('click', (e) => {
-            e.preventDefault();
-            if (!currentUser) {
-                alert("Сначала войдите в аккаунт");
-                return;
-            }
-            window.location.href = `/profile/${currentUser.username}`;
-        });
-
-        // Открытие модалки редактирования
-        document.getElementById('editProfileBtn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById('edit-bio').value = currentUser.profile?.bio || '';
-            document.getElementById('edit-avatar').value = currentUser.profile?.avatar || '';
-            showModal(document.getElementById('edit-profile-modal'));
-        });
-
-        // Закрытие модалки
-        document.getElementById('close-edit-profile')?.addEventListener('click', () => {
-            hideModal(document.getElementById('edit-profile-modal'));
         });
 
         // Отправка формы редактирования
         document.getElementById('edit-profile-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            if (!isApiAvailable) {
+                alert('Сервис временно недоступен');
+                return;
+            }
             
             const updatedProfile = {
                 bio: document.getElementById('edit-bio').value,
@@ -878,7 +901,8 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
-                    body: JSON.stringify(updatedProfile)
+                    body: JSON.stringify(updatedProfile),
+                    timeout: 10000
                 });
                 
                 if (!response.ok) {
@@ -893,7 +917,7 @@
                 
             } catch (error) {
                 console.error('Ошибка при обновлении профиля:', error);
-                alert('Ошибка: ' + error.message);
+                alert('Ошибка: ' + (error.message || 'Не удалось обновить профиль'));
             }
         });
 
@@ -913,14 +937,18 @@
 
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', async () => {
-            await updateAuthUI();
-            await checkProfilePage();
-            await updateAuthUI();
-            
-            // Оптимизация для мобильных устройств
-            if (/Mobi|Android/i.test(navigator.userAgent)) {
-                map.options.preferCanvas = true;
-                map.options.fadeAnimation = false;
+            try {
+                await checkApiAvailability();
+                await updateAuthUI();
+                await checkProfilePage();
+                
+                // Оптимизация для мобильных устройств
+                if (/Mobi|Android/i.test(navigator.userAgent)) {
+                    map.options.preferCanvas = true;
+                    map.options.fadeAnimation = false;
+                }
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
             }
         });
 
