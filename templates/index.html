@@ -497,6 +497,29 @@
         <div id="profile-content">
             <!-- Авторизованный вид -->
             <div id="authenticated-view" class="auth-state">
+                <div id="edit-profile-modal" class="modal">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Редактировать профиль</h3>
+                        <button class="close-button" id="close-edit-profile">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="edit-profile-form">
+                            <div class="form-group">
+                                <label for="edit-bio">Биография</label>
+                                <textarea id="edit-bio" class="form-control" rows="3" maxlength="500"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-avatar">Ссылка на аватар</label>
+                                <input type="url" id="edit-avatar" class="form-control" placeholder="https://example.com/avatar.jpg">
+                            </div>
+                            <button type="submit" class="auth-option primary">
+                                <i class="fas fa-save"></i> Сохранить изменения
+                            </button>
+                        </form>
+                    </div>
+                </div>
                 <div class="profile-info">
                     <p><i class="fas fa-user"></i> <span id="profile-username"></span></p>
                     <p class="email"><i class="fas fa-envelope"></i> <span id="profile-email"></span></p>
@@ -507,6 +530,7 @@
                 <button id="logout-btn">
                     <i class="fas fa-sign-out-alt"></i> Выйти
                 </button>
+
             </div>
             
 
@@ -812,6 +836,64 @@
                 hideModal(profileModal);
             } catch (error) {
                 showError(loginError, error.message);
+            }
+        });
+
+        // Редактирование профиля
+        document.getElementById('go-to-profile').addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!currentUser) {
+                alert("Сначала войдите в аккаунт");
+                return;
+            }
+            window.location.href = `/profile/${currentUser.username}`;
+        });
+
+        // Открытие модалки редактирования
+        document.getElementById('editProfileBtn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('edit-bio').value = currentUser.profile?.bio || '';
+            document.getElementById('edit-avatar').value = currentUser.profile?.avatar || '';
+            showModal(document.getElementById('edit-profile-modal'));
+        });
+
+        // Закрытие модалки
+        document.getElementById('close-edit-profile')?.addEventListener('click', () => {
+            hideModal(document.getElementById('edit-profile-modal'));
+        });
+
+        // Отправка формы редактирования
+        document.getElementById('edit-profile-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const updatedProfile = {
+                bio: document.getElementById('edit-bio').value,
+                avatar: document.getElementById('edit-avatar').value || '/default-avatar.jpg'
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/users/${currentUser.username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    body: JSON.stringify(updatedProfile)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                
+                const updatedUser = await response.json();
+                currentUser = updatedUser;
+                alert('Профиль успешно обновлен!');
+                hideModal(document.getElementById('edit-profile-modal'));
+                await updateAuthUI();
+                
+            } catch (error) {
+                console.error('Ошибка при обновлении профиля:', error);
+                alert('Ошибка: ' + error.message);
             }
         });
 
