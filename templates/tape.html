@@ -51,6 +51,11 @@
             letter-spacing: -0.5px;
         }
 
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
         .nav-button {
             background: var(--card);
             border: 1px solid var(--border);
@@ -283,11 +288,18 @@
     <div class="feed-container">
         <header class="header">
             <div class="logo">PhotoTravel</div>
-            <form action="/">
-                <button class="nav-button">
-                    <i class="fas fa-map-marker-alt"></i> Карта
-                </button>
-            </form>
+            <div class="nav-buttons">
+                <form action="/profile/current_user" id="profileForm">
+                    <button class="nav-button">
+                        <i class="fas fa-user"></i> Профиль
+                    </button>
+                </form>
+                <form action="/">
+                    <button class="nav-button">
+                        <i class="fas fa-map-marker-alt"></i> Карта
+                    </button>
+                </form>
+            </div>
         </header>
 
         <div class="post">
@@ -429,6 +441,38 @@
                 img.src = img.getAttribute('src');
                 img.classList.remove('loading');
             }, 1000 + Math.random() * 2000);
+        });
+
+        // Получаем имя текущего пользователя и обновляем форму профиля
+        document.addEventListener('DOMContentLoaded', function() {
+            // Проверяем авторизацию (примерная логика)
+            const token = localStorage.getItem('access_token');
+            
+            if (token) {
+                // Запрашиваем данные текущего пользователя
+                fetch('/users/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error('Ошибка авторизации');
+                    return response.json();
+                })
+                .then(user => {
+                    // Обновляем ссылку на профиль
+                    const profileForm = document.getElementById('profileForm');
+                    profileForm.action = `/profile/${user.username}`;
+                })
+                .catch(error => {
+                    console.error('Ошибка получения данных пользователя:', error);
+                    // Перенаправляем на страницу входа, если не авторизован
+                    window.location.href = '/login';
+                });
+            } else {
+                // Если нет токена, перенаправляем на страницу входа
+                window.location.href = '/login';
+            }
         });
     </script>
 </body>
