@@ -77,7 +77,6 @@
             margin: 0 auto;
         }
 
-        /* Шапка профиля */
         .profile-header {
             background: var(--card);
             border-radius: 12px;
@@ -162,7 +161,6 @@
             border-color: var(--primary);
         }
 
-        /* Посты пользователя */
         .user-posts {
             margin-top: 32px;
         }
@@ -298,7 +296,137 @@
             color: #ff4757;
         }
 
-        /* Адаптив */
+        /* Модальное окно */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-content {
+            background-color: var(--card);
+            border-radius: 12px;
+            padding: 24px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: var(--shadow);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-light);
+            transition: color 0.2s ease;
+        }
+        
+        .close-modal:hover {
+            color: var(--text);
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text);
+        }
+        
+        .form-group textarea,
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s ease;
+        }
+        
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-group textarea:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+        }
+        
+        .save-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s ease;
+        }
+        
+        .save-btn:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .avatar-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 16px;
+            background-color: #f1f3f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 2px solid var(--border);
+        }
+        
+        .avatar-preview-text {
+            font-size: 24px;
+            font-weight: 600;
+            color: white;
+        }
+
         @media (max-width: 600px) {
             .profile-stats {
                 gap: 16px;
@@ -419,10 +547,44 @@
         </div>
     </div>
 
+    <!-- Модальное окно редактирования -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Редактировать профиль</h3>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            <form id="editProfileForm">
+                <div class="form-group">
+                    <label for="editBio">Описание профиля</label>
+                    <textarea id="editBio" maxlength="500"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="editAvatar">Ссылка на аватар</label>
+                    <input type="text" id="editAvatar" placeholder="https://example.com/avatar.jpg">
+                </div>
+                <div class="avatar-preview" id="avatarPreview">
+                    <div class="avatar-preview-text" id="avatarPreviewText">U</div>
+                </div>
+                <button type="submit" class="save-btn">Сохранить изменения</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Получаем username из URL
         const pathParts = window.location.pathname.split('/profile/');
         const username = pathParts.length > 1 ? pathParts[1] : '';
+        let currentUser = null;
+        
+        // Элементы модального окна
+        const editModal = document.getElementById('editModal');
+        const closeModalBtn = document.getElementById('closeModal');
+        const editProfileForm = document.getElementById('editProfileForm');
+        const editBio = document.getElementById('editBio');
+        const editAvatar = document.getElementById('editAvatar');
+        const avatarPreview = document.getElementById('avatarPreview');
+        const avatarPreviewText = document.getElementById('avatarPreviewText');
         
         // Загружаем данные профиля
         async function loadProfile() {
@@ -461,7 +623,7 @@
                         });
                         
                         if (meResponse.ok) {
-                            const currentUser = await meResponse.json();
+                            currentUser = await meResponse.json();
                             if (currentUser.username === username) {
                                 editBtn.style.display = 'block';
                                 editBtn.onclick = () => openEditModal(user);
@@ -482,11 +644,108 @@
             }
         }
         
+        // Открытие модального окна редактирования
         function openEditModal(user) {
-            // Здесь должна быть логика открытия модального окна редактирования
-            alert('Редактирование профиля для: ' + user.username);
-            // Или window.location.href = `/edit-profile/${user.username}`;
+            editBio.value = user.profile.bio || '';
+            editAvatar.value = user.profile.avatar || '';
+            
+            // Обновляем превью аватара
+            updateAvatarPreview(user.username[0].toUpperCase(), user.profile.avatar);
+            
+            // Показываем модальное окно
+            editModal.classList.add('active');
+            
+            // Слушаем изменения в поле аватара
+            editAvatar.addEventListener('input', () => {
+                updateAvatarPreview(user.username[0].toUpperCase(), editAvatar.value);
+            });
         }
+        
+        // Обновление превью аватара
+        function updateAvatarPreview(letter, avatarUrl) {
+            if (avatarUrl && avatarUrl.trim() !== '') {
+                avatarPreview.style.backgroundImage = `url(${avatarUrl})`;
+                avatarPreview.style.backgroundSize = 'cover';
+                avatarPreviewText.style.display = 'none';
+                avatarPreview.style.backgroundColor = 'transparent';
+            } else {
+                avatarPreview.style.backgroundImage = 'none';
+                avatarPreview.style.backgroundColor = 'linear-gradient(135deg, var(--primary), var(--secondary))';
+                avatarPreviewText.style.display = 'flex';
+                avatarPreviewText.textContent = letter;
+            }
+        }
+        
+        // Закрытие модального окна
+        function closeEditModal() {
+            editModal.classList.remove('active');
+        }
+        
+        // Сохранение изменений профиля
+        async function saveProfileChanges(event) {
+            event.preventDefault();
+            
+            const newBio = editBio.value;
+            const newAvatar = editAvatar.value;
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    alert('Ошибка авторизации. Пожалуйста, войдите снова.');
+                    return;
+                }
+                
+                const response = await fetch(`/users/${username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        bio: newBio,
+                        avatar: newAvatar || '/default-avatar.jpg'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка при сохранении изменений');
+                }
+                
+                const updatedUser = await response.json();
+                
+                // Обновляем данные на странице
+                document.getElementById('profileBio').textContent = updatedUser.profile.bio || "Пока ничего не рассказал о себе";
+                
+                const avatar = document.getElementById('profileAvatar');
+                avatar.textContent = updatedUser.username[0].toUpperCase();
+                if (updatedUser.profile.avatar && !updatedUser.profile.avatar.startsWith('/')) {
+                    avatar.style.backgroundImage = `url(${updatedUser.profile.avatar})`;
+                    avatar.style.backgroundSize = 'cover';
+                    avatar.textContent = '';
+                } else {
+                    avatar.style.backgroundImage = 'none';
+                    avatar.textContent = updatedUser.username[0].toUpperCase();
+                }
+                
+                closeEditModal();
+                alert('Изменения успешно сохранены!');
+                
+            } catch (error) {
+                console.error('Error saving profile:', error);
+                alert('Ошибка при сохранении изменений: ' + error.message);
+            }
+        }
+        
+        // Назначаем обработчики событий
+        closeModalBtn.addEventListener('click', closeEditModal);
+        editProfileForm.addEventListener('submit', saveProfileChanges);
+        
+        // Закрытие модального окна при клике вне его
+        editModal.addEventListener('click', (event) => {
+            if (event.target === editModal) {
+                closeEditModal();
+            }
+        });
         
         // Загружаем профиль при открытии страницы
         window.addEventListener('DOMContentLoaded', loadProfile);
