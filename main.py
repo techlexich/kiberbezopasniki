@@ -108,13 +108,15 @@ async def root_head():
 
 # Подключение к БД
 def get_db_auth():
+    conn = None  # Инициализируем переменную заранее
     try:
         conn = psycopg2.connect(
-            dbname="auth_db_17at",  # Имя БД
-            user="auth_db_17at_user",  # Пользователь
-            password="eGFSjcl2O29bWJBCAcRdh4MIzjNFojNZ",  # Пароль
-            host="dpg-d05lfk2li9vc738u4vb0-a",  # Хост
-            port="5432"  # Порт
+            dbname="auth_db_17at",
+            user="auth_db_17at_user",
+            password="eGFSjcl2O29bWJBCAcRdh4MIzjNFojNZ",
+            host="dpg-d05lfk2li9vc738u4vb0-a",
+            port="5432",
+            cursor_factory=RealDictCursor  # Используем RealDictCursor для работы со словарями
         )
         yield conn
     except psycopg2.Error as e:
@@ -123,8 +125,8 @@ def get_db_auth():
             detail=f"Ошибка подключения к базе данных: {str(e)}"
         )
     finally:
-        conn.close()
-
+        if conn is not None:  # Проверяем, что соединение было создано
+            conn.close()
 
 # Вспомогательные функции
 def verify_password(plain_password: str, hashed_password: str):
@@ -235,21 +237,7 @@ async def login_for_access_token(
 async def read_users_me(current_user: UserInDB = Depends(get_current_user)):
     return current_user
 
-@app.post("/api/save-image-url")
-async def save_image_url(post_data: ImagePostRequest, db = Depends(get_db_connect)):
-    try:
-        with db.cursor() as cur:
-            cur.execute(
-                """INSERT INTO posts (photo_url, user_id, created_at, description)
-                   VALUES (%s, %s, %s, %s) RETURNING post_id""",
-                (post_data.image_url, 1, datetime.utcnow(), post_data.description)
-            )
-            post_id = cur.fetchone()["post_id"]
-            db.commit()
-        return {"status": "success", "post_id": post_id}
-    except psycopg2.DatabaseError as e:
-        db.rollback()
-        raise HTTPException(500, f"Database error: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
