@@ -51,6 +51,11 @@
             letter-spacing: -0.5px;
         }
 
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
         .nav-button {
             background: var(--card);
             border: 1px solid var(--border);
@@ -309,6 +314,11 @@
             .profile-header {
                 padding: 20px 16px;
             }
+            
+            .nav-buttons {
+                flex-direction: column;
+                gap: 8px;
+            }
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -318,11 +328,18 @@
     <div class="profile-container">
         <header class="header">
             <div class="logo">PhotoTravel</div>
-            <form action="/">
-                <button class="nav-button">
-                    <i class="fas fa-map-marker-alt"></i> Карта
-                </button>
-            </form>
+            <div class="nav-buttons">
+                <form action="/tape">
+                    <button class="nav-button">
+                        <i class="fas fa-newspaper"></i> Лента
+                    </button>
+                </form>
+                <form action="/">
+                    <button class="nav-button">
+                        <i class="fas fa-map-marker-alt"></i> Карта
+                    </button>
+                </form>
+            </div>
         </header>
 
         <div class="profile-header">
@@ -550,8 +567,15 @@
                     })
                 });
                 
+                // Проверяем content-type
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Invalid response format');
+                }
+                
                 if (!response.ok) {
-                    throw new Error('Ошибка при сохранении изменений');
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Ошибка при сохранении изменений');
                 }
                 
                 const updatedUser = await response.json();
@@ -575,6 +599,11 @@
             } catch (error) {
                 console.error('Error saving profile:', error);
                 alert('Ошибка при сохранении изменений: ' + error.message);
+                
+                // Если ошибка авторизации - предлагаем войти снова
+                if (error.message.includes('401') || error.message.includes('auth')) {
+                    localStorage.removeItem('access_token');
+                }
             }
         }
         
