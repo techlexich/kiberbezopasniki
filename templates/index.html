@@ -690,15 +690,27 @@
         }
 
         // Обработчик кнопки "Перейти в профиль"
-        document.getElementById('go-to-profile').addEventListener('click', (e) => {
+        document.getElementById('go-to-profile').addEventListener('click', async (e) => {
             e.preventDefault();
             
-            if (currentUser) {
-                // Перенаправляем на страницу профиля (можно изменить URL)
+            if (!currentUser) {
+                alert("Сначала войдите в аккаунт");
+                return;
+            }
+
+            try {
+                // Проверяем существование пользователя
+                const response = await fetch(`${API_URL}/users/${currentUser.username}`);
+                
+                if (!response.ok) {
+                throw new Error("Пользователь не найден");
+                }
+
+                // Если всё ок — редирект
                 window.location.href = `/profile/${currentUser.username}`;
-            } else {
-                console.error("Пользователь не авторизован");
-                // Можно показать сообщение об ошибке
+            } catch (error) {
+                console.error("Ошибка:", error);
+                alert("Профиль не найден");
             }
         });
 
