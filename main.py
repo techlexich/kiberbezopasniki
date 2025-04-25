@@ -14,6 +14,7 @@ from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
 from pathlib import Path
+from fastapi.middleware.base import BaseHTTPMiddleware
 
 # Настройки
 load_dotenv()
@@ -200,7 +201,11 @@ async def update_profile(
         }
 
 @app.get("/profile/{username}")
-async def profile_page(username: str):
+async def profile_page(username: str, db=Depends(get_db)):
+    # Проверяем существование пользователя
+    user = await get_user(db, username)
+    if not user:
+        raise HTTPException(status_code=404)
     return FileResponse("static/profile.html")
 
 @app.get("/", response_class=HTMLResponse)
@@ -214,6 +219,15 @@ async def tape(request: Request):
     if not templates:
         raise HTTPException(500, "Templates not found")
     return templates.TemplateResponse("tape.html", {"request": request})
+
+class NotFoundMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if response.status_code == 404:
+            return FileResponse("static/404.html")
+        return response
+
+app.add_middleware(NotFoundMiddleware)
 
 if __name__ == "__main__":
     import uvicorn

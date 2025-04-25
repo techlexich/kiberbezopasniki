@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Страница не найдена</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --text: #2b2d42;
+            --error: #dc3545;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            background-color: #f8f9fa;
+            color: var(--text);
+        }
+        
+        .error-code {
+            font-size: 120px;
+            font-weight: 600;
+            color: var(--error);
+            margin-bottom: 20px;
+        }
+        
+        .error-message {
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        
+        .home-link {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        
+        .home-link:hover {
+            background-color: #3a56d4;
+        }
+        
+        .fa-triangle-exclamation {
+            font-size: 80px;
+            color: var(--error);
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <i class="fas fa-triangle-exclamation"></i>
+    <div class="error-code">404</div>
+    <div class="error-message">Пользователь не найден</div>
+    <a href="/" class="home-link">
+        <i class="fas fa-home"></i> Вернуться на главную
+    </a>
+</body>
+</html>

@@ -697,22 +697,28 @@
                 alert("Сначала войдите в аккаунт");
                 return;
             }
-
-            try {
-                // Проверяем существование пользователя
-                const response = await fetch(`${API_URL}/users/${currentUser.username}`);
-                
-                if (!response.ok) {
-                throw new Error("Пользователь не найден");
-                }
-
-                // Если всё ок — редирект
-                window.location.href = `/profile/${currentUser.username}`;
-            } catch (error) {
-                console.error("Ошибка:", error);
-                alert("Профиль не найден");
-            }
+            
+            // Просто редирект без проверки (проверка будет на сервере)
+            window.location.href = `/profile/${currentUser.username}`;
         });
+
+        // Проверка профиля при загрузке страницы
+        async function checkProfilePage() {
+            const path = window.location.pathname;
+            if (path.startsWith('/profile/')) {
+                const username = path.split('/profile/')[1];
+                try {
+                    const response = await fetch(`${API_URL}/users/${username}`);
+                    if (!response.ok) {
+                        // Сервер сам перенаправит на 404
+                        return;
+                    }
+                    // Здесь можно загрузить данные профиля, если нужно
+                } catch (error) {
+                    console.error("Ошибка:", error);
+                }
+            }
+        }
 
         // Обработчики кнопок входа/регистрации
         loginOption.addEventListener('click', () => {
@@ -825,6 +831,8 @@
 
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', async () => {
+            await updateAuthUI();
+            await checkProfilePage();
             await updateAuthUI();
             
             // Оптимизация для мобильных устройств
