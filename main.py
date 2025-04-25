@@ -99,6 +99,13 @@ class ImagePostRequest(BaseModel):
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+
+@app.head("/")  # Явно разрешаем HEAD /
+async def root_head():
+    return {"message": "OK"}
+
+
+
 # Подключение к БД
 def get_db_auth():
     try:
@@ -118,21 +125,6 @@ def get_db_auth():
     finally:
         conn.close()
 
-def get_db_connect():
-    try:
-        conn = psycopg2.connect(
-            CONNECT_DATABASE_URL,
-            cursor_factory=RealDictCursor,
-            client_encoding='utf-8'
-        )
-        yield conn
-    except psycopg2.Error as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Ошибка подключения к базе данных: {str(e)}"
-        )
-    finally:
-        conn.close()
 
 # Вспомогательные функции
 def verify_password(plain_password: str, hashed_password: str):
