@@ -113,6 +113,10 @@
         }
         
         #profile-modal {
+            box-sizing: border-box; 
+            width: 300px;
+            max-width: calc(100% - 40px);
+            padding: 18px;
             right: 20px;
             max-height: 80vh;
             overflow-y: auto;
@@ -121,9 +125,6 @@
         /* Стили для системы авторизации */
         .auth-state { display: none; }
         .guest-state { display: flex; flex-direction: column; gap: 8px; }
-        
-        body.authenticated .auth-state { display: block; }
-        body.authenticated .guest-state { display: none; }
         
         .profile-info {
             padding: 16px 0;
@@ -367,9 +368,10 @@
                 transform: translateX(-50%) translateY(0);
             }
         }
-        /* Добавляем стиль для новой кнопки */
+        
         .profile-redirect-btn {
             width: 100%;
+            box-sizing: border-box;
             padding: 12px;
             margin: 16px 0 8px;
             background-color: var(--primary);
@@ -576,7 +578,6 @@
         const closeProfile = document.getElementById('close-profile');
 
         // Элементы авторизации
-        const authOptions = document.getElementById('auth-options');
         const loginOption = document.getElementById('login-option');
         const registerOption = document.getElementById('register-option');
         const loginForm = document.getElementById('login-form');
@@ -611,25 +612,32 @@
         }
 
         function resetAuthForms() {
-            document.getElementById('guest-view').style.display = 'flex';
+            if (currentUser) {
+                document.getElementById('guest-view').style.display = 'none';
+                document.getElementById('authenticated-view').style.display = 'block';
+            } else {
+                document.getElementById('guest-view').style.display = 'flex';
+                document.getElementById('authenticated-view').style.display = 'none';
+            }
+            
             document.getElementById('login-form').classList.remove('active');
             document.getElementById('register-form').classList.remove('active');
-            document.getElementById('login-email').value = '';
-            document.getElementById('login-password').value = '';
-            document.getElementById('register-email').value = '';
-            document.getElementById('register-login').value = '';
-            document.getElementById('register-password').value = '';
-            document.getElementById('register-password-repeat').value = '';
-            document.getElementById('login-error').style.display = 'none';
-            document.getElementById('register-error').style.display = 'none';
+            loginEmail.value = '';
+            loginPassword.value = '';
+            registerEmail.value = '';
+            registerLogin.value = '';
+            registerPassword.value = '';
+            registerPasswordRepeat.value = '';
+            loginError.style.display = 'none';
+            registerError.style.display = 'none';
         }
 
-        // Обновленный обработчик открытия профиля
+        // Обработчик открытия профиля
         profileButton.addEventListener('click', () => {
-    showModal(profileModal);
-    hideModal(filtersModal);
-    resetAuthForms(); // Сбрасываем формы при каждом открытии
-});
+            showModal(profileModal);
+            hideModal(filtersModal);
+            resetAuthForms();
+        });
 
         // Функции для работы с авторизацией
         async function checkAuth() {
@@ -656,36 +664,39 @@
 
         async function updateAuthUI() {
             currentUser = await checkAuth();
+            const guestView = document.getElementById('guest-view');
+            const authView = document.getElementById('authenticated-view');
             
             if (currentUser) {
-                // Показываем авторизованный интерфейс
-                document.body.classList.add('authenticated');
+                // Показываем авторизованный вид
                 document.getElementById('profile-username').textContent = currentUser.username;
                 document.getElementById('profile-email').textContent = currentUser.email;
                 document.getElementById('profile-button').innerHTML = 
                     `<i class="fas fa-user"></i> ${currentUser.username}`;
                 
-                // Сбрасываем формы авторизации
-                resetAuthForms();
+                // Жёстко переключаем видимость
+                guestView.style.display = 'none';
+                authView.style.display = 'block';
+                loginForm.classList.remove('active');
+                registerForm.classList.remove('active');
             } else {
-                // Показываем гостевой интерфейс
-                document.body.classList.remove('authenticated');
-                document.getElementById('profile-button').innerHTML = 
-                    '<i class="fas fa-user"></i> Профиль';
+                // Показываем гостевой вид
+                document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
+                guestView.style.display = 'flex';
+                authView.style.display = 'none';
             }
         }
 
-        // Обработчики кнопок входа/регистрации (добавляем показ соответствующих форм)
-        document.getElementById('login-option')?.addEventListener('click', () => {
+        // Обработчики кнопок входа/регистрации
+        loginOption.addEventListener('click', () => {
             document.getElementById('guest-view').style.display = 'none';
-            document.getElementById('login-form').classList.add('active');
+            loginForm.classList.add('active');
         });
         
-        document.getElementById('register-option')?.addEventListener('click', () => {
+        registerOption.addEventListener('click', () => {
             document.getElementById('guest-view').style.display = 'none';
-            document.getElementById('register-form').classList.add('active');
+            registerForm.classList.add('active');
         });
-
 
         function showError(element, message) {
             element.textContent = message;
@@ -698,24 +709,8 @@
             hideModal(profileModal);
         });
 
-        profileButton.addEventListener('click', () => {
-            showModal(profileModal);
-            hideModal(filtersModal);
-            resetAuthForms();
-        });
-
         closeFilters.addEventListener('click', () => hideModal(filtersModal));
         closeProfile.addEventListener('click', () => hideModal(profileModal));
-
-        loginOption.addEventListener('click', () => {
-            authOptions.style.display = 'none';
-            loginForm.classList.add('active');
-        });
-
-        registerOption.addEventListener('click', () => {
-            authOptions.style.display = 'none';
-            registerForm.classList.add('active');
-        });
 
         backFromLogin.addEventListener('click', resetAuthForms);
         backFromRegister.addEventListener('click', resetAuthForms);
@@ -790,6 +785,7 @@
         // Выход
         logoutButton.addEventListener('click', () => {
             localStorage.removeItem('access_token');
+            currentUser = null;
             updateAuthUI();
             hideModal(profileModal);
         });
