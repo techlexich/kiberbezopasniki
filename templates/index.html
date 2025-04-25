@@ -509,6 +509,8 @@
                 </button>
             </div>
             
+
+
             <!-- Гостевой вид -->
             <div id="guest-view" class="guest-state">
                 <button id="login-option" class="auth-option primary">
@@ -686,6 +688,19 @@
                 authView.style.display = 'none';
             }
         }
+
+        // Обработчик кнопки "Перейти в профиль"
+        document.getElementById('go-to-profile').addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            if (currentUser) {
+                // Перенаправляем на страницу профиля (можно изменить URL)
+                window.location.href = `/profile/${currentUser.username}`;
+            } else {
+                console.error("Пользователь не авторизован");
+                // Можно показать сообщение об ошибке
+            }
+        });
 
         // Обработчики кнопок входа/регистрации
         loginOption.addEventListener('click', () => {
