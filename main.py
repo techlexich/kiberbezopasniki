@@ -103,9 +103,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 def get_db_auth():
     try:
         conn = psycopg2.connect(
-            AUTH_DATABASE_URL,
-            cursor_factory=RealDictCursor,
-            client_encoding='utf-8'
+            dbname="auth_db_17at",  # Имя БД
+            user="auth_db_17at_user",  # Пользователь
+            password="eGFSjcl2O29bWJBCAcRdh4MIzjNFojNZ",  # Пароль
+            host="dpg-d05lfk2li9vc738u4vb0-a",  # Хост
+            port="5432"  # Порт
         )
         yield conn
     except psycopg2.Error as e:
