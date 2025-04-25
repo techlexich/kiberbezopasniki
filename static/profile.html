@@ -463,12 +463,58 @@
             }
         }
         
-        // Редактирование профиля
-        document.getElementById('editProfileBtn').addEventListener('click', () => {
-            alert('Редактирование профиля будет здесь!');
-            // window.location.href = `/profile/${username}/edit`;
-        });
-        
+        async function loadProfile() {
+            const username = window.location.pathname.split('/profile/')[1];
+            try {
+                const response = await fetch(`${API_URL}/users/${username}`);
+                if (!response.ok) {
+                    // Если профиль не найден, сервер сам перенаправит на 404
+                    return;
+                }
+                
+                const user = await response.json();
+                
+                // Заполняем данные профиля
+                document.getElementById('profileName').textContent = user.username;
+                document.getElementById('profileBio').textContent = user.profile.bio || "Пока ничего не рассказал о себе";
+                document.getElementById('profileAvatar').textContent = user.username[0].toUpperCase();
+                document.getElementById('profileAvatar').style.background = `linear-gradient(135deg, ${getRandomColor()}, ${getRandomColor()})`;
+                
+                // Обновляем аватарки в постах
+                document.querySelectorAll('.post-avatar').forEach(el => {
+                    el.textContent = user.username[0].toUpperCase();
+                    el.style.background = `linear-gradient(135deg, ${getRandomColor()}, ${getRandomColor()})`;
+                });
+                
+                // Проверяем, это профиль текущего пользователя?
+                const token = localStorage.getItem('access_token');
+                if (token) {
+                    const currentUser = await fetch(`${API_URL}/users/me`, {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    }).then(res => res.ok ? res.json() : null);
+                    
+                    if (currentUser && currentUser.username === username) {
+                        // Настраиваем кнопку редактирования
+                        document.getElementById('editProfileBtn').addEventListener('click', () => {
+                            window.location.href = '/'; // Или открываем модальное окно редактирования
+                        });
+                    } else {
+                        // Скрываем кнопку редактирования для чужих профилей
+                        document.getElementById('editProfileBtn').style.display = 'none';
+                    }
+                }
+                
+            } catch (error) {
+                console.error("Ошибка загрузки профиля:", error);
+            }
+        }
+
+        // Вспомогательная функция для генерации цвета
+        function getRandomColor() {
+            const colors = ['#4361ee', '#4895ef', '#7209b7', '#3a0ca3', '#4cc9f0'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
         // Логика для лайков
         document.querySelectorAll('.like-button').forEach(button => {
             button.addEventListener('click', function() {

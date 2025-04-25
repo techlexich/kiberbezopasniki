@@ -15,6 +15,8 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import HttpUrl, Field
+import logging
 
 # Настройки
 load_dotenv()
@@ -36,8 +38,8 @@ app.add_middleware(
 
 # Модели
 class UserProfile(BaseModel):
-    bio: str = ""
-    avatar: str = "/default-avatar.jpg"
+    bio: str = Field(default="", max_length=500)
+    avatar: HttpUrl = "https://example.com/default-avatar.jpg"
 
 class User(BaseModel):
     id: int
@@ -169,36 +171,53 @@ async def get_user_profile(username: str, db=Depends(get_db)):
         }
     }
 
-@app.put("/users/{user_id}", response_model=User)
+logger = logging.getLogger(__name__)
+@app.put("/users/{username}", response_model=User)
 async def update_profile(
-    user_id: int, 
+    username: str,
     profile: UserProfile,
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    if current_user["id"] != user_id:
-        raise HTTPException(403, "Forbidden")
+    # Проверяем, что текущий пользователь редактирует СВОЙ профиль
+    if current_user["username"] != username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Вы можете редактировать только свой профиль"
+        )
     
     with db.cursor() as cur:
-        cur.execute("""
-            UPDATE users 
-            SET bio = %s, avatar_url = %s
-            WHERE id = %s
-            RETURNING id, username, email, 
-                     COALESCE(bio, '') as bio,
-                     COALESCE(avatar_url, '/default-avatar.jpg') as avatar
-        """, (profile.bio, profile.avatar, user_id))
-        updated = cur.fetchone()
-        db.commit()
-        return {
-            "id": updated["id"],
-            "username": updated["username"],
-            "email": updated["email"],
-            "profile": {
-                "bio": updated["bio"],
-                "avatar": updated["avatar"]
+        try:
+            cur.execute("""
+                UPDATE users 
+                SET bio = %s, avatar_url = %s
+                WHERE username = %s
+                RETURNING id, username, email, 
+                         COALESCE(bio, '') as bio,
+                         COALESCE(avatar_url, '/default-avatar.jpg') as avatar
+            """, (profile.bio, profile.avatar, username))
+            
+            updated = cur.fetchone()
+            if not updated:
+                raise HTTPException(status_code=404, detail="Пользователь не найден")
+            
+            db.commit()
+            logger.info(f"User {username} updated their profile")
+            
+            return {
+                "id": updated["id"],
+                "username": updated["username"],
+                "email": updated["email"],
+                "profile": {
+                    "bio": updated["bio"],
+                    "avatar": updated["avatar"]
+                }
             }
-        }
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating profile: {str(e)}")
+            raise HTTPException(status_code=500, detail="Ошибка при обновлении профиля")
 
 @app.get("/profile/{username}")
 async def profile_page(username: str, db=Depends(get_db)):
