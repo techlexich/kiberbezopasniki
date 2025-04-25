@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
@@ -12,14 +13,18 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
 # Настройки
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 DB_URL = os.getenv("AUTH_DATABASE_URL")
+if not SECRET_KEY or not DB_URL:
+    raise ValueError("Не заданы SECRET_KEY или DB_URL")
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates") if Path("templates").exists() else None
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,10 +34,15 @@ app.add_middleware(
 )
 
 # Модели
+class UserProfile(BaseModel):
+    bio: str = ""
+    avatar: str = "/default-avatar.jpg"
+
 class User(BaseModel):
     id: int
     username: str
     email: str
+    profile: UserProfile = UserProfile()
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -78,7 +88,12 @@ def create_access_token(data: dict):
 
 async def get_user(db, username: str):
     with db.cursor() as cur:
-        cur.execute("SELECT id, username, email, password_hash FROM users WHERE username = %s", (username,))
+        cur.execute("""
+            SELECT id, username, email, password_hash, 
+                   COALESCE(bio, '') as bio,
+                   COALESCE(avatar_url, '/default-avatar.jpg') as avatar
+            FROM users WHERE username = %s
+        """, (username,))
         return cur.fetchone()
 
 async def authenticate_user(db, username: str, password: str):
@@ -101,7 +116,7 @@ async def get_current_user(db=Depends(get_db), token: str=Depends(oauth2_scheme)
 @app.post("/register", response_model=User)
 async def register(user: UserCreate, db=Depends(get_db)):
     with db.cursor() as cur:
-        cur.execute("SELECT 1 FROM users WHERE email = %s OR username = %s", 
+        cur.execute("SELECT * FROM users WHERE email = %s OR username = %s", 
                    (user.email, user.username))
         if cur.fetchone():
             raise HTTPException(400, "Email или username уже заняты")
@@ -114,7 +129,7 @@ async def register(user: UserCreate, db=Depends(get_db)):
         """, (user.email, user.username, hashed))
         new_user = cur.fetchone()
         db.commit()
-        return new_user
+        return {**new_user, "profile": {"bio": "", "avatar": "/default-avatar.jpg"}}
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_db)):
@@ -128,19 +143,78 @@ async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_d
 
 @app.get("/users/me", response_model=User)
 async def read_me(user=Depends(get_current_user)):
-    return user
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "profile": {
+            "bio": user["bio"],
+            "avatar": user["avatar"]
+        }
+    }
 
 @app.get("/users/{username}", response_model=User)
 async def get_user_profile(username: str, db=Depends(get_db)):
     user = await get_user(db, username)
     if not user:
         raise HTTPException(404, "User not found")
-    return user
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "profile": {
+            "bio": user["bio"],
+            "avatar": user["avatar"]
+        }
+    }
+
+@app.put("/users/{user_id}", response_model=User)
+async def update_profile(
+    user_id: int, 
+    profile: UserProfile,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    if current_user["id"] != user_id:
+        raise HTTPException(403, "Forbidden")
+    
+    with db.cursor() as cur:
+        cur.execute("""
+            UPDATE users 
+            SET bio = %s, avatar_url = %s
+            WHERE id = %s
+            RETURNING id, username, email, 
+                     COALESCE(bio, '') as bio,
+                     COALESCE(avatar_url, '/default-avatar.jpg') as avatar
+        """, (profile.bio, profile.avatar, user_id))
+        updated = cur.fetchone()
+        db.commit()
+        return {
+            "id": updated["id"],
+            "username": updated["username"],
+            "email": updated["email"],
+            "profile": {
+                "bio": updated["bio"],
+                "avatar": updated["avatar"]
+            }
+        }
 
 @app.get("/profile/{username}")
 async def profile_page(username: str):
     return FileResponse("static/profile.html")
 
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    if not templates:
+        raise HTTPException(500, "Templates not found")
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/tape", response_class=HTMLResponse)
+async def tape(request: Request):
+    if not templates:
+        raise HTTPException(500, "Templates not found")
+    return templates.TemplateResponse("tape.html", {"request": request})
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000) #111
