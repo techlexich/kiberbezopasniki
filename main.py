@@ -114,7 +114,7 @@ def get_db_auth():
             dbname="auth_db_17at",
             user="auth_db_17at_user",
             password="eGFSjcl2O29bWJBCAcRdh4MIzjNFojNZ",
-            host="dpg-d05lfk2li9vc738u4vb0-a",
+            host="dpg-d05lfk2li9vc738u4vb0-a.oregon-postgres.render.com",
             port="5432",
             cursor_factory=RealDictCursor  # Используем RealDictCursor для работы со словарями
         )
