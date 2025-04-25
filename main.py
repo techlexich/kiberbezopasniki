@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, AnyUrl
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -15,7 +15,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
-from pydantic import HttpUrl, Field
+from pydantic import Field
 import logging
 
 # Настройки
@@ -39,7 +39,13 @@ app.add_middleware(
 # Модели
 class UserProfile(BaseModel):
     bio: str = Field(default="", max_length=500)
-    avatar: HttpUrl = "https://example.com/default-avatar.jpg"
+    avatar: str = Field(default="/default-avatar.jpg")
+
+    @field_validator('avatar')
+    def validate_avatar(cls, v):
+        if not v.startswith(('http://', 'https://', '/')):
+            raise ValueError("Avatar должен быть URL или начинаться с /")
+        return v
 
 class User(BaseModel):
     id: int
@@ -145,29 +151,38 @@ async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_d
     }
 
 @app.get("/users/me", response_model=User)
-async def read_me(user=Depends(get_current_user)):
+async def read_me(request: Request, user=Depends(get_current_user)):
+    avatar = user["avatar"]
+    if avatar.startswith('/'):
+        avatar = str(request.base_url)[:-1] + avatar
+        
     return {
         "id": user["id"],
         "username": user["username"],
         "email": user["email"],
         "profile": {
             "bio": user["bio"],
-            "avatar": user["avatar"]
+            "avatar": avatar
         }
     }
 
 @app.get("/users/{username}", response_model=User)
-async def get_user_profile(username: str, db=Depends(get_db)):
+async def get_user_profile(username: str, request: Request, db=Depends(get_db)):
     user = await get_user(db, username)
     if not user:
         raise HTTPException(404, "User not found")
+    
+    avatar = user["avatar"]
+    if avatar.startswith('/'):
+        avatar = str(request.base_url)[:-1] + avatar
+        
     return {
         "id": user["id"],
         "username": user["username"],
         "email": user["email"],
         "profile": {
             "bio": user["bio"],
-            "avatar": user["avatar"]
+            "avatar": avatar
         }
     }
 
@@ -176,6 +191,7 @@ logger = logging.getLogger(__name__)
 async def update_profile(
     username: str,
     profile: UserProfile,
+    request: Request,
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -204,13 +220,17 @@ async def update_profile(
             db.commit()
             logger.info(f"User {username} updated their profile")
             
+            avatar = updated["avatar"]
+            if avatar.startswith('/'):
+                avatar = str(request.base_url)[:-1] + avatar
+                
             return {
                 "id": updated["id"],
                 "username": updated["username"],
                 "email": updated["email"],
                 "profile": {
                     "bio": updated["bio"],
-                    "avatar": updated["avatar"]
+                    "avatar": avatar
                 }
             }
             
@@ -250,4 +270,4 @@ app.add_middleware(NotFoundMiddleware)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) #111
+    uvicorn.run(app, host="0.0.0.0", port=8000)
