@@ -14,7 +14,7 @@ from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
 from pathlib import Path
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Настройки
 load_dotenv()
