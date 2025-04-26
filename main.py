@@ -381,59 +381,34 @@ async def create_post(
         raise HTTPException(400, "Invalid file")
 
     try:
-        # Подготовка файла
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        temp_file = f"temp_{file_name}"
 
-        # Сохраняем временно
-        with open(temp_file, "wb") as buffer:
-            while True:
-                chunk = await photo.read(8192)  # Читаем файл чанками
-                if not chunk:
-                    break
-                buffer.write(chunk)
+        # Загружаем напрямую в S3
+        s3.put_object(
+            Bucket=BEGET_S3_BUCKET_NAME,
+            Key=file_name,
+            Body=await photo.read(),  # Читаем файл напрямую
+            ContentType=photo.content_type,
+            ACL='public-read'
+        )
 
-        # Загружаем в S3
-        with open(temp_file, "rb") as file_data:
-            s3.upload_file(
-                temp_file,  # Локальный путь к файлу
-                BEGET_S3_BUCKET_NAME,
-                file_name,
-                ExtraArgs={
-                    'ContentType': photo.content_type,
-                    'ACL': 'public-read'
-                }
-            )
-
-        # Формируем URL
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-        # Сохранение в БД
         with db.cursor() as cur:
             cur.execute("""
-                INSERT INTO posts 
-                    (photo_url, description, user_id)
+                INSERT INTO posts (photo_url, description, user_id)
                 VALUES (%s, %s, %s)
                 RETURNING id, created_at
-            """, (
-                photo_url,
-                description,
-                current_user["id"]
-            ))
+            """, (photo_url, description, current_user["id"]))
             new_post = cur.fetchone()
             db.commit()
 
-        logger.info(f"New post created by {current_user['username']}: {new_post['id']}")
-        
         return {"status": "success", "url": photo_url}
 
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, "File upload failed")
-    finally:
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
 
 @app.get("/posts/{post_id}")
 async def get_post(
