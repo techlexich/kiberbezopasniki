@@ -372,6 +372,10 @@ async def delete_post(
         
         return {"status": "ok", "post_id": post_id}
 
+import hashlib
+import base64
+from botocore.exceptions import ClientError
+
 @app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
@@ -383,29 +387,38 @@ async def create_post(
         raise HTTPException(400, "Invalid file")
 
     try:
+        # Генерируем уникальное имя файла
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"{uuid.uuid4()}.{file_ext}"
         
-        # Читаем файл в память
+        # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Генерируем MD5 хеш
-        file_md5 = hashlib.md5(file_content).digest()
-        file_md5_base64 = base64.b64encode(file_md5).decode('utf-8')
+        # Вычисляем MD5 и SHA256 хеши
+        file_md5 = base64.b64encode(hashlib.md5(file_content).digest()).decode()
+        file_sha256 = hashlib.sha256(file_content).hexdigest()
         
-        # Загружаем в S3 с правильными заголовками
+        # Формируем заголовки
+        headers = {
+            'ContentType': photo.content_type,
+            'ContentLength': str(len(file_content)),
+            'ContentMD5': file_md5,
+            'x-amz-content-sha256': file_sha256,
+            'ACL': 'public-read'
+        }
+        
+        # Альтернативный метод загрузки
         s3.put_object(
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
             Body=file_content,
-            ContentType=photo.content_type,
-            ContentLength=len(file_content),
-            ContentMD5=file_md5_base64,
-            ACL='public-read'
+            **headers
         )
 
+        # Формируем URL к файлу
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
+        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (photo_url, description, user_id)
@@ -418,9 +431,8 @@ async def create_post(
         return {"status": "success", "url": photo_url}
 
     except ClientError as e:
-        logger.error(f"S3 ClientError: {str(e)}", exc_info=True)
-        error_message = e.response.get('Error', {}).get('Message', 'Unknown S3 error')
-        raise HTTPException(500, detail=f"S3 upload failed: {error_message}")
+        logger.error(f"S3 Error: {e.response}", exc_info=True)
+        raise HTTPException(500, detail=f"S3 upload failed: {e.response.get('Error', {}).get('Message', 'Unknown error')}")
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail="File upload failed")
