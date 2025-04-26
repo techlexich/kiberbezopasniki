@@ -342,6 +342,21 @@
             </div>
         </header>
 
+        <!-- Форма для нового поста (только для владельца профиля) -->
+        <div id="new-post-form" style="display: none; margin-bottom: 20px;">
+            <form id="create-post-form" enctype="multipart/form-data">
+                <div style="margin-bottom: 10px;">
+                    <input type="file" id="post-photo" accept="image/*" required style="width: 100%;">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <textarea id="post-description" placeholder="Описание фото..." style="width: 100%; padding: 10px;"></textarea>
+                </div>
+                <button type="submit" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    Опубликовать
+                </button>
+            </form>
+        </div>
+
         <div class="profile-header">
             <button class="edit-profile-btn" id="editProfileBtn">
                 <i class="fas fa-pencil-alt"></i> Редактировать
@@ -374,6 +389,7 @@
             <h2 class="section-title">
                 <i class="fas fa-images"></i> Мои публикации
             </h2>
+            <div id="posts-container"></div>
         </div>
             
     <!-- Модальное окно редактирования -->
@@ -620,6 +636,106 @@
         
         // Загружаем профиль при открытии страницы
         window.addEventListener('DOMContentLoaded', loadProfile);
+        async function loadUserPosts() {
+            if (!username) return;
+            
+            try {
+                const response = await fetch(`/users/${username}/posts`);
+                const posts = await response.json();
+                
+                const container = document.getElementById('posts-container');
+                container.innerHTML = '';
+                
+                if (posts.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет публикаций</p>';
+                    return;
+                }
+                
+                posts.forEach(post => {
+                    const postDate = new Date(post.created_at).toLocaleString();
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post';
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <div class="avatar">${username[0].toUpperCase()}</div>
+                            <div class="user-info">
+                                <div class="username">${username}</div>
+                                <div class="post-time">${postDate}</div>
+                            </div>
+                        </div>
+                        ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                        <img src="${post.photo_url}" alt="Фото" class="post-image">
+                        <div class="post-actions">
+                            <button class="action-button like-button">
+                                <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                            </button>
+                            <button class="action-button">
+                                <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(postElement);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки постов:', error);
+            }
+        }
+        // Показываем форму для владельца профиля
+        function checkAndShowPostForm() {
+            const token = localStorage.getItem('access_token');
+            const postForm = document.getElementById('new-post-form');
+            
+            if (token && currentUser && currentUser.username === username) {
+                postForm.style.display = 'block';
+                
+                // Обработчик отправки формы
+                document.getElementById('create-post-form').addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    
+                    const photoInput = document.getElementById('post-photo');
+                    const description = document.getElementById('post-description').value;
+                    
+                    if (!photoInput.files[0]) {
+                        alert('Выберите фото');
+                        return;
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('photo', photoInput.files[0]);
+                    formData.append('description', description);
+                    
+                    try {
+                        const response = await fetch('/posts', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: formData
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(await response.text());
+                        }
+                        
+                        // Очищаем форму и обновляем список постов
+                        photoInput.value = '';
+                        document.getElementById('post-description').value = '';
+                        await loadUserPosts();
+                        
+                    } catch (error) {
+                        console.error('Ошибка публикации:', error);
+                        alert('Ошибка при публикации: ' + error.message);
+                    }
+                });
+            } else {
+                postForm.style.display = 'none';
+            }
+        }
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadProfile();
+            await loadUserPosts();
+            checkAndShowPostForm();
+        });
     </script>
 </body>
 </html>
