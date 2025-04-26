@@ -281,6 +281,7 @@
             color: var(--text-light);
         }
 
+        /* Стили модального окна */
         .modal {
             display: none;
             position: fixed;
@@ -506,6 +507,7 @@
                 left: 50%;
                 right: auto;
                 transform: translateX(-50%) translateY(-10px);
+                top: 100px;
             }
             
             .modal.show {
@@ -704,8 +706,7 @@
         // Настройки API
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
-        let isApiAvailable = false;
-    
+        
         // Элементы интерфейса
         const profileButton = document.getElementById('profile-button');
         const profileModal = document.getElementById('profile-modal');
@@ -733,7 +734,7 @@
         // Сообщения об ошибках
         const loginError = document.getElementById('login-error');
         const registerError = document.getElementById('register-error');
-    
+
         // Функции для работы с модальными окнами
         function showModal(modal) {
             if (window.innerWidth <= 768) {
@@ -745,7 +746,6 @@
                 modal.style.display = 'block';
             } else {
                 // Для десктопов - рядом с кнопкой
-                const profileButton = document.getElementById('profile-button');
                 const buttonRect = profileButton.getBoundingClientRect();
                 
                 modal.style.position = 'fixed';
@@ -763,8 +763,35 @@
                     modal.style.transform = 'translateY(0)';
                 }
             }, 10);
+            
+            // Добавляем обработчик для закрытия при клике вне окна
+            document.addEventListener('click', clickOutsideHandler);
+            // Добавляем обработчик для закрытия по Escape
+            document.addEventListener('keydown', handleEscape);
         }
-    
+
+        function hideModal(modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                // Удаляем обработчики при закрытии модального окна
+                document.removeEventListener('click', clickOutsideHandler);
+                document.removeEventListener('keydown', handleEscape);
+            }, 200);
+        }
+
+        function clickOutsideHandler(e) {
+            if (!profileModal.contains(e.target) && e.target !== profileButton) {
+                hideModal(profileModal);
+            }
+        }
+
+        function handleEscape(e) {
+            if (e.key === 'Escape') {
+                hideModal(profileModal);
+            }
+        }
+
         function resetAuthForms() {
             if (currentUser) {
                 document.getElementById('guest-view').style.display = 'none';
@@ -950,11 +977,6 @@
             currentUser = null;
             updateAuthUI();
             hideModal(profileModal);
-        });
-    
-        // Закрытие модалки при клике вне ее области
-        window.addEventListener('click', (e) => {
-            if (e.target === profileModal) hideModal(profileModal);
         });
     
         // Инициализация при загрузке
