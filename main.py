@@ -344,41 +344,37 @@ async def delete_post(
         return {"status": "ok", "post_id": post_id}
 
 @app.post("/posts")
+@app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
     description: str = Form(default=""),
-    shooting_time: Optional[str] = Form(None),
-    location: Optional[str] = Form(None),
-    camera_settings: Optional[str] = Form(None),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Проверяем тип файла
+    # Валидация файла
+    if not photo.filename:
+        raise HTTPException(400, "No filename provided")
+    
     if not photo.content_type.startswith('image/'):
-        raise HTTPException(400, "Only image files are allowed")
-    
-    # Проверяем размер файла (максимум 10MB)
-    max_size = 10 * 1024 * 1024  # 10MB
-    if photo.size > max_size:
-        raise HTTPException(400, "File is too large (max 10MB)")
-    
+        raise HTTPException(400, "Only images are allowed")
+
     try:
-        # Генерируем уникальное имя файла
-        file_ext = photo.filename.split('.')[-1].lower()
-        if file_ext not in ['jpg', 'jpeg', 'png', 'gif']:
-            raise HTTPException(400, "Unsupported file format")
-            
+        # Генерация имени файла
+        file_ext = photo.filename.split('.')[-1]
         file_name = f"{uuid.uuid4()}.{file_ext}"
         
-        # Загружаем в S3
-        s3.upload_fileobj(
-            photo.file,
-            os.getenv("S3_BUCKET_NAME"),
-            file_name,
-            ExtraArgs={
-                "ACL": "public-read",
-                "ContentType": photo.content_type
-            }
+        # Чтение файла
+        file_data = await photo.read()  # Важно: await!
+        if not file_data:
+            raise HTTPException(400, "Empty file content")
+
+        # Загрузка в S3
+        s3.put_object(
+            Bucket=os.getenv("BEGET_S3_BUCKET_NAME"),
+            Key=file_name,
+            Body=file_data,
+            ContentType=photo.content_type,
+            ACL='public-read'
         )
         
         # Формируем URL
