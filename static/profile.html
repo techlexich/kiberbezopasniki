@@ -991,8 +991,11 @@
 
             try {
                 const formData = new FormData();
-                formData.append('photo', photoFile);
-                formData.append('description', description);
+                formData.append('photo', file);
+                formData.append('description', 'My photo');
+                formData.append('shooting_time', '2025-04-26 12:00:00');
+                formData.append('location', 'Moscow');
+                formData.append('camera_settings', 'ISO 100, f/2.8');
 
                 const token = localStorage.getItem('access_token');
                 const response = await fetch('/posts', {
