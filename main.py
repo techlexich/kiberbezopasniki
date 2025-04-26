@@ -395,14 +395,46 @@ async def create_post(
         # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Загружаем напрямую через put_object (без временного файла)
-        s3.put_object(
-            Bucket=BEGET_S3_BUCKET_NAME,
-            Key=file_name,
-            Body=file_content,
-            ContentType=photo.content_type,
-            ACL='public-read'
-        )
+        # Альтернативный способ загрузки с явным указанием Content-SHA256
+        try:
+            # Создаем новый клиент с отключенной проверкой SHA256
+            s3_alt = boto3.client(
+                's3',
+                endpoint_url=BEGET_S3_ENDPOINT,
+                aws_access_key_id=BEGET_S3_ACCESS_KEY,
+                aws_secret_access_key=BEGET_S3_SECRET_KEY,
+                region_name='ru-1',
+                config=boto3.session.Config(
+                    signature_version='s3v4',
+                    s3={'addressing_style': 'path'},
+                    # Отключаем проверку SHA256 для Beget S3
+                    payload_signing_enabled=False
+                )
+            )
+            
+            s3_alt.put_object(
+                Bucket=BEGET_S3_BUCKET_NAME,
+                Key=file_name,
+                Body=file_content,
+                ContentType=photo.content_type,
+                ACL='public-read'
+            )
+        except Exception as s3_error:
+            logger.error(f"S3 upload error: {str(s3_error)}")
+            # Попробуем старый метод как fallback
+            with open(file_name, 'wb') as f:
+                f.write(file_content)
+            
+            s3.upload_file(
+                file_name,
+                BEGET_S3_BUCKET_NAME,
+                file_name,
+                ExtraArgs={
+                    'ContentType': photo.content_type,
+                    'ACL': 'public-read'
+                }
+            )
+            os.remove(file_name)
 
         # Формируем URL к файлу
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -419,14 +451,10 @@ async def create_post(
 
         return {"status": "success", "post_id": new_post["id"], "url": photo_url}
 
-    except ClientError as e:
-        logger.error(f"S3 Error: {e.response}", exc_info=True)
-        error_msg = "S3 upload failed"
-        if e.response.get('Error', {}).get('Code') == 'XAmzContentSHA256Mismatch':
-            error_msg += " (checksum mismatch - try again)"
-        raise HTTPException(500, detail=error_msg)
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
+        if 'file_name' in locals() and os.path.exists(file_name):
+            os.remove(file_name)
         raise HTTPException(500, detail="File upload failed")
 
 @app.get("/posts/{post_id}")
