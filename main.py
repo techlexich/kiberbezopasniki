@@ -394,26 +394,22 @@ async def create_post(
         # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Вычисляем MD5 и SHA256 хеши
+        # Вычисляем MD5 хеш
         file_md5 = base64.b64encode(hashlib.md5(file_content).digest()).decode()
-        file_sha256 = hashlib.sha256(file_content).hexdigest()
         
-        # Формируем заголовки
-        headers = {
+        # Формируем параметры для S3
+        put_params = {
+            'Bucket': BEGET_S3_BUCKET_NAME,
+            'Key': file_name,
+            'Body': file_content,
             'ContentType': photo.content_type,
-            'ContentLength': str(len(file_content)),
+            'ContentLength': len(file_content),  # Важно: передаём как int
             'ContentMD5': file_md5,
-            'x-amz-content-sha256': file_sha256,
             'ACL': 'public-read'
         }
         
-        # Альтернативный метод загрузки
-        s3.put_object(
-            Bucket=BEGET_S3_BUCKET_NAME,
-            Key=file_name,
-            Body=file_content,
-            **headers
-        )
+        # Загружаем в S3
+        s3.put_object(**put_params)
 
         # Формируем URL к файлу
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -432,7 +428,8 @@ async def create_post(
 
     except ClientError as e:
         logger.error(f"S3 Error: {e.response}", exc_info=True)
-        raise HTTPException(500, detail=f"S3 upload failed: {e.response.get('Error', {}).get('Message', 'Unknown error')}")
+        error_msg = e.response.get('Error', {}).get('Message', 'Unknown S3 error')
+        raise HTTPException(500, detail=f"S3 upload failed: {error_msg}")
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail="File upload failed")
