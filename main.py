@@ -19,31 +19,49 @@ import logging
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
-import shutil
 
 # Настройки
 load_dotenv()
-SECRET_KEY = os.getenv("SECRET_KEY")
-DB_URL = os.getenv("AUTH_DATABASE_URL")
-BEGET_S3_ENDPOINT = os.getenv("BEGET_S3_ENDPOINT")
-BEGET_S3_BUCKET_NAME = os.getenv("BEGET_S3_BUCKET_NAME")
 
-if not all([SECRET_KEY, DB_URL, BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME]):
-    raise ValueError("Не заданы обязательные переменные окружения")
+# Конфигурация с fallback значениями
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-for-dev")
+DB_URL = os.getenv("AUTH_DATABASE_URL")
+BEGET_S3_ENDPOINT = os.getenv("BEGET_S3_ENDPOINT", "")
+BEGET_S3_BUCKET_NAME = os.getenv("BEGET_S3_BUCKET_NAME", "")
+BEGET_S3_ACCESS_KEY = os.getenv("BEGET_S3_ACCESS_KEY", "")
+BEGET_S3_SECRET_KEY = os.getenv("BEGET_S3_SECRET_KEY", "")
+
+# Инициализация приложения
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Настройка логгирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Инициализация S3 клиента
-s3 = boto3.client(
-    's3',
-    endpoint_url=BEGET_S3_ENDPOINT,
-    aws_access_key_id=os.getenv("BEGET_S3_ACCESS_KEY"),
-    aws_secret_access_key=os.getenv("BEGET_S3_SECRET_KEY"),
-    region_name='ru-1',
-    config=boto3.session.Config(signature_version='s3v4')
-)
+# Инициализация S3 клиента только если заданы ключи
+if all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
+    s3 = boto3.client(
+        's3',
+        endpoint_url=BEGET_S3_ENDPOINT,
+        aws_access_key_id=BEGET_S3_ACCESS_KEY,
+        aws_secret_access_key=BEGET_S3_SECRET_KEY,
+        region_name='ru-1',
+        config=boto3.session.Config(signature_version='s3v4')
+    )
+else:
+    logger.warning("S3 storage not configured - file uploads will not work")
+    s3 = None
+
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -363,6 +381,9 @@ async def create_post(
     current_user=Depends(get_current_user)
 ):
     # Валидация файла
+    if not s3:
+        raise HTTPException(500, "File storage not configured")
+
     if not photo.filename or not photo.content_type:
         raise HTTPException(400, "Invalid file upload")
 
@@ -479,4 +500,5 @@ async def not_found_handler(request: Request, exc: Exception):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
