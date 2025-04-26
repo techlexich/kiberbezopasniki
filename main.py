@@ -20,6 +20,8 @@ import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
 import shutil
+import base64
+import hashlib
 
 # Настройки
 load_dotenv()
@@ -383,14 +385,20 @@ async def create_post(
     try:
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"{uuid.uuid4()}.{file_ext}"
-
-        # Загружаем напрямую в S3
+        
+        # Читаем файл в память
+        file_content = await photo.read()
+        
+        # Специальные параметры для Beget S3
         s3.put_object(
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
-            Body=await photo.read(),  # Читаем файл напрямую
+            Body=file_content,
             ContentType=photo.content_type,
-            ACL='public-read'
+            ACL='public-read',
+            # Критически важные параметры:
+            ContentLength=len(file_content),
+            ContentMD5=base64.b64encode(hashlib.md5(file_content).digest()).decode()
         )
 
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -406,6 +414,9 @@ async def create_post(
 
         return {"status": "success", "url": photo_url}
 
+    except ClientError as e:
+        logger.error(f"S3 ClientError: {e.response['Error']['Message']}")
+        raise HTTPException(500, "S3 upload failed")
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, "File upload failed")
