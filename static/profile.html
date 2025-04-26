@@ -991,13 +991,14 @@
 
             try {
                 const formData = new FormData();
-                formData.append('photo', file);
-                formData.append('description', 'My photo');
-                formData.append('shooting_time', '2025-04-26 12:00:00');
-                formData.append('location', 'Moscow');
-                formData.append('camera_settings', 'ISO 100, f/2.8');
+                formData.append('photo', photoFile); // Используем photoFile вместо file
+                formData.append('description', description || ''); // Добавляем описание
 
                 const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('Требуется авторизация');
+                }
+
                 const response = await fetch('/posts', {
                     method: 'POST',
                     headers: {
@@ -1007,10 +1008,13 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(await response.text());
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || 'Ошибка при публикации');
                 }
 
                 const result = await response.json();
+                console.log('Пост создан:', result);
+                
                 alert('Пост успешно опубликован!');
                 postModal.classList.remove('active');
                 resetPostForm();
@@ -1018,6 +1022,11 @@
             } catch (error) {
                 console.error('Ошибка при публикации:', error);
                 alert('Ошибка при публикации: ' + error.message);
+                
+                // Если ошибка авторизации, удаляем токен
+                if (error.message.includes('auth') || error.message.includes('401')) {
+                    localStorage.removeItem('access_token');
+                }
             } finally {
                 submitPostBtn.disabled = false;
                 submitPostBtn.innerHTML = '<i class="fas fa-share"></i> Опубликовать';
