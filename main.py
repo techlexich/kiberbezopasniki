@@ -374,49 +374,35 @@ async def delete_post(
 async def create_post(
     photo: UploadFile = File(...),
     description: str = Form(default=""),
-    shooting_time: Optional[str] = Form(None),
-    location: Optional[str] = Form(None),
-    camera_settings: Optional[str] = Form(None),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Валидация файла
-    if not s3:
-        raise HTTPException(500, "File storage not configured")
-
     if not photo.filename or not photo.content_type:
-        raise HTTPException(400, "Invalid file upload")
-
-    if not photo.content_type.startswith('image/'):
-        raise HTTPException(400, "Only image files are allowed")
+        raise HTTPException(400, "Invalid file")
 
     try:
-        # Чтение файла
-        file_content = await photo.read()
-        if not file_content:
-            raise HTTPException(400, "Empty file content")
-        
-        # Генерация уникального имени файла
+        # Подготовка файла
         file_ext = photo.filename.split('.')[-1].lower()
-        if file_ext not in ['jpg', 'jpeg', 'png', 'gif']:
-            raise HTTPException(400, "Unsupported file format")
-            
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        
-        # Загрузка в S3
-        try:
-            s3.put_object(
-                Bucket=BEGET_S3_BUCKET_NAME,
-                Key=file_name,
-                Body=file_content,
-                ContentType=photo.content_type,
-                ACL='public-read'
-            )
-        except ClientError as e:
-            logger.error(f"S3 upload error: {str(e)}")
-            raise HTTPException(500, "Failed to upload file to storage")
+        temp_file = f"temp_{file_name}"
 
-        # Формирование URL
+        # Сохраняем временно
+        with open(temp_file, "wb") as buffer:
+            shutil.copyfileobj(photo.file, buffer)
+
+        # Загружаем в S3
+        with open(temp_file, "rb") as file_data:
+            s3.upload_fileobj(
+                file_data,
+                BEGET_S3_BUCKET_NAME,
+                file_name,
+                ExtraArgs={
+                    'ContentType': photo.content_type,
+                    'ACL': 'public-read'
+                }
+            )
+
+        # Формируем URL
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
         # Сохранение в БД
@@ -439,18 +425,14 @@ async def create_post(
 
         logger.info(f"New post created by {current_user['username']}: {new_post['id']}")
         
-        return {
-            "status": "success",
-            "post_id": new_post["id"],
-            "created_at": new_post["created_at"],
-            "photo_url": photo_url
-        }
-    
-    except HTTPException:
-        raise
+        return {"status": "success", "url": photo_url}
+
     except Exception as e:
-        logger.error(f"Error in create_post: {str(e)}", exc_info=True)
-        raise HTTPException(500, "Internal server error")
+        logger.error(f"Upload error: {str(e)}")
+        raise HTTPException(500, "File upload failed")
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
 @app.get("/posts/{post_id}")
 async def get_post(

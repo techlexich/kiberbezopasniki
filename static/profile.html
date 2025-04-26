@@ -320,6 +320,117 @@
                 gap: 8px;
             }
         }
+        .new-post-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+
+        .new-post-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Стили для модального окна создания поста */
+        #post-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #post-modal.active {
+            display: flex;
+        }
+
+        .post-modal-content {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow);
+        }
+
+        .post-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .post-modal-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .close-post-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-light);
+        }
+
+        .file-upload-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .file-upload-label {
+            display: block;
+            padding: 40px 20px;
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-upload-label:hover {
+            border-color: var(--primary);
+        }
+
+        .file-upload-label i {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .file-upload-label span {
+            display: block;
+            color: var(--text-light);
+        }
+
+        #post-photo {
+            display: none;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            display: none;
+            margin: 0 auto 20px;
+            border-radius: 8px;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -412,6 +523,37 @@
                     <div class="avatar-preview-text" id="avatarPreviewText">U</div>
                 </div>
                 <button type="submit" class="save-btn">Сохранить изменения</button>
+            </form>
+        </div>
+    </div>
+
+     <!-- Кнопка для создания нового поста -->
+     <button class="new-post-btn" id="newPostBtn">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Модальное окно для создания поста -->
+    <div id="post-modal">
+        <div class="post-modal-content">
+            <div class="post-modal-header">
+                <h3 class="post-modal-title">Новый пост</h3>
+                <button class="close-post-modal" id="closePostModal">&times;</button>
+            </div>
+            <form id="create-post-form">
+                <div class="file-upload-container">
+                    <label for="post-photo" class="file-upload-label" id="file-upload-label">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Нажмите или перетащите фото</span>
+                    </label>
+                    <input type="file" id="post-photo" accept="image/*" required>
+                    <img id="preview-image" class="preview-image" alt="Предпросмотр">
+                </div>
+                <div class="form-group">
+                    <textarea id="post-description" placeholder="Добавьте описание..." rows="4"></textarea>
+                </div>
+                <button type="submit" class="save-btn" id="submit-post-btn">
+                    <i class="fas fa-share"></i> Опубликовать
+                </button>
             </form>
         </div>
     </div>
@@ -735,6 +877,145 @@
             await loadProfile();
             await loadUserPosts();
             checkAndShowPostForm();
+        });
+
+        const newPostBtn = document.getElementById('newPostBtn');
+        const postModal = document.getElementById('post-modal');
+        const closePostModal = document.getElementById('closePostModal');
+        const fileUploadLabel = document.getElementById('file-upload-label');
+        const postPhotoInput = document.getElementById('post-photo');
+        const previewImage = document.getElementById('preview-image');
+        const createPostForm = document.getElementById('create-post-form');
+        const submitPostBtn = document.getElementById('submit-post-btn');
+
+        // Показываем модальное окно
+        newPostBtn.addEventListener('click', () => {
+            if (!currentUser) {
+                alert('Для публикации войдите в аккаунт');
+                return;
+            }
+            postModal.classList.add('active');
+        });
+
+        // Закрываем модальное окно
+        closePostModal.addEventListener('click', () => {
+            postModal.classList.remove('active');
+            resetPostForm();
+        });
+
+        // Закрытие при клике вне окна
+        postModal.addEventListener('click', (e) => {
+            if (e.target === postModal) {
+                postModal.classList.remove('active');
+                resetPostForm();
+            }
+        });
+
+        // Превью выбранного изображения
+        postPhotoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    previewImage.src = event.target.result;
+                    previewImage.style.display = 'block';
+                    fileUploadLabel.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Сброс формы
+        function resetPostForm() {
+            createPostForm.reset();
+            previewImage.style.display = 'none';
+            previewImage.src = '';
+            fileUploadLabel.style.display = 'block';
+        }
+
+        // Отправка формы
+        createPostForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const photoFile = postPhotoInput.files[0];
+            const description = document.getElementById('post-description').value;
+            
+            if (!photoFile) {
+                alert('Выберите фото для публикации');
+                return;
+            }
+
+            submitPostBtn.disabled = true;
+            submitPostBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Публикация...';
+
+            try {
+                const formData = new FormData();
+                formData.append('photo', photoFile);
+                formData.append('description', description);
+
+                const token = localStorage.getItem('access_token');
+                const response = await fetch('/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const result = await response.json();
+                alert('Пост успешно опубликован!');
+                postModal.classList.remove('active');
+                resetPostForm();
+                await loadUserPosts(); // Обновляем список постов
+            } catch (error) {
+                console.error('Ошибка при публикации:', error);
+                alert('Ошибка при публикации: ' + error.message);
+            } finally {
+                submitPostBtn.disabled = false;
+                submitPostBtn.innerHTML = '<i class="fas fa-share"></i> Опубликовать';
+            }
+        });
+
+        // Drag and drop для файла
+        fileUploadLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadLabel.style.borderColor = var('--primary');
+            fileUploadLabel.style.backgroundColor = 'rgba(67, 97, 238, 0.1)';
+        });
+
+        fileUploadLabel.addEventListener('dragleave', () => {
+            fileUploadLabel.style.borderColor = var('--border');
+            fileUploadLabel.style.backgroundColor = 'transparent';
+        });
+
+        fileUploadLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadLabel.style.borderColor = var('--border');
+            fileUploadLabel.style.backgroundColor = 'transparent';
+            
+            if (e.dataTransfer.files.length) {
+                postPhotoInput.files = e.dataTransfer.files;
+                const event = new Event('change');
+                postPhotoInput.dispatchEvent(event);
+            }
+        });
+
+        // Инициализация при загрузке страницы
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadProfile();
+            await loadUserPosts();
+            
+            // Показываем кнопку создания поста только для владельца профиля
+            const token = localStorage.getItem('access_token');
+            if (token && currentUser && currentUser.username === username) {
+                newPostBtn.style.display = 'flex';
+            } else {
+                newPostBtn.style.display = 'none';
+            }
         });
     </script>
 </body>
