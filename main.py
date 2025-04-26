@@ -21,7 +21,7 @@ from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
 import shutil
 import requests
-from requests_aws4auth import AWS4Auth
+from requests.auth import AWS4Auth
 import datetime
 import hashlib
 import base64
