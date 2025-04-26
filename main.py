@@ -20,8 +20,12 @@ import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
 import shutil
-import base64
+import requests
+from requests.auth import AWS4Auth
+import datetime
 import hashlib
+import base64
+from botocore.exceptions import ClientError
 
 # Настройки
 load_dotenv()
@@ -370,10 +374,6 @@ async def delete_post(
         
         return {"status": "ok", "post_id": post_id}
 
-import hashlib
-import base64
-from botocore.exceptions import ClientError
-
 @app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
@@ -392,22 +392,40 @@ async def create_post(
         # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Создаем временный файл (обходной путь для Beget)
-        temp_file = f"temp_{file_name}"
-        with open(temp_file, "wb") as f:
-            f.write(file_content)
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-        # Загружаем через upload_file (более надежный метод)
-        s3.upload_file(
-            temp_file,
-            BEGET_S3_BUCKET_NAME,
-            file_name,
-            ExtraArgs={
-                'ContentType': photo.content_type,
-                'ACL': 'public-read'
-            }
+        # Создаем подпись запроса
+        now = datetime.datetime.utcnow()
+        date = now.strftime('%Y%m%d')
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+        
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read'
+        }
+        
+        # Создаем подпись
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3',
+            session_token=None
         )
-
+        
+        # Отправляем запрос напрямую
+        response = requests.put(
+            url,
+            data=file_content,
+            headers=headers,
+            auth=auth
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+        
         # Формируем URL к файлу
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
@@ -423,18 +441,9 @@ async def create_post(
 
         return {"status": "success", "url": photo_url}
 
-    except ClientError as e:
-        logger.error(f"S3 Error: {e.response}", exc_info=True)
-        error_msg = "S3 upload failed"
-        if e.response.get('Error', {}).get('Code') == 'XAmzContentSHA256Mismatch':
-            error_msg += " (checksum mismatch - try again)"
-        raise HTTPException(500, detail=error_msg)
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail="File upload failed")
-    finally:
-        if 'temp_file' in locals() and os.path.exists(temp_file):
-            os.remove(temp_file)
 
 @app.get("/posts/{post_id}")
 async def get_post(
