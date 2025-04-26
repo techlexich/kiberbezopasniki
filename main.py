@@ -30,6 +30,9 @@ from starlette.responses import FileResponse
 import ssl
 from urllib3.util.ssl_ import create_urllib3_context
 from botocore.config import Config
+import asyncio
+from aiohttp import ClientSession, TCPConnector
+import aiohttp
 
 # Настройки
 load_dotenv()
@@ -413,6 +416,45 @@ def generate_beget_s3_signature(access_key, secret_key, method, bucket, object_n
     ).decode()
     return date, signature
 
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+async def async_upload_to_s3(file_path: str, object_name: str):
+    """Асинхронная загрузка файла в Beget S3"""
+    async with ClientSession(connector=TCPConnector(ssl=False)) as session:
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{object_name}"
+        
+        # Генерация подписи
+        date, signature = generate_beget_s3_signature(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            "PUT",
+            BEGET_S3_BUCKET_NAME,
+            object_name,
+            "image/jpeg"  # или определять из файла
+        )
+        
+        headers = {
+            'Date': date,
+            'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
+            'x-amz-acl': 'public-read'
+        }
+        
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        
+        for attempt in range(3):  # 3 попытки
+            try:
+                async with session.put(url, data=data, headers=headers) as response:
+                    if response.status in (200, 201):
+                        return True
+                    await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                await asyncio.sleep(2 ** attempt)
+                
+        return False
+
 @app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
@@ -430,61 +472,40 @@ async def create_post(
             raise HTTPException(400, "Only images are allowed")
             
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        file_content = await photo.read()
+        local_path = os.path.join(UPLOAD_DIR, file_name)
         
-        # Вариант 1: Используем boto3 с отключенной проверкой SSL
-        try:
-            s3 = boto3.client(
-                's3',
-                endpoint_url=BEGET_S3_ENDPOINT,
-                aws_access_key_id=BEGET_S3_ACCESS_KEY,
-                aws_secret_access_key=BEGET_S3_SECRET_KEY,
-                region_name='ru-1',
-                config=Config(
-                    signature_version='s3v4',
-                    connect_timeout=30,
-                    retries={'max_attempts': 3},
-                    s3={'addressing_style': 'path'}
-                ),
-                verify=False
-            )
-            
-            s3.put_object(
-                Bucket=BEGET_S3_BUCKET_NAME,
-                Key=file_name,
-                Body=file_content,
-                ContentType=photo.content_type,
-                ACL='public-read'
-            )
-            
-        except Exception as boto_error:
-            logger.warning(f"Boto3 upload failed, trying direct HTTP: {str(boto_error)}")
-            
-            # Вариант 2: Прямая HTTP-загрузка как fallback
-            session = get_beget_s3_client()
-            date, signature = generate_beget_s3_signature(
-                BEGET_S3_ACCESS_KEY,
-                BEGET_S3_SECRET_KEY,
-                "PUT",
-                BEGET_S3_BUCKET_NAME,
-                file_name,
-                photo.content_type
-            )
-            
-            response = session.put(
-                f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}",
-                data=file_content,
-                headers={
-                    'Date': date,
-                    'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
-                    'Content-Type': photo.content_type,
-                    'x-amz-acl': 'public-read'
-                },
-                timeout=30
-            )
-            
-            if response.status_code not in (200, 201):
-                raise HTTPException(500, f"S3 upload failed: {response.text}")
+        # Сохраняем локально
+        with open(local_path, 'wb') as f:
+            content = await photo.read()
+            f.write(content)
+        
+        # Сохраняем в БД сначала с временным URL
+        photo_url = f"/local_uploads/{file_name}"  # Временный URL
+        with db.cursor() as cur:
+            cur.execute("""
+                INSERT INTO posts (photo_url, description, user_id)
+                VALUES (%s, %s, %s)
+                RETURNING id, created_at
+            """, (photo_url, description, current_user["id"]))
+            new_post = cur.fetchone()
+            db.commit()
+        
+        # Асинхронная загрузка в S3 (без ожидания)
+        asyncio.create_task(async_upload_to_s3(local_path, file_name))
+        
+        return {"status": "success", "post_id": new_post["id"], "url": photo_url}
+
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail=f"File upload failed: {str(e)}")
+
+# Эндпоинт для локальных файлов
+@app.get("/local_uploads/{filename}")
+async def serve_local_file(filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    raise HTTPException(404)
 
         # Сохранение в БД
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
