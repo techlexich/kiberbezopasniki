@@ -27,6 +27,8 @@ import hmac
 import hashlib
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import FileResponse
+import ssl
+from urllib3.util.ssl_ import create_urllib3_context
 
 # Настройки
 load_dotenv()
@@ -122,6 +124,14 @@ class NotFoundMiddleware(BaseHTTPMiddleware):
             return response
         except Exception:
             return FileResponse("static/500.html", status_code=500)
+
+class BegetS3Adapter(requests.adapters.HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        context = create_urllib3_context()
+        context.load_default_certs()
+        context.verify_mode = ssl.CERT_NONE  # Отключаем проверку SSL для Beget
+        kwargs['ssl_context'] = context
+        return super().init_poolmanager(*args, **kwargs)
 
 # Настройки авторизации
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -413,7 +423,11 @@ async def create_post(
         file_name = f"{uuid.uuid4()}.{file_ext}"
         file_content = await photo.read()
         
-        # Генерация подписи для Beget S3
+        # Создаем сессию с кастомным адаптером SSL
+        session = requests.Session()
+        session.mount('https://', BegetS3Adapter())
+        
+        # Генерация подписи
         date, signature = generate_beget_s3_signature(
             BEGET_S3_ACCESS_KEY,
             BEGET_S3_SECRET_KEY,
@@ -423,8 +437,8 @@ async def create_post(
             photo.content_type
         )
         
-        # Загрузка файла напрямую через HTTP
-        response = requests.put(
+        # Загрузка файла
+        response = session.put(
             f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}",
             data=file_content,
             headers={
@@ -432,13 +446,14 @@ async def create_post(
                 'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
                 'Content-Type': photo.content_type,
                 'x-amz-acl': 'public-read'
-            }
+            },
+            timeout=30
         )
         
         if response.status_code not in (200, 201):
             raise HTTPException(500, f"S3 upload failed: {response.text}")
 
-        # Сохранение в базу данных
+        # Сохранение в БД
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         with db.cursor() as cur:
             cur.execute("""
