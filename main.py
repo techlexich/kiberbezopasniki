@@ -389,16 +389,19 @@ async def create_post(
         # Читаем файл в память
         file_content = await photo.read()
         
-        # Специальные параметры для Beget S3
+        # Генерируем MD5 хеш
+        file_md5 = hashlib.md5(file_content).digest()
+        file_md5_base64 = base64.b64encode(file_md5).decode('utf-8')
+        
+        # Загружаем в S3 с правильными заголовками
         s3.put_object(
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
             Body=file_content,
             ContentType=photo.content_type,
-            ACL='public-read',
-            # Критически важные параметры:
             ContentLength=len(file_content),
-            ContentMD5=base64.b64encode(hashlib.md5(file_content).digest()).decode()
+            ContentMD5=file_md5_base64,
+            ACL='public-read'
         )
 
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -415,11 +418,12 @@ async def create_post(
         return {"status": "success", "url": photo_url}
 
     except ClientError as e:
-        logger.error(f"S3 ClientError: {e.response['Error']['Message']}")
-        raise HTTPException(500, "S3 upload failed")
+        logger.error(f"S3 ClientError: {str(e)}", exc_info=True)
+        error_message = e.response.get('Error', {}).get('Message', 'Unknown S3 error')
+        raise HTTPException(500, detail=f"S3 upload failed: {error_message}")
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, "File upload failed")
+        raise HTTPException(500, detail="File upload failed")
 
 @app.get("/posts/{post_id}")
 async def get_post(
