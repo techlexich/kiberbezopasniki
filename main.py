@@ -257,7 +257,7 @@ async def root(request: Request):
 async def tape(request: Request):
     if not templates:
         raise HTTPException(500, "Templates not found")
-    return templates.TemplateResponse("templates/tape.html", {"request": request})
+    return templates.TemplateResponse("tape.html", {"request": request})
 
 class NotFoundMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
