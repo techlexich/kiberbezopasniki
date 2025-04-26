@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from pydantic import BaseModel, EmailStr, field_validator, AnyUrl, Field
 from passlib.context import CryptContext
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from typing import Optional
 import psycopg2
@@ -21,18 +21,11 @@ from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
 import shutil
 import requests
-from requests.auth import HTTPBasicAuth
-import base64
-import hmac
+from requests_aws4auth import AWS4Auth
+import datetime
 import hashlib
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import FileResponse
-import ssl
-from urllib3.util.ssl_ import create_urllib3_context
-from botocore.config import Config
-import asyncio
-from aiohttp import ClientSession, TCPConnector
-import aiohttp
+import base64
+from botocore.exceptions import ClientError
 
 # Настройки
 load_dotenv()
@@ -118,32 +111,6 @@ class UserCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-class NotFoundMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        try:
-            response = await call_next(request)
-            if response.status_code == 404:
-                return FileResponse("static/404.html")
-            return response
-        except Exception:
-            return FileResponse("static/500.html", status_code=500)
-
-class CustomS3Adapter(requests.adapters.HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
-        context = create_urllib3_context()
-        # Специальные настройки для Beget S3
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        kwargs['ssl_context'] = context
-        return super().init_poolmanager(*args, **kwargs)
-    
-def get_beget_s3_client():
-    """Создаем настроенный клиент для Beget S3"""
-    session = requests.Session()
-    adapter = CustomS3Adapter(max_retries=3)
-    session.mount('https://', adapter)
-    return session
 
 # Настройки авторизации
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -263,57 +230,96 @@ async def get_user_profile(username: str, request: Request, db=Depends(get_db)):
     }
 
 logger = logging.getLogger(__name__)
-@app.put("/users/{username}", response_model=User)
-async def update_profile(
-    username: str,
-    profile: UserProfile,
-    request: Request,
+@app.post("/posts")
+async def create_post(
+    photo: UploadFile = File(...),
+    description: str = Form(default=""),
+    shooting_time: str = Form(default=None),
+    location: str = Form(default=None),
+    camera_settings: str = Form(default=None),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Проверяем, что текущий пользователь редактирует СВОЙ профиль
-    if current_user["username"] != username:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Вы можете редактировать только свой профиль"
+    if not photo.filename or not photo.content_type:
+        raise HTTPException(400, detail="Invalid file")
+
+    try:
+        # Генерируем уникальное имя файла
+        file_ext = photo.filename.split('.')[-1].lower()
+        file_name = f"{uuid.uuid4()}.{file_ext}"
+        
+        # Читаем содержимое файла
+        file_content = await photo.read()
+        
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        
+        # Подготовка заголовков
+        now = datetime.utcnow()
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+        
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(file_content))
+        }
+        
+        # Создаем подпись запроса
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3'
         )
-    
-    with db.cursor() as cur:
-        try:
+        
+        # Отправляем запрос
+        response = requests.put(
+            url,
+            data=file_content,
+            headers=headers,
+            auth=auth
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+
+        # Формируем URL к файлу
+        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        
+        # Устанавливаем текущее время как shooting_time, если не указано
+        if shooting_time is None:
+            shooting_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Сохраняем в базу данных
+        with db.cursor() as cur:
             cur.execute("""
-                UPDATE users 
-                SET bio = %s, avatar_url = %s
-                WHERE username = %s
-                RETURNING id, username, email, 
-                         COALESCE(bio, '') as bio,
-                         COALESCE(avatar_url, '/default-avatar.jpg') as avatar
-            """, (profile.bio, profile.avatar, username))
-            
-            updated = cur.fetchone()
-            if not updated:
-                raise HTTPException(status_code=404, detail="Пользователь не найден")
-            
+                INSERT INTO posts (
+                    photo_url, 
+                    description, 
+                    user_id,
+                    shooting_time,
+                    location,
+                    camera_settings
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, created_at
+            """, (
+                photo_url, 
+                description, 
+                current_user["id"],
+                shooting_time,
+                location,
+                camera_settings
+            ))
+            new_post = cur.fetchone()
             db.commit()
-            logger.info(f"User {username} updated their profile")
-            
-            avatar = updated["avatar"]
-            if avatar.startswith('/'):
-                avatar = str(request.base_url)[:-1] + avatar
-                
-            return {
-                "id": updated["id"],
-                "username": updated["username"],
-                "email": updated["email"],
-                "profile": {
-                    "bio": updated["bio"],
-                    "avatar": avatar
-                }
-            }
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error updating profile: {str(e)}")
-            raise HTTPException(status_code=500, detail="Ошибка при обновлении профиля")
+
+        return {"status": "success", "url": photo_url}
+
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="File upload failed")
 
 @app.get("/profile/{username}")
 async def profile_page(username: str, db=Depends(get_db)):
@@ -407,54 +413,6 @@ async def delete_post(
         
         return {"status": "ok", "post_id": post_id}
 
-def generate_beget_s3_signature(access_key, secret_key, method, bucket, object_name, content_type):
-    """Генерация подписи для Beget S3 API"""
-    date = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
-    string_to_sign = f"{method}\n\n{content_type}\n{date}\n/{bucket}/{object_name}"
-    signature = base64.b64encode(
-        hmac.new(secret_key.encode(), string_to_sign.encode(), hashlib.sha1).digest()
-    ).decode()
-    return date, signature
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-async def async_upload_to_s3(file_path: str, object_name: str):
-    """Асинхронная загрузка файла в Beget S3"""
-    async with ClientSession(connector=TCPConnector(ssl=False)) as session:
-        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{object_name}"
-        
-        # Генерация подписи
-        date, signature = generate_beget_s3_signature(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            "PUT",
-            BEGET_S3_BUCKET_NAME,
-            object_name,
-            "image/jpeg"  # или определять из файла
-        )
-        
-        headers = {
-            'Date': date,
-            'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
-            'x-amz-acl': 'public-read'
-        }
-        
-        with open(file_path, 'rb') as f:
-            data = f.read()
-        
-        for attempt in range(3):  # 3 попытки
-            try:
-                async with session.put(url, data=data, headers=headers) as response:
-                    if response.status in (200, 201):
-                        return True
-                    await asyncio.sleep(2 ** attempt)  # Экспоненциальная задержка
-            except Exception as e:
-                logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
-                await asyncio.sleep(2 ** attempt)
-                
-        return False
-
 @app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
@@ -466,49 +424,51 @@ async def create_post(
         raise HTTPException(400, "Invalid file")
 
     try:
-        # Генерация имени файла
+        # Генерируем уникальное имя файла
         file_ext = photo.filename.split('.')[-1].lower()
-        if file_ext not in ['jpg', 'jpeg', 'png', 'gif']:
-            raise HTTPException(400, "Only images are allowed")
-            
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        local_path = os.path.join(UPLOAD_DIR, file_name)
         
-        # Сохраняем локально
-        with open(local_path, 'wb') as f:
-            content = await photo.read()
-            f.write(content)
+        # Читаем содержимое файла
+        file_content = await photo.read()
         
-        # Сохраняем в БД сначала с временным URL
-        photo_url = f"/local_uploads/{file_name}"  # Временный URL
-        with db.cursor() as cur:
-            cur.execute("""
-                INSERT INTO posts (photo_url, description, user_id)
-                VALUES (%s, %s, %s)
-                RETURNING id, created_at
-            """, (photo_url, description, current_user["id"]))
-            new_post = cur.fetchone()
-            db.commit()
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-        # Асинхронная загрузка в S3 (без ожидания)
-        asyncio.create_task(async_upload_to_s3(local_path, file_name))
+        # Создаем подпись запроса
+        now = datetime.datetime.utcnow()
+        date = now.strftime('%Y%m%d')
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
         
-        return {"status": "success", "post_id": new_post["id"], "url": photo_url}
-
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"File upload failed: {str(e)}")
-
-# Эндпоинт для локальных файлов
-@app.get("/local_uploads/{filename}")
-async def serve_local_file(filename: str):
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    raise HTTPException(404)
-
-        # Сохранение в БД
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read'
+        }
+        
+        # Создаем подпись
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3',
+            session_token=None
+        )
+        
+        # Отправляем запрос напрямую
+        response = requests.put(
+            url,
+            data=file_content,
+            headers=headers,
+            auth=auth
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+        
+        # Формируем URL к файлу
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        
+        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (photo_url, description, user_id)
@@ -518,11 +478,11 @@ async def serve_local_file(filename: str):
             new_post = cur.fetchone()
             db.commit()
 
-        return {"status": "success", "post_id": new_post["id"], "url": photo_url}
+        return {"status": "success", "url": photo_url}
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"File upload failed: {str(e)}")
+        raise HTTPException(500, detail="File upload failed")
 
 @app.get("/posts/{post_id}")
 async def get_post(
@@ -546,31 +506,18 @@ async def get_post(
 @app.get("/check-s3-connection")
 async def check_s3_connection():
     try:
-        test_file = "test-connection.txt"
-        date, signature = generate_beget_s3_signature(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            "GET",
-            BEGET_S3_BUCKET_NAME,
-            test_file,
-            "text/plain"
-        )
-        
-        response = requests.head(
-            f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{test_file}",
-            headers={
-                'Date': date,
-                'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}"
-            }
-        )
-        
-        return {
-            "status": "success",
-            "s3_status": response.status_code,
-            "bucket": BEGET_S3_BUCKET_NAME
-        }
+        # Пробуем получить список бакетов
+        response = s3.list_buckets()
+        return {"status": "success", "buckets": [b['Name'] for b in response['Buckets']]}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, f"S3 connection error: {str(e)}")
+
+class NotFoundMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if response.status_code == 404:
+            return FileResponse("static/404.html")
+        return response
 
 app.add_middleware(NotFoundMiddleware)
 
@@ -582,8 +529,6 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     return FileResponse("static/404.html", status_code=404)
-
-app.add_middleware(NotFoundMiddleware)
 
 if __name__ == "__main__":
     import uvicorn
