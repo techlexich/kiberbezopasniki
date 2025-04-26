@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from pydantic import BaseModel, EmailStr, field_validator, AnyUrl, Field
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from typing import Optional
 import psycopg2
@@ -20,9 +20,10 @@ import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
 import shutil
-import base64
 import requests
-from requests.auth import AWS4Auth
+from requests.auth import HTTPBasicAuth
+import base64
+import hmac
 import hashlib
 
 # Настройки
@@ -372,9 +373,14 @@ async def delete_post(
         
         return {"status": "ok", "post_id": post_id}
 
-import hashlib
-import base64
-from botocore.exceptions import ClientError
+def generate_beget_s3_signature(access_key, secret_key, method, bucket, object_name, content_type):
+    """Генерация подписи для Beget S3 API"""
+    date = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+    string_to_sign = f"{method}\n\n{content_type}\n{date}\n/{bucket}/{object_name}"
+    signature = base64.b64encode(
+        hmac.new(secret_key.encode(), string_to_sign.encode(), hashlib.sha1).digest()
+    ).decode()
+    return date, signature
 
 @app.post("/posts")
 async def create_post(
@@ -387,46 +393,41 @@ async def create_post(
         raise HTTPException(400, "Invalid file")
 
     try:
-        # Генерируем уникальное имя файла
+        # Генерация имени файла
         file_ext = photo.filename.split('.')[-1].lower()
         if file_ext not in ['jpg', 'jpeg', 'png', 'gif']:
             raise HTTPException(400, "Only images are allowed")
             
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        
-        # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Формируем URL для загрузки
-        object_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
-        # Создаем подпись для запроса
-        auth = AWS4Auth(
+        # Генерация подписи для Beget S3
+        date, signature = generate_beget_s3_signature(
             BEGET_S3_ACCESS_KEY,
             BEGET_S3_SECRET_KEY,
-            'ru-1',  # Регион
-            's3',
-            session_token=None
+            "PUT",
+            BEGET_S3_BUCKET_NAME,
+            file_name,
+            photo.content_type
         )
         
-        # Загружаем файл напрямую через PUT-запрос
+        # Загрузка файла напрямую через HTTP
         response = requests.put(
-            object_url,
+            f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}",
             data=file_content,
             headers={
+                'Date': date,
+                'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
                 'Content-Type': photo.content_type,
                 'x-amz-acl': 'public-read'
-            },
-            auth=auth
+            }
         )
         
-        if response.status_code != 200:
+        if response.status_code not in (200, 201):
             raise HTTPException(500, f"S3 upload failed: {response.text}")
-        
-        # Формируем URL к файлу
+
+        # Сохранение в базу данных
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
-        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (photo_url, description, user_id)
@@ -464,18 +465,31 @@ async def get_post(
 @app.get("/check-s3-connection")
 async def check_s3_connection():
     try:
-        # Пробуем получить список бакетов
-        response = s3.list_buckets()
-        return {"status": "success", "buckets": [b['Name'] for b in response['Buckets']]}
+        test_file = "test-connection.txt"
+        date, signature = generate_beget_s3_signature(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            "GET",
+            BEGET_S3_BUCKET_NAME,
+            test_file,
+            "text/plain"
+        )
+        
+        response = requests.head(
+            f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{test_file}",
+            headers={
+                'Date': date,
+                'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}"
+            }
+        )
+        
+        return {
+            "status": "success",
+            "s3_status": response.status_code,
+            "bucket": BEGET_S3_BUCKET_NAME
+        }
     except Exception as e:
-        raise HTTPException(500, f"S3 connection error: {str(e)}")
-
-class NotFoundMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        if response.status_code == 404:
-            return FileResponse("static/404.html")
-        return response
+        raise HTTPException(500, detail=str(e))
 
 app.add_middleware(NotFoundMiddleware)
 
