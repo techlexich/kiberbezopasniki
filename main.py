@@ -51,7 +51,6 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Инициализация S3 клиента только если заданы ключи
 s3 = boto3.client(
     's3',
     endpoint_url=BEGET_S3_ENDPOINT,
@@ -60,10 +59,9 @@ s3 = boto3.client(
     region_name='ru-1',
     config=boto3.session.Config(
         signature_version='s3v4',
-        s3={'addressing_style': 'path'}  # Иногда требуется для S3-совместимых хранилищ
+        s3={'addressing_style': 'path'}
     )
 )
-
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -394,22 +392,21 @@ async def create_post(
         # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Вычисляем MD5 хеш
-        file_md5 = base64.b64encode(hashlib.md5(file_content).digest()).decode()
+        # Создаем временный файл (обходной путь для Beget)
+        temp_file = f"temp_{file_name}"
+        with open(temp_file, "wb") as f:
+            f.write(file_content)
         
-        # Формируем параметры для S3
-        put_params = {
-            'Bucket': BEGET_S3_BUCKET_NAME,
-            'Key': file_name,
-            'Body': file_content,
-            'ContentType': photo.content_type,
-            'ContentLength': len(file_content),  # Важно: передаём как int
-            'ContentMD5': file_md5,
-            'ACL': 'public-read'
-        }
-        
-        # Загружаем в S3
-        s3.put_object(**put_params)
+        # Загружаем через upload_file (более надежный метод)
+        s3.upload_file(
+            temp_file,
+            BEGET_S3_BUCKET_NAME,
+            file_name,
+            ExtraArgs={
+                'ContentType': photo.content_type,
+                'ACL': 'public-read'
+            }
+        )
 
         # Формируем URL к файлу
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -428,11 +425,16 @@ async def create_post(
 
     except ClientError as e:
         logger.error(f"S3 Error: {e.response}", exc_info=True)
-        error_msg = e.response.get('Error', {}).get('Message', 'Unknown S3 error')
-        raise HTTPException(500, detail=f"S3 upload failed: {error_msg}")
+        error_msg = "S3 upload failed"
+        if e.response.get('Error', {}).get('Code') == 'XAmzContentSHA256Mismatch':
+            error_msg += " (checksum mismatch - try again)"
+        raise HTTPException(500, detail=error_msg)
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail="File upload failed")
+    finally:
+        if 'temp_file' in locals() and os.path.exists(temp_file):
+            os.remove(temp_file)
 
 @app.get("/posts/{post_id}")
 async def get_post(
