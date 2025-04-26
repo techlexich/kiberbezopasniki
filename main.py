@@ -27,7 +27,7 @@ if not SECRET_KEY or not DB_URL:
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates") if Path("templates").exists() else None
+templates = Jinja2Templates(directory="templates")
 
 app.add_middleware(
     CORSMiddleware,
@@ -247,17 +247,13 @@ async def profile_page(username: str, db=Depends(get_db)):
         raise HTTPException(status_code=404)
     return FileResponse("static/profile.html")
 
-@app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
-    if not templates:
-        raise HTTPException(500, "Templates not found")
-    return templates.TemplateResponse("index.html", {"request": request})
-
 @app.get("/tape", response_class=HTMLResponse)
 async def tape(request: Request):
-    if not templates:
-        raise HTTPException(500, "Templates not found")
     return templates.TemplateResponse("tape.html", {"request": request})
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 class NotFoundMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -271,3 +267,12 @@ app.add_middleware(NotFoundMiddleware)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+#исключение ошибок
+@app.exception_handler(500)
+async def internal_server_error_handler(request: Request, exc: Exception):
+    return PlainTextResponse("Internal Server Error", status_code=500)
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception):
+    return FileResponse("static/404.html", status_code=404)
