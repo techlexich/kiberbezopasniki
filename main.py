@@ -387,25 +387,21 @@ async def create_post(
     try:
         # Генерируем уникальное имя файла
         file_ext = photo.filename.split('.')[-1].lower()
+        if file_ext not in ['jpg', 'jpeg', 'png', 'gif']:
+            raise HTTPException(400, "Only images are allowed")
+            
         file_name = f"{uuid.uuid4()}.{file_ext}"
         
         # Читаем содержимое файла
         file_content = await photo.read()
         
-        # Создаем временный файл (обходной путь для Beget)
-        temp_file = f"temp_{file_name}"
-        with open(temp_file, "wb") as f:
-            f.write(file_content)
-        
-        # Загружаем через upload_file (более надежный метод)
-        s3.upload_file(
-            temp_file,
-            BEGET_S3_BUCKET_NAME,
-            file_name,
-            ExtraArgs={
-                'ContentType': photo.content_type,
-                'ACL': 'public-read'
-            }
+        # Загружаем напрямую через put_object (без временного файла)
+        s3.put_object(
+            Bucket=BEGET_S3_BUCKET_NAME,
+            Key=file_name,
+            Body=file_content,
+            ContentType=photo.content_type,
+            ACL='public-read'
         )
 
         # Формируем URL к файлу
@@ -421,7 +417,7 @@ async def create_post(
             new_post = cur.fetchone()
             db.commit()
 
-        return {"status": "success", "url": photo_url}
+        return {"status": "success", "post_id": new_post["id"], "url": photo_url}
 
     except ClientError as e:
         logger.error(f"S3 Error: {e.response}", exc_info=True)
@@ -432,9 +428,6 @@ async def create_post(
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail="File upload failed")
-    finally:
-        if 'temp_file' in locals() and os.path.exists(temp_file):
-            os.remove(temp_file)
 
 @app.get("/posts/{post_id}")
 async def get_post(
