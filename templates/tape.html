@@ -280,6 +280,173 @@
             font-size: 12px;
             color: var(--text-light);
         }
+
+        .auth-state { display: none; }
+        .guest-state { display: flex; flex-direction: column; gap: 8px; }
+
+        .profile-info {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .profile-info p {
+            margin: 8px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .profile-info .email {
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        #logout-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 16px;
+            background-color: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        #logout-btn:hover {
+            background-color: #f1f3f5;
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .auth-error {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .auth-option {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            text-align: center;
+            background-color: var(--bg);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border);
+            font-weight: 500;
+            box-sizing: border-box;
+        }
+
+        .auth-option:hover {
+            background-color: #f1f3f5;
+        }
+
+        .auth-option.primary {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .auth-option.primary:hover {
+            background-color: var(--primary-light);
+        }
+
+        .auth-form {
+            display: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .auth-form.active {
+            display: block;
+        }
+
+        .auth-form input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.2s ease;
+        }
+
+        .auth-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+        }
+
+        .auth-form button {
+            width: 100%;
+            padding: 12px;
+            margin: 16px 0 8px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        .auth-form button:hover {
+            background-color: var(--primary-light);
+        }
+
+        .back-button {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            margin-bottom: 16px;
+            font-size: 14px;
+            transition: color 0.2s ease;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0;
+        }
+
+        .back-button:hover {
+            color: var(--text);
+        }
+
+        .profile-redirect-btn {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px;
+            margin: 16px 0 8px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+        }
+
+        .profile-redirect-btn:hover {
+            background-color: var(--primary-light);
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -289,11 +456,9 @@
         <header class="header">
             <div class="logo">PhotoTravel</div>
             <div class="nav-buttons">
-                <form action="/profile/current_user" id="profileForm">
-                    <button class="nav-button">
-                        <i class="fas fa-user"></i> Профиль
-                    </button>
-                </form>
+                <button id="profile-button" class="nav-button">
+                    <i class="fas fa-user"></i> Профиль
+                </button>
                 <form action="/">
                     <button class="nav-button">
                         <i class="fas fa-map-marker-alt"></i> Карта
@@ -410,37 +575,338 @@
         <i class="fas fa-plus"></i>
     </button>
 
+    <div id="profile-modal" class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Профиль</h3>
+            <button class="close-button" id="close-profile">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div id="profile-content">
+            <!-- Авторизованный вид -->
+            <div id="authenticated-view" class="auth-state">
+                <div class="profile-info">
+                    <p><i class="fas fa-user"></i> <span id="profile-username"></span></p>
+                    <p class="email"><i class="fas fa-envelope"></i> <span id="profile-email"></span></p>
+                </div>
+                <a href="#" id="go-to-profile" class="profile-redirect-btn">
+                    <i class="fas fa-user-circle"></i> Перейти в профиль
+                </a>
+                <button id="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Выйти
+                </button>
+            </div>
+    
+            <!-- Гостевой вид -->
+            <div id="guest-view" class="guest-state">
+                <button id="login-option" class="auth-option primary">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+                <button id="register-option" class="auth-option">
+                    <i class="fas fa-user-plus"></i> Зарегистрироваться
+                </button>
+            </div>
+            
+            <!-- Формы авторизации -->
+            <div id="login-form" class="auth-form">
+                <button class="back-button" id="back-from-login">
+                    <i class="fas fa-arrow-left"></i> Назад
+                </button>
+                <h3 class="modal-title">Вход в аккаунт</h3>
+                <input type="text" placeholder="Email или логин" id="login-email">
+                <input type="password" placeholder="Пароль" id="login-password">
+                <div id="login-error" class="auth-error"></div>
+                <button id="login-button">Войти</button>
+            </div>
+            
+            <div id="register-form" class="auth-form">
+                <button class="back-button" id="back-from-register">
+                    <i class="fas fa-arrow-left"></i> Назад
+                </button>
+                <h3 class="modal-title">Создать аккаунт</h3>
+                <input type="text" placeholder="Email" id="register-email">
+                <input type="text" placeholder="Логин" id="register-login">
+                <input type="password" placeholder="Пароль" id="register-password">
+                <input type="password" placeholder="Повторите пароль" id="register-password-repeat">
+                <div id="register-error" class="auth-error"></div>
+                <button id="register-button">Зарегистрироваться</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Логика для лайков
-        document.querySelectorAll('.like-button').forEach(button => {
-            button.addEventListener('click', function() {
-                const icon = this.querySelector('i');
-                const countSpan = this.querySelector('span');
-                let count = parseInt(countSpan.textContent) || 0;
+        // Настройки API
+        const API_URL = 'https://kiberbezopasniki.onrender.com';
+        let currentUser = null;
+        let isApiAvailable = false;
+    
+        // Элементы интерфейса
+        const profileButton = document.getElementById('profile-button');
+        const profileModal = document.getElementById('profile-modal');
+        const closeProfile = document.getElementById('close-profile');
+        
+        // Элементы авторизации
+        const loginOption = document.getElementById('login-option');
+        const registerOption = document.getElementById('register-option');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const backFromLogin = document.getElementById('back-from-login');
+        const backFromRegister = document.getElementById('back-from-register');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        const logoutButton = document.getElementById('logout-btn');
+        
+        // Поля ввода
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const registerEmail = document.getElementById('register-email');
+        const registerLogin = document.getElementById('register-login');
+        const registerPassword = document.getElementById('register-password');
+        const registerPasswordRepeat = document.getElementById('register-password-repeat');
+        
+        // Сообщения об ошибках
+        const loginError = document.getElementById('login-error');
+        const registerError = document.getElementById('register-error');
+    
+        // Функции для работы с модальными окнами
+        function showModal(modal) {
+            modal.style.display = 'block';
+            setTimeout(() => modal.classList.add('show'), 10);
+        }
+    
+        function hideModal(modal) {
+            modal.classList.remove('show');
+            setTimeout(() => modal.style.display = 'none', 200);
+        }
+    
+        function resetAuthForms() {
+            if (currentUser) {
+                document.getElementById('guest-view').style.display = 'none';
+                document.getElementById('authenticated-view').style.display = 'block';
+            } else {
+                document.getElementById('guest-view').style.display = 'flex';
+                document.getElementById('authenticated-view').style.display = 'none';
+            }
+            
+            document.getElementById('login-form').classList.remove('active');
+            document.getElementById('register-form').classList.remove('active');
+            loginEmail.value = '';
+            loginPassword.value = '';
+            registerEmail.value = '';
+            registerLogin.value = '';
+            registerPassword.value = '';
+            registerPasswordRepeat.value = '';
+            loginError.style.display = 'none';
+            registerError.style.display = 'none';
+        }
+    
+        // Обработчик открытия профиля
+        profileButton.addEventListener('click', () => {
+            showModal(profileModal);
+            resetAuthForms();
+        });
+    
+        // Функции для работы с авторизацией
+        async function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (!token) return null;
+            
+            try {
+                const response = await fetch(`${API_URL}/users/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 
-                if (this.classList.contains('liked')) {
-                    icon.classList.replace('fas', 'far');
-                    countSpan.textContent = count - 1;
-                    this.classList.remove('liked');
+                if (response.ok) {
+                    return await response.json();
                 } else {
-                    icon.classList.replace('far', 'fas');
-                    countSpan.textContent = count + 1;
-                    this.classList.add('liked');
+                    localStorage.removeItem('access_token');
+                    return null;
                 }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                return null;
+            }
+        }
+    
+        async function updateAuthUI() {
+            try {
+                currentUser = await checkAuth();
+                const guestView = document.getElementById('guest-view');
+                const authView = document.getElementById('authenticated-view');
+                
+                if (currentUser) {
+                    // Показываем авторизованный вид
+                    document.getElementById('profile-username').textContent = currentUser.username || 'Пользователь';
+                    document.getElementById('profile-email').textContent = currentUser.email || 'Не указан';
+                    document.getElementById('profile-button').innerHTML = 
+                        `<i class="fas fa-user"></i> ${currentUser.username || 'Профиль'}`;
+                    
+                    guestView.style.display = 'none';
+                    authView.style.display = 'block';
+                    loginForm.classList.remove('active');
+                    registerForm.classList.remove('active');
+                } else {
+                    // Показываем гостевой вид
+                    document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
+                    guestView.style.display = 'flex';
+                    authView.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Ошибка при обновлении UI:', error);
+            }
+        }
+    
+        // Обработчик кнопки "Перейти в профиль"
+        document.getElementById('go-to-profile').addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            if (!currentUser) {
+                alert("Сначала войдите в аккаунт");
+                return;
+            }
+            
+            window.location.href = `/profile/${currentUser.username}`;
+        });
+    
+        // Обработчики кнопок входа/регистрации
+        loginOption.addEventListener('click', () => {
+            document.getElementById('guest-view').style.display = 'none';
+            loginForm.classList.add('active');
+        });
+        
+        registerOption.addEventListener('click', () => {
+            document.getElementById('guest-view').style.display = 'none';
+            registerForm.classList.add('active');
+        });
+    
+        function showError(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+        }
+    
+        closeProfile.addEventListener('click', () => hideModal(profileModal));
+    
+        backFromLogin.addEventListener('click', resetAuthForms);
+        backFromRegister.addEventListener('click', resetAuthForms);
+    
+        // Регистрация
+        registerButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            registerError.style.display = 'none';
+            
+            if (registerPassword.value !== registerPasswordRepeat.value) {
+                showError(registerError, 'Пароли не совпадают');
+                return;
+            }
+    
+            try {
+                const response = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: registerEmail.value,
+                        username: registerLogin.value,
+                        password: registerPassword.value,
+                        password_repeat: registerPasswordRepeat.value
+                    })
+                });
+    
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Ошибка регистрации');
+                }
+    
+                localStorage.setItem('access_token', data.access_token);
+                await updateAuthUI();
+                resetAuthForms();
+                hideModal(profileModal);
+            } catch (error) {
+                showError(registerError, error.message || 'Ошибка соединения');
+            }
+        });
+    
+        // Вход
+        loginButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            loginError.style.display = 'none';
+    
+            try {
+                const response = await fetch(`${API_URL}/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        username: loginEmail.value,
+                        password: loginPassword.value
+                    })
+                });
+    
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Неверный email или пароль');
+                }
+    
+                localStorage.setItem('access_token', data.access_token);
+                await updateAuthUI();
+                resetAuthForms();
+                hideModal(profileModal);
+            } catch (error) {
+                showError(loginError, error.message || 'Ошибка соединения');
+            }
+        });
+    
+        // Выход
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('access_token');
+            currentUser = null;
+            updateAuthUI();
+            hideModal(profileModal);
+        });
+    
+        // Закрытие модалки при клике вне ее области
+        window.addEventListener('click', (e) => {
+            if (e.target === profileModal) hideModal(profileModal);
+        });
+    
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateAuthUI();
+            
+            // Логика для лайков
+            document.querySelectorAll('.like-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const icon = this.querySelector('i');
+                    const countSpan = this.querySelector('span');
+                    let count = parseInt(countSpan.textContent) || 0;
+                    
+                    if (this.classList.contains('liked')) {
+                        icon.classList.replace('fas', 'far');
+                        countSpan.textContent = count - 1;
+                        this.classList.remove('liked');
+                    } else {
+                        icon.classList.replace('far', 'fas');
+                        countSpan.textContent = count + 1;
+                        this.classList.add('liked');
+                    }
+                });
             });
-        });
-
-        // Кнопка нового поста
-        document.querySelector('.new-post-button').addEventListener('click', function() {
-            alert('Форма создания нового поста будет здесь');
-        });
-
-        // Имитация загрузки изображений
-        document.querySelectorAll('.post-image').forEach(img => {
-            setTimeout(() => {
-                img.src = img.getAttribute('src');
-                img.classList.remove('loading');
-            }, 1000 + Math.random() * 2000);
+    
+            // Кнопка нового поста
+            document.querySelector('.new-post-button').addEventListener('click', function() {
+                alert('Форма создания нового поста будет здесь');
+            });
+    
+            // Имитация загрузки изображений
+            document.querySelectorAll('.post-image').forEach(img => {
+                setTimeout(() => {
+                    img.src = img.getAttribute('src');
+                    img.classList.remove('loading');
+                }, 1000 + Math.random() * 2000);
+            });
         });
     </script>
 </body>
