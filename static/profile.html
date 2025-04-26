@@ -168,7 +168,7 @@
             border-color: var(--primary);
         }
 
-        /* Модальное окно */
+        /* Модальное окно редактирования профиля */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -299,52 +299,7 @@
             color: white;
         }
 
-        @media (max-width: 600px) {
-            .profile-header {
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-            }
-            
-            .profile-stats {
-                justify-content: center;
-                gap: 16px;
-            }
-            
-            .profile-header {
-                padding: 20px 16px;
-            }
-            
-            .nav-buttons {
-                flex-direction: column;
-                gap: 8px;
-            }
-        }
-        .new-post-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            transition: all 0.3s ease;
-        }
-
-        .new-post-btn:hover {
-            transform: scale(1.1);
-        }
-
-        /* Стили для модального окна создания поста */
+        /* Модальное окно создания поста */
         #post-modal {
             display: none;
             position: fixed;
@@ -431,6 +386,156 @@
             margin: 0 auto 20px;
             border-radius: 8px;
         }
+
+        /* Кнопка нового поста */
+        .new-post-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+
+        .new-post-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Стили для постов */
+        .post {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        .post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .post-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+        }
+
+        .post-user-info {
+            flex-grow: 1;
+        }
+
+        .post-username {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .post-time {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        .post-text {
+            margin-bottom: 14px;
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .post-image {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 14px;
+            max-height: 500px;
+            object-fit: contain;
+            background: #f1f3f5;
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid var(--border);
+            padding-top: 14px;
+        }
+
+        .action-button {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .action-button:hover {
+            background: #f1f3f5;
+            color: var(--text);
+        }
+
+        .action-button i {
+            font-size: 16px;
+        }
+
+        .like-button.liked {
+            color: #ff4757;
+        }
+
+        @media (max-width: 600px) {
+            .profile-header {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+            
+            .profile-stats {
+                justify-content: center;
+                gap: 16px;
+            }
+            
+            .profile-header {
+                padding: 20px 16px;
+            }
+            
+            .nav-buttons {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .new-post-btn {
+                bottom: 20px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -453,21 +558,6 @@
             </div>
         </header>
 
-        <!-- Форма для нового поста (только для владельца профиля) -->
-        <div id="new-post-form" style="display: none; margin-bottom: 20px;">
-            <form id="create-post-form" enctype="multipart/form-data">
-                <div style="margin-bottom: 10px;">
-                    <input type="file" id="post-photo" accept="image/*" required style="width: 100%;">
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <textarea id="post-description" placeholder="Описание фото..." style="width: 100%; padding: 10px;"></textarea>
-                </div>
-                <button type="submit" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
-                    Опубликовать
-                </button>
-            </form>
-        </div>
-
         <div class="profile-header">
             <button class="edit-profile-btn" id="editProfileBtn">
                 <i class="fas fa-pencil-alt"></i> Редактировать
@@ -481,15 +571,15 @@
                 
                 <div class="profile-stats">
                     <div class="stat-item">
-                        <div class="stat-number" id="postsCount">24</div>
+                        <div class="stat-number" id="postsCount">0</div>
                         <div class="stat-label">публикации</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number" id="followersCount">356</div>
+                        <div class="stat-number" id="followersCount">0</div>
                         <div class="stat-label">подписчиков</div>
                     </div>
                     <div class="stat-item">
-                        <div class="stat-number" id="followingCount">128</div>
+                        <div class="stat-number" id="followingCount">0</div>
                         <div class="stat-label">подписок</div>
                     </div>
                 </div>
@@ -500,10 +590,18 @@
             <h2 class="section-title">
                 <i class="fas fa-images"></i> Мои публикации
             </h2>
-            <div id="posts-container"></div>
+            <div id="posts-container">
+                <p style="text-align: center; color: var(--text-light);">Загрузка публикаций...</p>
+            </div>
         </div>
-            
-    <!-- Модальное окно редактирования -->
+    </div>
+
+    <!-- Кнопка для создания нового поста -->
+    <button class="new-post-btn" id="newPostBtn">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Модальное окно редактирования профиля -->
     <div class="modal-overlay" id="editModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -526,11 +624,6 @@
             </form>
         </div>
     </div>
-
-     <!-- Кнопка для создания нового поста -->
-     <button class="new-post-btn" id="newPostBtn">
-        <i class="fas fa-plus"></i>
-    </button>
 
     <!-- Модальное окно для создания поста -->
     <div id="post-modal">
@@ -564,7 +657,7 @@
         const username = pathParts.length > 1 ? pathParts[1] : '';
         let currentUser = null;
         
-        // Элементы модального окна
+        // Элементы модального окна редактирования профиля
         const editModal = document.getElementById('editModal');
         const closeModalBtn = document.getElementById('closeModal');
         const editProfileForm = document.getElementById('editProfileForm');
@@ -573,38 +666,45 @@
         const avatarPreview = document.getElementById('avatarPreview');
         const avatarPreviewText = document.getElementById('avatarPreviewText');
         
+        // Элементы модального окна создания поста
+        const newPostBtn = document.getElementById('newPostBtn');
+        const postModal = document.getElementById('post-modal');
+        const closePostModal = document.getElementById('closePostModal');
+        const fileUploadLabel = document.getElementById('file-upload-label');
+        const postPhotoInput = document.getElementById('post-photo');
+        const previewImage = document.getElementById('preview-image');
+        const createPostForm = document.getElementById('create-post-form');
+        const submitPostBtn = document.getElementById('submit-post-btn');
+
         // Загружаем данные профиля
         async function loadProfile() {
             if (!username) return;
             
             try {
-                // 1. Загружаем данные профиля
                 const profileResponse = await fetch(`/users/${username}`);
                 
-                // Проверяем, что ответ JSON, а не HTML
+                // Проверяем, что ответ JSON
                 const contentType = profileResponse.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     throw new Error('Invalid response format');
                 }
                 
                 if (!profileResponse.ok) {
-                    // Если 404 - перенаправляем на страницу 404
                     if (profileResponse.status === 404) {
                         window.location.href = '/404';
                         return;
                     }
-                    // Для других ошибок показываем сообщение
                     const errorData = await profileResponse.json();
                     throw new Error(errorData.message || 'Failed to load profile');
                 }
                 
                 const user = await profileResponse.json();
                 
-                // 2. Заполняем данные
+                // Заполняем данные профиля
                 document.getElementById('profileName').textContent = user.username;
                 document.getElementById('profileBio').textContent = user.profile.bio || "Пока ничего не рассказал о себе";
                 
-                // 3. Настраиваем аватар
+                // Настраиваем аватар
                 const avatar = document.getElementById('profileAvatar');
                 avatar.textContent = user.username[0].toUpperCase();
                 if (user.profile.avatar && !user.profile.avatar.startsWith('/')) {
@@ -613,7 +713,7 @@
                     avatar.textContent = '';
                 }
                 
-                // 4. Проверяем авторизацию
+                // Проверяем авторизацию
                 const token = localStorage.getItem('access_token');
                 const editBtn = document.getElementById('editProfileBtn');
                 
@@ -623,62 +723,109 @@
                             headers: {'Authorization': `Bearer ${token}`}
                         });
                         
-                        // Проверяем content-type для /users/me
-                        const meContentType = meResponse.headers.get('content-type');
-                        if (!meContentType || !meContentType.includes('application/json')) {
-                            localStorage.removeItem('access_token');
-                            editBtn.style.display = 'none';
-                            return;
-                        }
-                        
-                        if (meResponse.ok) {
-                            currentUser = await meResponse.json();
-                            if (currentUser.username === username) {
-                                editBtn.style.display = 'block';
-                                editBtn.onclick = () => openEditModal(user);
-                            } else {
-                                editBtn.style.display = 'none';
-                            }
-                        } else {
-                            // Если ошибка авторизации - удаляем токен
+                        if (!meResponse.ok) {
                             if (meResponse.status === 401) {
                                 localStorage.removeItem('access_token');
                             }
                             editBtn.style.display = 'none';
+                            return;
+                        }
+                        
+                        currentUser = await meResponse.json();
+                        if (currentUser.username === username) {
+                            editBtn.style.display = 'block';
+                            editBtn.onclick = () => openEditModal(user);
+                            newPostBtn.style.display = 'flex';
+                        } else {
+                            editBtn.style.display = 'none';
+                            newPostBtn.style.display = 'none';
                         }
                     } catch (e) {
                         console.error('Auth check failed:', e);
                         localStorage.removeItem('access_token');
                         editBtn.style.display = 'none';
+                        newPostBtn.style.display = 'none';
                     }
                 } else {
                     editBtn.style.display = 'none';
+                    newPostBtn.style.display = 'none';
                 }
                 
             } catch (error) {
                 console.error('Profile load error:', error);
-                // Показываем пользователю сообщение об ошибке
                 alert('Ошибка загрузки профиля. Пожалуйста, попробуйте позже.');
             }
         }
-        
-        // Открытие модального окна редактирования
+
+        // Загружаем посты пользователя
+        async function loadUserPosts() {
+            if (!username) return;
+            
+            try {
+                const response = await fetch(`/users/${username}/posts`);
+                if (!response.ok) {
+                    throw new Error('Failed to load posts');
+                }
+                
+                const data = await response.json();
+                const container = document.getElementById('posts-container');
+                
+                if (!data.posts || data.posts.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет публикаций</p>';
+                    document.getElementById('postsCount').textContent = '0';
+                    return;
+                }
+                
+                document.getElementById('postsCount').textContent = data.total || data.posts.length;
+                container.innerHTML = '';
+                
+                data.posts.forEach(post => {
+                    const postDate = new Date(post.created_at).toLocaleString();
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post';
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
+                            <div class="post-user-info">
+                                <div class="post-username">${post.username}</div>
+                                <div class="post-time">${postDate}</div>
+                            </div>
+                        </div>
+                        ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                        <img src="${post.photo_url}" class="post-image" alt="Фото">
+                        <div class="post-actions">
+                            <button class="action-button like-button">
+                                <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                            </button>
+                            <button class="action-button">
+                                <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(postElement);
+                });
+                
+            } catch (error) {
+                console.error('Error loading posts:', error);
+                document.getElementById('posts-container').innerHTML = 
+                    '<p style="text-align: center; color: var(--text-light);">Ошибка загрузки публикаций</p>';
+            }
+        }
+
+        // Открытие модального окна редактирования профиля
         function openEditModal(user) {
             editBio.value = user.profile.bio || '';
             editAvatar.value = user.profile.avatar || '';
             
-            // Обновляем превью аватара
             updateAvatarPreview(user.username[0].toUpperCase(), user.profile.avatar);
             
-            // Показываем модальное окно
             editModal.classList.add('active');
             
-            // Слушаем изменения в поле аватара
             editAvatar.addEventListener('input', () => {
                 updateAvatarPreview(user.username[0].toUpperCase(), editAvatar.value);
             });
         }
-        
+
         // Обновление превью аватара
         function updateAvatarPreview(letter, avatarUrl) {
             if (avatarUrl && avatarUrl.trim() !== '') {
@@ -693,12 +840,12 @@
                 avatarPreviewText.textContent = letter;
             }
         }
-        
-        // Закрытие модального окна
+
+        // Закрытие модального окна редактирования профиля
         function closeEditModal() {
             editModal.classList.remove('active');
         }
-        
+
         // Сохранение изменений профиля
         async function saveProfileChanges(event) {
             event.preventDefault();
@@ -724,12 +871,6 @@
                         avatar: newAvatar || '/default-avatar.jpg'
                     })
                 });
-                
-                // Проверяем content-type
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('Invalid response format');
-                }
                 
                 if (!response.ok) {
                     const errorData = await response.json();
@@ -758,137 +899,13 @@
                 console.error('Error saving profile:', error);
                 alert('Ошибка при сохранении изменений: ' + error.message);
                 
-                // Если ошибка авторизации - предлагаем войти снова
                 if (error.message.includes('401') || error.message.includes('auth')) {
                     localStorage.removeItem('access_token');
                 }
             }
         }
-        
-        // Назначаем обработчики событий
-        closeModalBtn.addEventListener('click', closeEditModal);
-        editProfileForm.addEventListener('submit', saveProfileChanges);
-        
-        // Закрытие модального окна при клике вне его
-        editModal.addEventListener('click', (event) => {
-            if (event.target === editModal) {
-                closeEditModal();
-            }
-        });
-        
-        // Загружаем профиль при открытии страницы
-        window.addEventListener('DOMContentLoaded', loadProfile);
-        async function loadUserPosts() {
-            if (!username) return;
-            
-            try {
-                const response = await fetch(`/users/${username}/posts`);
-                const posts = await response.json();
-                
-                const container = document.getElementById('posts-container');
-                container.innerHTML = '';
-                
-                if (posts.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет публикаций</p>';
-                    return;
-                }
-                
-                posts.forEach(post => {
-                    const postDate = new Date(post.created_at).toLocaleString();
-                    const postElement = document.createElement('div');
-                    postElement.className = 'post';
-                    postElement.innerHTML = `
-                        <div class="post-header">
-                            <div class="avatar">${username[0].toUpperCase()}</div>
-                            <div class="user-info">
-                                <div class="username">${username}</div>
-                                <div class="post-time">${postDate}</div>
-                            </div>
-                        </div>
-                        ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                        <img src="${post.photo_url}" alt="Фото" class="post-image">
-                        <div class="post-actions">
-                            <button class="action-button like-button">
-                                <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
-                            </button>
-                            <button class="action-button">
-                                <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
-                            </button>
-                        </div>
-                    `;
-                    container.appendChild(postElement);
-                });
-            } catch (error) {
-                console.error('Ошибка загрузки постов:', error);
-            }
-        }
-        // Показываем форму для владельца профиля
-        function checkAndShowPostForm() {
-            const token = localStorage.getItem('access_token');
-            const postForm = document.getElementById('new-post-form');
-            
-            if (token && currentUser && currentUser.username === username) {
-                postForm.style.display = 'block';
-                
-                // Обработчик отправки формы
-                document.getElementById('create-post-form').addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    const photoInput = document.getElementById('post-photo');
-                    const description = document.getElementById('post-description').value;
-                    
-                    if (!photoInput.files[0]) {
-                        alert('Выберите фото');
-                        return;
-                    }
-                    
-                    const formData = new FormData();
-                    formData.append('photo', photoInput.files[0]);
-                    formData.append('description', description);
-                    
-                    try {
-                        const response = await fetch('/posts', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`
-                            },
-                            body: formData
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error(await response.text());
-                        }
-                        
-                        // Очищаем форму и обновляем список постов
-                        photoInput.value = '';
-                        document.getElementById('post-description').value = '';
-                        await loadUserPosts();
-                        
-                    } catch (error) {
-                        console.error('Ошибка публикации:', error);
-                        alert('Ошибка при публикации: ' + error.message);
-                    }
-                });
-            } else {
-                postForm.style.display = 'none';
-            }
-        }
-        window.addEventListener('DOMContentLoaded', async () => {
-            await loadProfile();
-            await loadUserPosts();
-            checkAndShowPostForm();
-        });
 
-        const newPostBtn = document.getElementById('newPostBtn');
-        const postModal = document.getElementById('post-modal');
-        const closePostModal = document.getElementById('closePostModal');
-        const fileUploadLabel = document.getElementById('file-upload-label');
-        const postPhotoInput = document.getElementById('post-photo');
-        const previewImage = document.getElementById('preview-image');
-        const createPostForm = document.getElementById('create-post-form');
-        const submitPostBtn = document.getElementById('submit-post-btn');
-
-        // Показываем модальное окно
+        // Показываем модальное окно создания поста
         newPostBtn.addEventListener('click', () => {
             if (!currentUser) {
                 alert('Для публикации войдите в аккаунт');
@@ -897,7 +914,7 @@
             postModal.classList.add('active');
         });
 
-        // Закрываем модальное окно
+        // Закрываем модальное окно создания поста
         closePostModal.addEventListener('click', () => {
             postModal.classList.remove('active');
             resetPostForm();
@@ -925,7 +942,7 @@
             }
         });
 
-        // Сброс формы
+        // Сброс формы создания поста
         function resetPostForm() {
             createPostForm.reset();
             previewImage.style.display = 'none';
@@ -933,7 +950,31 @@
             fileUploadLabel.style.display = 'block';
         }
 
-        // Отправка формы
+        // Drag and drop для файла
+        fileUploadLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadLabel.style.borderColor = 'var(--primary)';
+            fileUploadLabel.style.backgroundColor = 'rgba(67, 97, 238, 0.1)';
+        });
+
+        fileUploadLabel.addEventListener('dragleave', () => {
+            fileUploadLabel.style.borderColor = 'var(--border)';
+            fileUploadLabel.style.backgroundColor = 'transparent';
+        });
+
+        fileUploadLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadLabel.style.borderColor = 'var(--border)';
+            fileUploadLabel.style.backgroundColor = 'transparent';
+            
+            if (e.dataTransfer.files.length) {
+                postPhotoInput.files = e.dataTransfer.files;
+                const event = new Event('change');
+                postPhotoInput.dispatchEvent(event);
+            }
+        });
+
+        // Отправка формы создания поста
         createPostForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -980,27 +1021,13 @@
             }
         });
 
-        // Drag and drop для файла
-        fileUploadLabel.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            fileUploadLabel.style.borderColor = var('--primary');
-            fileUploadLabel.style.backgroundColor = 'rgba(67, 97, 238, 0.1)';
-        });
-
-        fileUploadLabel.addEventListener('dragleave', () => {
-            fileUploadLabel.style.borderColor = var('--border');
-            fileUploadLabel.style.backgroundColor = 'transparent';
-        });
-
-        fileUploadLabel.addEventListener('drop', (e) => {
-            e.preventDefault();
-            fileUploadLabel.style.borderColor = var('--border');
-            fileUploadLabel.style.backgroundColor = 'transparent';
-            
-            if (e.dataTransfer.files.length) {
-                postPhotoInput.files = e.dataTransfer.files;
-                const event = new Event('change');
-                postPhotoInput.dispatchEvent(event);
+        // Назначаем обработчики событий
+        closeModalBtn.addEventListener('click', closeEditModal);
+        editProfileForm.addEventListener('submit', saveProfileChanges);
+        
+        editModal.addEventListener('click', (event) => {
+            if (event.target === editModal) {
+                closeEditModal();
             }
         });
 
@@ -1008,14 +1035,6 @@
         window.addEventListener('DOMContentLoaded', async () => {
             await loadProfile();
             await loadUserPosts();
-            
-            // Показываем кнопку создания поста только для владельца профиля
-            const token = localStorage.getItem('access_token');
-            if (token && currentUser && currentUser.username === username) {
-                newPostBtn.style.display = 'flex';
-            } else {
-                newPostBtn.style.display = 'none';
-            }
         });
     </script>
 </body>
