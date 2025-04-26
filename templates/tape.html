@@ -281,6 +281,58 @@
             color: var(--text-light);
         }
 
+        .modal {
+            display: none;
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background-color: var(--card);
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            z-index: 1001;
+            width: 300px;
+            max-width: calc(100% - 40px);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            border: 1px solid var(--border);
+        }
+
+        .modal.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            margin: 0;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .close-button:hover {
+            background-color: #f1f3f5;
+            color: var(--text);
+        }
+
         .auth-state { display: none; }
         .guest-state { display: flex; flex-direction: column; gap: 8px; }
 
@@ -446,6 +498,19 @@
 
         .profile-redirect-btn:hover {
             background-color: var(--primary-light);
+        }
+
+        @media (max-width: 768px) {
+            .modal {
+                width: 280px;
+                left: 50%;
+                right: auto;
+                transform: translateX(-50%) translateY(-10px);
+            }
+            
+            .modal.show {
+                transform: translateX(-50%) translateY(0);
+            }
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -671,13 +736,33 @@
     
         // Функции для работы с модальными окнами
         function showModal(modal) {
-            modal.style.display = 'block';
-            setTimeout(() => modal.classList.add('show'), 10);
-        }
-    
-        function hideModal(modal) {
-            modal.classList.remove('show');
-            setTimeout(() => modal.style.display = 'none', 200);
+            if (window.innerWidth <= 768) {
+                // Для мобильных - по центру экрана
+                modal.style.position = 'fixed';
+                modal.style.top = '50%';
+                modal.style.left = '50%';
+                modal.style.transform = 'translateX(-50%) translateY(-10px)';
+                modal.style.display = 'block';
+            } else {
+                // Для десктопов - рядом с кнопкой
+                const profileButton = document.getElementById('profile-button');
+                const buttonRect = profileButton.getBoundingClientRect();
+                
+                modal.style.position = 'fixed';
+                modal.style.top = `${buttonRect.bottom + window.scrollY + 10}px`;
+                modal.style.right = `${window.innerWidth - buttonRect.right}px`;
+                modal.style.transform = 'translateY(-10px)';
+                modal.style.display = 'block';
+            }
+            
+            setTimeout(() => {
+                modal.classList.add('show');
+                if (window.innerWidth <= 768) {
+                    modal.style.transform = 'translateX(-50%) translateY(0)';
+                } else {
+                    modal.style.transform = 'translateY(0)';
+                }
+            }, 10);
         }
     
         function resetAuthForms() {
