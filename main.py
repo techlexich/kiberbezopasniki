@@ -25,6 +25,8 @@ from requests.auth import HTTPBasicAuth
 import base64
 import hmac
 import hashlib
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import FileResponse
 
 # Настройки
 load_dotenv()
@@ -110,6 +112,16 @@ class UserCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class NotFoundMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        try:
+            response = await call_next(request)
+            if response.status_code == 404:
+                return FileResponse("static/404.html")
+            return response
+        except Exception:
+            return FileResponse("static/500.html", status_code=500)
 
 # Настройки авторизации
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -501,6 +513,8 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     return FileResponse("static/404.html", status_code=404)
+
+app.add_middleware(NotFoundMiddleware)
 
 if __name__ == "__main__":
     import uvicorn
