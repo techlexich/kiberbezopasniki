@@ -442,38 +442,6 @@
                 img.classList.remove('loading');
             }, 1000 + Math.random() * 2000);
         });
-
-        // Получаем имя текущего пользователя и обновляем форму профиля
-        document.addEventListener('DOMContentLoaded', function() {
-            // Проверяем авторизацию (примерная логика)
-            const token = localStorage.getItem('access_token');
-            
-            if (token) {
-                // Запрашиваем данные текущего пользователя
-                fetch('/users/me', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) throw new Error('Ошибка авторизации');
-                    return response.json();
-                })
-                .then(user => {
-                    // Обновляем ссылку на профиль
-                    const profileForm = document.getElementById('profileForm');
-                    profileForm.action = `/profile/${user.username}`;
-                })
-                .catch(error => {
-                    console.error('Ошибка получения данных пользователя:', error);
-                    // Перенаправляем на страницу входа, если не авторизован
-                    window.location.href = '/login';
-                });
-            } else {
-                // Если нет токена, перенаправляем на страницу входа
-                window.location.href = '/login';
-            }
-        });
     </script>
 </body>
 </html>
