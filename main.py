@@ -129,7 +129,9 @@ class BegetS3Adapter(requests.adapters.HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
         context = create_urllib3_context()
         context.load_default_certs()
-        context.verify_mode = ssl.CERT_NONE  # Отключаем проверку SSL для Beget
+        # Правильная настройка SSL контекста для Beget
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
         kwargs['ssl_context'] = context
         return super().init_poolmanager(*args, **kwargs)
 
@@ -423,9 +425,10 @@ async def create_post(
         file_name = f"{uuid.uuid4()}.{file_ext}"
         file_content = await photo.read()
         
-        # Создаем сессию с кастомным адаптером SSL
+        # Создаем сессию с кастомным адаптером
         session = requests.Session()
-        session.mount('https://', BegetS3Adapter())
+        adapter = BegetS3Adapter(max_retries=3)
+        session.mount('https://', adapter)
         
         # Генерация подписи
         date, signature = generate_beget_s3_signature(
