@@ -19,6 +19,7 @@ import logging
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
+import shutil
 
 # Настройки
 load_dotenv()
@@ -409,16 +410,13 @@ async def create_post(
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts 
-                    (photo_url, description, user_id, shooting_time, location, camera_settings)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (photo_url, description, user_id)
+                VALUES (%s, %s, %s)
                 RETURNING id, created_at
             """, (
                 photo_url,
                 description,
-                current_user["id"],
-                shooting_time,
-                location,
-                camera_settings
+                current_user["id"]
             ))
             new_post = cur.fetchone()
             db.commit()
