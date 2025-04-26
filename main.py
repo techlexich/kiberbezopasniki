@@ -50,18 +50,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Инициализация S3 клиента только если заданы ключи
-if all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
-    s3 = boto3.client(
-        's3',
-        endpoint_url=BEGET_S3_ENDPOINT,
-        aws_access_key_id=BEGET_S3_ACCESS_KEY,
-        aws_secret_access_key=BEGET_S3_SECRET_KEY,
-        region_name='ru-1',
-        config=boto3.session.Config(signature_version='s3v4')
+s3 = boto3.client(
+    's3',
+    endpoint_url=BEGET_S3_ENDPOINT,
+    aws_access_key_id=BEGET_S3_ACCESS_KEY,
+    aws_secret_access_key=BEGET_S3_SECRET_KEY,
+    region_name='ru-1',
+    config=boto3.session.Config(
+        signature_version='s3v4',
+        s3={'addressing_style': 'path'}  # Иногда требуется для S3-совместимых хранилищ
     )
-else:
-    logger.warning("S3 storage not configured - file uploads will not work")
-    s3 = None
+)
 
 
 app = FastAPI()
@@ -389,12 +388,16 @@ async def create_post(
 
         # Сохраняем временно
         with open(temp_file, "wb") as buffer:
-            shutil.copyfileobj(photo.file, buffer)
+            while True:
+                chunk = await photo.read(8192)  # Читаем файл чанками
+                if not chunk:
+                    break
+                buffer.write(chunk)
 
         # Загружаем в S3
         with open(temp_file, "rb") as file_data:
-            s3.upload_fileobj(
-                file_data,
+            s3.upload_file(
+                temp_file,  # Локальный путь к файлу
                 BEGET_S3_BUCKET_NAME,
                 file_name,
                 ExtraArgs={
