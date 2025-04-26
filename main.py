@@ -29,6 +29,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import FileResponse
 import ssl
 from urllib3.util.ssl_ import create_urllib3_context
+from botocore.config import Config
 
 # Настройки
 load_dotenv()
@@ -125,15 +126,21 @@ class NotFoundMiddleware(BaseHTTPMiddleware):
         except Exception:
             return FileResponse("static/500.html", status_code=500)
 
-class BegetS3Adapter(requests.adapters.HTTPAdapter):
+class CustomS3Adapter(requests.adapters.HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
         context = create_urllib3_context()
-        context.load_default_certs()
-        # Правильная настройка SSL контекста для Beget
+        # Специальные настройки для Beget S3
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
         kwargs['ssl_context'] = context
         return super().init_poolmanager(*args, **kwargs)
+    
+def get_beget_s3_client():
+    """Создаем настроенный клиент для Beget S3"""
+    session = requests.Session()
+    adapter = CustomS3Adapter(max_retries=3)
+    session.mount('https://', adapter)
+    return session
 
 # Настройки авторизации
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -425,36 +432,59 @@ async def create_post(
         file_name = f"{uuid.uuid4()}.{file_ext}"
         file_content = await photo.read()
         
-        # Создаем сессию с кастомным адаптером
-        session = requests.Session()
-        adapter = BegetS3Adapter(max_retries=3)
-        session.mount('https://', adapter)
-        
-        # Генерация подписи
-        date, signature = generate_beget_s3_signature(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            "PUT",
-            BEGET_S3_BUCKET_NAME,
-            file_name,
-            photo.content_type
-        )
-        
-        # Загрузка файла
-        response = session.put(
-            f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}",
-            data=file_content,
-            headers={
-                'Date': date,
-                'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
-                'Content-Type': photo.content_type,
-                'x-amz-acl': 'public-read'
-            },
-            timeout=30
-        )
-        
-        if response.status_code not in (200, 201):
-            raise HTTPException(500, f"S3 upload failed: {response.text}")
+        # Вариант 1: Используем boto3 с отключенной проверкой SSL
+        try:
+            s3 = boto3.client(
+                's3',
+                endpoint_url=BEGET_S3_ENDPOINT,
+                aws_access_key_id=BEGET_S3_ACCESS_KEY,
+                aws_secret_access_key=BEGET_S3_SECRET_KEY,
+                region_name='ru-1',
+                config=Config(
+                    signature_version='s3v4',
+                    connect_timeout=30,
+                    retries={'max_attempts': 3},
+                    s3={'addressing_style': 'path'}
+                ),
+                verify=False
+            )
+            
+            s3.put_object(
+                Bucket=BEGET_S3_BUCKET_NAME,
+                Key=file_name,
+                Body=file_content,
+                ContentType=photo.content_type,
+                ACL='public-read'
+            )
+            
+        except Exception as boto_error:
+            logger.warning(f"Boto3 upload failed, trying direct HTTP: {str(boto_error)}")
+            
+            # Вариант 2: Прямая HTTP-загрузка как fallback
+            session = get_beget_s3_client()
+            date, signature = generate_beget_s3_signature(
+                BEGET_S3_ACCESS_KEY,
+                BEGET_S3_SECRET_KEY,
+                "PUT",
+                BEGET_S3_BUCKET_NAME,
+                file_name,
+                photo.content_type
+            )
+            
+            response = session.put(
+                f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}",
+                data=file_content,
+                headers={
+                    'Date': date,
+                    'Authorization': f"Beget {BEGET_S3_ACCESS_KEY}:{signature}",
+                    'Content-Type': photo.content_type,
+                    'x-amz-acl': 'public-read'
+                },
+                timeout=30
+            )
+            
+            if response.status_code not in (200, 201):
+                raise HTTPException(500, f"S3 upload failed: {response.text}")
 
         # Сохранение в БД
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
