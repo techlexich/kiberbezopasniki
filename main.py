@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel, EmailStr, field_validator, AnyUrl
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
+from pydantic import BaseModel, EmailStr, field_validator, AnyUrl, Field
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -15,26 +15,34 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from starlette.middleware.base import BaseHTTPMiddleware
-from pydantic import Field
 import logging
 import boto3
-from botocore.exceptions import NoCredentialsError
-from fastapi import UploadFile, File, Form
-import uuid  # Для генерации уникальных имен файлов
+from botocore.exceptions import NoCredentialsError, ClientError
+import uuid
+import shutil
 
 # Настройки
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 DB_URL = os.getenv("AUTH_DATABASE_URL")
-if not SECRET_KEY or not DB_URL:
-    raise ValueError("Не заданы SECRET_KEY или DB_URL")
+BEGET_S3_ENDPOINT = os.getenv("BEGET_S3_ENDPOINT")
+BEGET_S3_BUCKET_NAME = os.getenv("BEGET_S3_BUCKET_NAME")
 
+if not all([SECRET_KEY, DB_URL, BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME]):
+    raise ValueError("Не заданы обязательные переменные окружения")
+
+# Настройка логгирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Инициализация S3 клиента
 s3 = boto3.client(
     's3',
+    endpoint_url=BEGET_S3_ENDPOINT,
     aws_access_key_id=os.getenv("BEGET_S3_ACCESS_KEY"),
     aws_secret_access_key=os.getenv("BEGET_S3_SECRET_KEY"),
-    endpoint_url=os.getenv("BEGET_S3_ENDPOINT"),  # Важно: добавьте endpoint
-    region_name='ru-1'  # Или другой регион, указанный в beget
+    region_name='ru-1',
+    config=boto3.session.Config(signature_version='s3v4')
 )
 
 app = FastAPI()
@@ -47,6 +55,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Модели
 class UserProfile(BaseModel):
@@ -344,43 +353,52 @@ async def delete_post(
         return {"status": "ok", "post_id": post_id}
 
 @app.post("/posts")
-@app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
     description: str = Form(default=""),
+    shooting_time: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    camera_settings: Optional[str] = Form(None),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
     # Валидация файла
-    if not photo.filename:
-        raise HTTPException(400, "No filename provided")
-    
+    if not photo.filename or not photo.content_type:
+        raise HTTPException(400, "Invalid file upload")
+
     if not photo.content_type.startswith('image/'):
-        raise HTTPException(400, "Only images are allowed")
+        raise HTTPException(400, "Only image files are allowed")
 
     try:
-        # Генерация имени файла
-        file_ext = photo.filename.split('.')[-1]
+        # Чтение файла
+        file_content = await photo.read()
+        if not file_content:
+            raise HTTPException(400, "Empty file content")
+        
+        # Генерация уникального имени файла
+        file_ext = photo.filename.split('.')[-1].lower()
+        if file_ext not in ['jpg', 'jpeg', 'png', 'gif']:
+            raise HTTPException(400, "Unsupported file format")
+            
         file_name = f"{uuid.uuid4()}.{file_ext}"
         
-        # Чтение файла
-        file_data = await photo.read()  # Важно: await!
-        if not file_data:
-            raise HTTPException(400, "Empty file content")
-
         # Загрузка в S3
-        s3.put_object(
-            Bucket=os.getenv("BEGET_S3_BUCKET_NAME"),
-            Key=file_name,
-            Body=file_data,
-            ContentType=photo.content_type,
-            ACL='public-read'
-        )
+        try:
+            s3.put_object(
+                Bucket=BEGET_S3_BUCKET_NAME,
+                Key=file_name,
+                Body=file_content,
+                ContentType=photo.content_type,
+                ACL='public-read'
+            )
+        except ClientError as e:
+            logger.error(f"S3 upload error: {str(e)}")
+            raise HTTPException(500, "Failed to upload file to storage")
+
+        # Формирование URL
+        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-        # Формируем URL
-        photo_url = f"{os.getenv('BEGET_S3_ENDPOINT')}/{os.getenv('BEGET_S3_BUCKET_NAME')}/{file_name}"
-        
-        # Сохраняем в БД
+        # Сохранение в БД
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts 
@@ -397,16 +415,21 @@ async def create_post(
             ))
             new_post = cur.fetchone()
             db.commit()
+
+        logger.info(f"New post created by {current_user['username']}: {new_post['id']}")
         
         return {
-            "status": "ok", 
+            "status": "success",
             "post_id": new_post["id"],
             "created_at": new_post["created_at"],
             "photo_url": photo_url
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(500, f"Ошибка загрузки: {str(e)}")
+        logger.error(f"Error in create_post: {str(e)}", exc_info=True)
+        raise HTTPException(500, "Internal server error")
 
 @app.get("/posts/{post_id}")
 async def get_post(
@@ -445,10 +468,6 @@ class NotFoundMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(NotFoundMiddleware)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 #исключение ошибок
 @app.exception_handler(500)
 async def internal_server_error_handler(request: Request, exc: Exception):
@@ -457,3 +476,7 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: Exception):
     return FileResponse("static/404.html", status_code=404)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
