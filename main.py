@@ -224,35 +224,41 @@ async def read_me(request: Request, user=Depends(get_current_user)):
 
 
 
-
 @app.get("/points", response_model=list[Post])
-def get_top_posts(limit: int = 10):
+def get_points(limit: int = 10):
     try:
-        conn = get_db()
-        cursor = conn.cursor()
+        # Создаем новое подключение вместо использования генератора
+        conn = psycopg2.connect(
+            dbname="auth_db_17at",
+            user="auth_db_17at_user",
+            password="eGFSjcl2O29bWJBCAcRdh4MIzjNFojNZ",
+            host="dpg-d05lfk2li9vc738u4vb0-a.oregon-postgres.render.com",
+            port="5432",
+            cursor_factory=RealDictCursor
+        )
         
-        cursor.execute("""
-            SELECT id, latitude, altitude, likes_count, photo_url
-            FROM posts 
-            ORDER BY likes_count DESC 
-            LIMIT %s
-        """, (limit,))
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, latitude, altitude as longitude, 
+                       likes_count, photo_url, title
+                FROM posts 
+                ORDER BY likes_count DESC 
+                LIMIT %s
+            """, (limit,))
+            
+            posts = cursor.fetchall()
         
-        posts = cursor.fetchall()
         conn.close()
         
-        # Преобразуем строки в float
+        # Преобразуем координаты в float
         for post in posts:
             post["latitude"] = float(post["latitude"])
-            post["altitude"] = float(post["altitude"])
+            post["longitude"] = float(post["longitude"])
         
         return posts
     
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Некорректные координаты в БД")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
-    
+        raise HTTPException(500, detail=f"Ошибка базы данных: {str(e)}")
     
 
 @app.get("/users/{username}", response_model=User)
