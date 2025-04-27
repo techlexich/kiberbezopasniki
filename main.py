@@ -197,6 +197,45 @@ async def register(user: UserCreate, db=Depends(get_db)):
         db.commit()
         return {**new_user, "profile": {"bio": "", "avatar": "/default-avatar.jpg"}}
 
+
+@app.put("/users/{username}", response_model=User)
+async def update_user_profile(
+    username: str,
+    profile: UserProfile,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    # Проверяем, что пользователь обновляет свой профиль
+    if current_user["username"] != username:
+        raise HTTPException(403, "You can update only your own profile")
+    
+    with db.cursor() as cur:
+        # Обновляем профиль в базе данных
+        cur.execute("""
+            UPDATE users 
+            SET bio = %s, avatar_url = %s
+            WHERE username = %s
+            RETURNING id, username, email, bio, avatar_url
+        """, (profile.bio, profile.avatar, username))
+        
+        updated_user = cur.fetchone()
+        db.commit()
+        
+        if not updated_user:
+            raise HTTPException(404, "User not found")
+        
+        return {
+            "id": updated_user["id"],
+            "username": updated_user["username"],
+            "email": updated_user["email"],
+            "profile": {
+                "bio": updated_user["bio"],
+                "avatar": updated_user["avatar_url"]
+            }
+        }
+        
+        
+        
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_db)):
     user = await authenticate_user(db, form_data.username, form_data.password)
