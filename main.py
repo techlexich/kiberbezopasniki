@@ -80,6 +80,19 @@ app.add_middleware(
 
 
 # Модели
+
+
+
+# Модель ответа API
+class Post(BaseModel):
+    id: int
+    latitude: str
+    altitude: str
+    likes_count: int
+    photo_url: str
+
+
+
 class UserProfile(BaseModel):
     bio: str = Field(default="", max_length=500)
     avatar: str = Field(default="/default-avatar.jpg")
@@ -208,6 +221,31 @@ async def read_me(request: Request, user=Depends(get_current_user)):
             "avatar": avatar
         }
     }
+
+
+# Эндпоинт для получения топ-N постов(метки) 
+@app.get("/api/top-posts/", response_model=List[Post])
+def get_top_posts(limit: int = 10):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, latitude, longitude, likes_count, photo_url, title 
+            FROM posts 
+            ORDER BY likes_count DESC 
+            LIMIT %s
+        """, (limit,))
+        
+        posts = cursor.fetchall()
+        conn.close()
+        
+        return posts
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка базы данных: {str(e)}")
+
+
 
 @app.get("/users/{username}", response_model=User)
 async def get_user_profile(username: str, request: Request, db=Depends(get_db)):

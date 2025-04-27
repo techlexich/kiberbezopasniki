@@ -943,6 +943,7 @@
                 await checkApiAvailability();
                 await updateAuthUI();
                 await checkProfilePage();
+                renderTopPosts();
                 
                 // Оптимизация для мобильных устройств
                 if (/Mobi|Android/i.test(navigator.userAgent)) {
@@ -958,6 +959,38 @@
         window.addEventListener('resize', () => {
             map.invalidateSize();
         });
+        
+        // Загрузка топовых постов
+        async function loadTopPosts(limit = 10) {
+            try {
+                const response = await fetch(`http://localhost:8000/api/top-posts/?limit=${limit}`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                return await response.json();
+            } catch (error) {
+                console.error("Ошибка:", error);
+                return [];
+            }
+        }
+
+        // Добавление маркеров на карту
+        async function renderTopPosts() {
+            const posts = await loadTopPosts(10);
+            
+            if (posts.length === 0) {
+                console.log("Нет данных для отображения");
+                return;
+            }
+            
+            posts.forEach(post => {
+                L.marker([post.latitude, post.longitude])
+                    .addTo(map)
+                    .bindPopup(`
+                        <h3>${post.title}</h3>
+                        <img src="${post.photo_url}" width="200" />
+                        <p>❤️ ${post.likes_count} лайков</p>
+                    `);
+            });
+        }
     </script>
 </body>
 </html>
