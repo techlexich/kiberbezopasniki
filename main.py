@@ -224,7 +224,7 @@ async def read_me(request: Request, user=Depends(get_current_user)):
 
 
 # Эндпоинт для получения топ-N постов(метки) 
-@app.get("/api/top-posts/", response_model=List[Post])
+@app.get("/api/top-posts/", response_model=list[Post])
 def get_top_posts(limit: int = 10):
     try:
         conn = get_db_connection()
