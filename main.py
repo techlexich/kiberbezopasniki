@@ -240,7 +240,7 @@ def get_points(limit: int = 10):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT id, latitude, altitude as longitude, 
-                       likes_count, photo_url, title
+                       likes_count, photo_url
                 FROM posts 
                 ORDER BY likes_count DESC 
                 LIMIT %s
