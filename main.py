@@ -253,7 +253,7 @@ def get_points(limit: int = 10):
         # Преобразуем координаты в float
         for post in posts:
             post["latitude"] = float(post["latitude"])
-            post["longitude"] = float(post["longitude"])
+            post["altitude"] = float(post["altitude"])
         
         return posts
     
