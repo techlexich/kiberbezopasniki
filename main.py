@@ -86,8 +86,8 @@ app.add_middleware(
 # Модель ответа API
 class Post(BaseModel):
     id: int
-    latitude: str
-    altitude: str
+    latitude: float
+    altitude: float
     likes_count: int
     photo_url: str
 
@@ -223,15 +223,16 @@ async def read_me(request: Request, user=Depends(get_current_user)):
     }
 
 
-# Эндпоинт для получения топ-N постов(метки) 
-@app.get("/api/top-posts/", response_model=list[Post])
+
+
+@app.get("/api/top-posts/", response_model=List[Post])
 def get_top_posts(limit: int = 10):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT id, latitude, longitude, likes_count, photo_url, title 
+            SELECT id, latitude, altitude, likes_count, photo_url
             FROM posts 
             ORDER BY likes_count DESC 
             LIMIT %s
@@ -240,12 +241,19 @@ def get_top_posts(limit: int = 10):
         posts = cursor.fetchall()
         conn.close()
         
+        # Преобразуем строки в float
+        for post in posts:
+            post["latitude"] = float(post["latitude"])
+            post["longitude"] = float(post["longitude"])
+        
         return posts
     
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректные координаты в БД")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка базы данных: {str(e)}")
-
-
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+    
+    
 
 @app.get("/users/{username}", response_model=User)
 async def get_user_profile(username: str, request: Request, db=Depends(get_db)):

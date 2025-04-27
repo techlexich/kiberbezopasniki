@@ -975,7 +975,17 @@
         // Добавление маркеров на карту
         async function renderTopPosts() {
             const posts = await loadTopPosts(10);
+            posts.forEach(post => {
+                const lat = parseFloat(post.latitude);
+                const lng = parseFloat(post.longitude);
             
+                if (isNaN(lat) || isNaN(lng)) {
+                    console.error("Некорректные координаты:", post.latitude, post.longitude);
+                    return;
+                }
+            
+                L.marker([lat, lng]).addTo(map).bindPopup(`...`);
+            });
             if (posts.length === 0) {
                 console.log("Нет данных для отображения");
                 return;
