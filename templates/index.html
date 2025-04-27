@@ -963,7 +963,7 @@
         // Загрузка топовых постов
         async function loadTopPosts(limit = 10) {
             try {
-                const response = await fetch(`http://localhost:8000/api/top-posts/?limit=${limit}`);
+                const response = await fetch(`${API_URL}/points`);
                 if (!response.ok) throw new Error("Ошибка загрузки данных");
                 return await response.json();
             } catch (error) {
@@ -977,10 +977,10 @@
             const posts = await loadTopPosts(10);
             posts.forEach(post => {
                 const lat = parseFloat(post.latitude);
-                const lng = parseFloat(post.longitude);
+                const lng = parseFloat(post.altitude);
             
                 if (isNaN(lat) || isNaN(lng)) {
-                    console.error("Некорректные координаты:", post.latitude, post.longitude);
+                    console.error("Некорректные координаты:", post.latitude, post.altitude);
                     return;
                 }
             
@@ -992,7 +992,7 @@
             }
             
             posts.forEach(post => {
-                L.marker([post.latitude, post.longitude])
+                L.marker([post.latitude, post.altitude])
                     .addTo(map)
                     .bindPopup(`
                         <h3>${post.title}</h3>

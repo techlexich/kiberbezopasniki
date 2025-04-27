@@ -225,7 +225,7 @@ async def read_me(request: Request, user=Depends(get_current_user)):
 
 
 
-@app.get("/api/top-posts/", response_model=list[Post])
+@app.get("/points", response_model=list[Post])
 def get_top_posts(limit: int = 10):
     try:
         conn = get_db_connection()
@@ -244,7 +244,7 @@ def get_top_posts(limit: int = 10):
         # Преобразуем строки в float
         for post in posts:
             post["latitude"] = float(post["latitude"])
-            post["longitude"] = float(post["longitude"])
+            post["altitude"] = float(post["altitude"])
         
         return posts
     
