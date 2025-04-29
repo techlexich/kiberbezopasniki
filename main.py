@@ -331,48 +331,48 @@ async def create_post(
         raise HTTPException(400, detail="Invalid file")
 
     try:
-        # Генерация имени файла
-        file_ext = photo.filename.split('.')[-1].lower()[:5]  # Ограничение до 5 символов
-        file_name = f"{uuid.uuid4().hex[:5]}.{file_ext}"      # Ограничение UUID до 5 символов
+        # Генерация имени файла и загрузка в S3
+        file_ext = photo.filename.split('.')[-1].lower()
+        file_name = f"{uuid.uuid4()}.{file_ext}"
         file_content = await photo.read()
         
-        # Формируем URL (ограничиваем все строки до 5 символов)
-        bucket = BEGET_S3_BUCKET_NAME[:5]
-        endpoint = BEGET_S3_ENDPOINT[:5]
-        url = f"{endpoint}/{bucket}/{file_name}"
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
         # Подготовка заголовков
+        now = datetime.utcnow()
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+        
         headers = {
-            'Content-Type': photo.content_type[:5],
-            'x-amz-date': datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')[:5],
-            'x-amz-acl': 'public-read'[:5],
-            'Content-Length': str(len(file_content))[:5]
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(file_content))
         }
         
-        # Загрузка в S3
+        # Создаем подпись запроса
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3'
+        )
+        
+        # Отправляем запрос
         response = requests.put(
-            url[:100],  # Ограничение URL длины
+            url,
             data=file_content,
             headers=headers,
-            auth=AWS4Auth(
-                BEGET_S3_ACCESS_KEY[:5],
-                BEGET_S3_SECRET_KEY[:5],
-                'ru-1'[:3],
-                's3'[:2]
-            )
+            auth=auth
         )
+        
+        if response.status_code != 200:
+            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
 
-        photo_url = f"{endpoint}/{bucket}/{file_name}"[:100]  # Ограничение длины URL
+        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
-        # Подготовка данных для БД с жестким ограничением
-        shooting_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')[:5]
-        desc = description[:5]
-        tags = ""[:5]
-        altitude = "0"[:5]
-        latitude = "0"[:5]
-        camera_settings = "{}"  # Пустой JSON
-
-        # Вставка в БД
+        # Сохраняем в базу данных с ограничением длины
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
@@ -388,27 +388,35 @@ async def create_post(
                     latitude,
                     camera_settings
                 ) VALUES (
-                    %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s
+                    %s,  -- photo_url
+                    %s,  -- shooting_time
+                    %s,  -- description
+                    %s,  -- user_id
+                    NOW(),  -- created_at
+                    %s,  -- likes_count
+                    %s,  -- comments_count
+                    %s,  -- tags (ограничено 5 символами)
+                    %s,  -- altitude (ограничено 5 символами)
+                    %s,  -- latitude (ограничено 5 символами)
+                    %s   -- camera_settings
                 )
                 RETURNING id, created_at
             """, (
-                photo_url[:100],
-                shooting_time,
-                desc,
+                photo_url,
+                datetime.now().strftime('%H:%M'),
+                description,
                 current_user["id"],
-                0, 0,  # likes_count, comments_count
-                tags, altitude, latitude,
-                camera_settings
+                0,  # likes_count
+                0,  # comments_count
+                ""[:5],  # tags обрезается до 5 символов
+                ""[:5],  # altitude обрезается до 5 символов
+                ""[:5],  # latitude обрезается до 5 символов
+                "{}"     # camera_settings
             ))
             new_post = cur.fetchone()
             db.commit()
 
-        return {
-            "status": "success",
-            "url": photo_url,
-            "post_id": new_post["id"],
-            "warning": "Все строковые значения обрезаны до 5 символов"
-        }
+        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
