@@ -324,9 +324,6 @@ logger = logging.getLogger(__name__)
 async def create_post(
     photo: UploadFile = File(...),
     description: str = Form(default=""),
-    # shooting_time: str = Form(default=None),
-    # location: str = Form(default=None),
-    # camera_settings: str = Form(default=None),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -334,11 +331,9 @@ async def create_post(
         raise HTTPException(400, detail="Invalid file")
 
     try:
-        # Генерируем уникальное имя файла
+        # Генерация имени файла и загрузка в S3 (ваш код)
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        
-        # Читаем содержимое файла
         file_content = await photo.read()
         
         # Формируем URL для загрузки
@@ -376,33 +371,64 @@ async def create_post(
             raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
 
         # Формируем URL к файлу
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'),
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(file_content))
+        }
+        auth = AWS4Auth(BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY, 'ru-1', 's3')
+        response = requests.put(url, data=file_content, headers=headers, auth=auth)
+        
+        if response.status_code != 200:
+            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
-        # Устанавливаем текущее время как shooting_time, если не указано
-        # if shooting_time is None:
-        #     shooting_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Сохраняем в базу данных
+
+        # **Формируем все 10 значений для БД**
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
-                    photo_url, 
-                    description, 
+                    id,
+                    photo_url,
+                    shooting_time,
+                    description,
                     user_id,
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+                    created_at,
+                    likes_count,
+                    comments_count,
+                    location,
+                    camera_settings
+                ) VALUES (
+                    %s,  -- id (генерируем UUID)
+                    %s,  -- photo_url
+                    %s,  -- shooting_time (текущее время)
+                    %s,  -- description
+                    %s,  -- user_id
+                    NOW(),  -- created_at
+                    %s,  -- likes_count (0)
+                    %s,  -- comments_count (0)
+                    %s,  -- location (пустая строка)
+                    %s   -- camera_settings (пустая строка)
+                )
                 RETURNING id, created_at
             """, (
-                photo_url, 
-                description, 
+                str(uuid.uuid4()),  # id (генерируем новый UUID)
+                photo_url,
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # shooting_time
+                description,
                 current_user["id"],
-        #         shooting_time,
-        #         location,
-        #         camera_settings
+                0,  # likes_count
+                0,  # comments_count
+                "",  # location (пустая строка вместо NULL)
+                ""   # camera_settings (пустая строка вместо NULL)
             ))
             new_post = cur.fetchone()
             db.commit()
 
-        return {"status": "success", "url": photo_url}
+        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
