@@ -399,9 +399,9 @@ async def create_post(
                     created_at,
                     likes_count,
                     comments_count,
-                    tags
+                    tags,
                     altitude,
-                    latitude
+                    latitude,
                     camera_settings
                 ) VALUES (
                     %s,  -- id (генерируем UUID)
