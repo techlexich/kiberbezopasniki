@@ -372,7 +372,7 @@ async def create_post(
 
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
-        # Сохраняем в базу данных
+        # Сохраняем в базу данных с ограничением длины
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
@@ -395,23 +395,23 @@ async def create_post(
                     NOW(),  -- created_at
                     %s,  -- likes_count
                     %s,  -- comments_count
-                    %s,  -- tags
-                    %s,  -- altitude
-                    %s,  -- latitude
-                    %s   -- camera_settings (пустой JSON объект)
+                    %s,  -- tags (ограничено 5 символами)
+                    %s,  -- altitude (ограничено 5 символами)
+                    %s,  -- latitude (ограничено 5 символами)
+                    %s   -- camera_settings
                 )
                 RETURNING id, created_at
             """, (
                 photo_url,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # shooting_time
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 description,
                 current_user["id"],
                 0,  # likes_count
                 0,  # comments_count
-                "",  # tags
-                "",  # altitude
-                "",  # latitude
-                "{}"  # camera_settings (пустой JSON объект)
+                ""[:5],  # tags обрезается до 5 символов
+                ""[:5],  # altitude обрезается до 5 символов
+                ""[:5],  # latitude обрезается до 5 символов
+                "{}"     # camera_settings
             ))
             new_post = cur.fetchone()
             db.commit()
