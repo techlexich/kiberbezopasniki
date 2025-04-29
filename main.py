@@ -398,7 +398,7 @@ async def create_post(
                     %s,  -- tags
                     %s,  -- altitude
                     %s,  -- latitude
-                    %s   -- camera_settings
+                    %s   -- camera_settings (пустой JSON объект)
                 )
                 RETURNING id, created_at
             """, (
@@ -411,7 +411,7 @@ async def create_post(
                 "",  # tags
                 "",  # altitude
                 "",  # latitude
-                ""   # camera_settings
+                "{}"  # camera_settings (пустой JSON объект)
             ))
             new_post = cur.fetchone()
             db.commit()
