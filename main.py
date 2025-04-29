@@ -6,7 +6,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from pydantic import BaseModel, EmailStr, field_validator, AnyUrl, Field
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from typing import Optional
 import psycopg2
@@ -22,7 +21,6 @@ import uuid
 import shutil
 import requests
 from requests_aws4auth import AWS4Auth
-import datetime
 from datetime import datetime, timedelta
 import hashlib
 import base64
@@ -524,7 +522,7 @@ async def create_post(
         url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
         # Создаем подпись запроса
-        now = datetime.datetime.utcnow()
+        now = datetime.utcnow()
         date = now.strftime('%Y%m%d')
         timestamp = now.strftime('%Y%m%dT%H%M%SZ')
         
