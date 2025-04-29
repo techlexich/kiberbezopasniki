@@ -399,7 +399,9 @@ async def create_post(
                     created_at,
                     likes_count,
                     comments_count,
+                    tags
                     altitude,
+                    latitude
                     camera_settings
                 ) VALUES (
                     %s,  -- id (генерируем UUID)
@@ -410,7 +412,9 @@ async def create_post(
                     NOW(),  -- created_at
                     %s,  -- likes_count (0)
                     %s,  -- comments_count (0)
+                    %s,  -- tags (пустая строка)
                     %s,  -- altitude (пустая строка)
+                    %s,  -- latitude (пустая строка)
                     %s   -- camera_settings (пустая строка)
                 )
                 RETURNING id, created_at
@@ -422,8 +426,10 @@ async def create_post(
                 current_user["id"],
                 0,  # likes_count
                 0,  # comments_count
-                "",  # location (пустая строка вместо NULL)
-                ""   # camera_settings (пустая строка вместо NULL)
+                "",  # tags
+                "",  # altitude
+                "",  # latitude
+                ""   # camera_settings
             ))
             new_post = cur.fetchone()
             db.commit()
