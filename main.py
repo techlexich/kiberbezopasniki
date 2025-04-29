@@ -331,7 +331,7 @@ async def create_post(
         raise HTTPException(400, detail="Invalid file")
 
     try:
-        # Генерация имени файла и загрузка в S3 (ваш код)
+        # Генерация имени файла и загрузка в S3
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"{uuid.uuid4()}.{file_ext}"
         file_content = await photo.read()
@@ -370,28 +370,12 @@ async def create_post(
             logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
             raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
 
-        # Формируем URL к файлу
-        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        headers = {
-            'Content-Type': photo.content_type,
-            'x-amz-date': datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'),
-            'x-amz-acl': 'public-read',
-            'Content-Length': str(len(file_content))
-        }
-        auth = AWS4Auth(BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY, 'ru-1', 's3')
-        response = requests.put(url, data=file_content, headers=headers, auth=auth)
-        
-        if response.status_code != 200:
-            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
-            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
-
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
-        # **Формируем все 10 значений для БД**
+        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
-                    id,
                     photo_url,
                     shooting_time,
                     description,
@@ -404,22 +388,20 @@ async def create_post(
                     latitude,
                     camera_settings
                 ) VALUES (
-                    %s,  -- id (генерируем UUID)
                     %s,  -- photo_url
-                    %s,  -- shooting_time (текущее время)
+                    %s,  -- shooting_time
                     %s,  -- description
                     %s,  -- user_id
                     NOW(),  -- created_at
-                    %s,  -- likes_count (0)
-                    %s,  -- comments_count (0)
-                    %s,  -- tags (пустая строка)
-                    %s,  -- altitude (пустая строка)
-                    %s,  -- latitude (пустая строка)
-                    %s   -- camera_settings (пустая строка)
+                    %s,  -- likes_count
+                    %s,  -- comments_count
+                    %s,  -- tags
+                    %s,  -- altitude
+                    %s,  -- latitude
+                    %s   -- camera_settings
                 )
                 RETURNING id, created_at
             """, (
-                str(uuid.uuid4()),  # id (генерируем новый UUID)
                 photo_url,
                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # shooting_time
                 description,
