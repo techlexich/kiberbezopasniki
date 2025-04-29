@@ -399,6 +399,7 @@ async def create_post(
                     created_at,
                     likes_count,
                     comments_count,
+                    altitude,
                     camera_settings
                 ) VALUES (
                     %s,  -- id (генерируем UUID)
@@ -409,6 +410,7 @@ async def create_post(
                     NOW(),  -- created_at
                     %s,  -- likes_count (0)
                     %s,  -- comments_count (0)
+                    %s,  -- altitude (пустая строка)
                     %s   -- camera_settings (пустая строка)
                 )
                 RETURNING id, created_at
