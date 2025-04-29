@@ -320,93 +320,93 @@ async def get_user_profile(username: str, request: Request, db=Depends(get_db)):
     }
 
 logger = logging.getLogger(__name__)
-# @app.post("/posts")
-# async def create_post(
-#     photo: UploadFile = File(...),
-#     description: str = Form(default=""),
-#     shooting_time: str = Form(default=None),
-#     location: str = Form(default=None),
-#     camera_settings: str = Form(default=None),
-#     db=Depends(get_db),
-#     current_user=Depends(get_current_user)
-# ):
-#     if not photo.filename or not photo.content_type:
-#         raise HTTPException(400, detail="Invalid file")
+@app.post("/posts")
+async def create_post(
+    photo: UploadFile = File(...),
+    description: str = Form(default=""),
+    # shooting_time: str = Form(default=None),
+    # location: str = Form(default=None),
+    # camera_settings: str = Form(default=None),
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    if not photo.filename or not photo.content_type:
+        raise HTTPException(400, detail="Invalid file")
 
-#     try:
-#         # Генерируем уникальное имя файла
-#         file_ext = photo.filename.split('.')[-1].lower()
-#         file_name = f"{uuid.uuid4()}.{file_ext}"
+    try:
+        # Генерируем уникальное имя файла
+        file_ext = photo.filename.split('.')[-1].lower()
+        file_name = f"{uuid.uuid4()}.{file_ext}"
         
-#         # Читаем содержимое файла
-#         file_content = await photo.read()
+        # Читаем содержимое файла
+        file_content = await photo.read()
         
-#         # Формируем URL для загрузки
-#         url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-#         # Подготовка заголовков
-#         now = datetime.utcnow()
-#         timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+        # Подготовка заголовков
+        now = datetime.utcnow()
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
         
-#         headers = {
-#             'Content-Type': photo.content_type,
-#             'x-amz-date': timestamp,
-#             'x-amz-acl': 'public-read',
-#             'Content-Length': str(len(file_content))
-#         }
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(file_content))
+        }
         
-#         # Создаем подпись запроса
-#         auth = AWS4Auth(
-#             BEGET_S3_ACCESS_KEY,
-#             BEGET_S3_SECRET_KEY,
-#             'ru-1',
-#             's3'
-#         )
+        # Создаем подпись запроса
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3'
+        )
         
-#         # Отправляем запрос
-#         response = requests.put(
-#             url,
-#             data=file_content,
-#             headers=headers,
-#             auth=auth
-#         )
+        # Отправляем запрос
+        response = requests.put(
+            url,
+            data=file_content,
+            headers=headers,
+            auth=auth
+        )
         
-#         if response.status_code != 200:
-#             logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
-#             raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+        if response.status_code != 200:
+            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
 
-#         # Формируем URL к файлу
-#         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        # Формируем URL к файлу
+        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-#         # Устанавливаем текущее время как shooting_time, если не указано
-#         if shooting_time is None:
-#             shooting_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Устанавливаем текущее время как shooting_time, если не указано
+        # if shooting_time is None:
+        #     shooting_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-#         # Сохраняем в базу данных
-#         with db.cursor() as cur:
-#             cur.execute("""
-#                 INSERT INTO posts (
-#                     photo_url, 
-#                     description, 
-#                     user_id,
-#                 ) VALUES (%s, %s, %s, %s, %s, %s)
-#                 RETURNING id, created_at
-#             """, (
-#                 photo_url, 
-#                 description, 
-#                 current_user["id"],
-#                 shooting_time,
-#                 location,
-#                 camera_settings
-#             ))
-#             new_post = cur.fetchone()
-#             db.commit()
+        # Сохраняем в базу данных
+        with db.cursor() as cur:
+            cur.execute("""
+                INSERT INTO posts (
+                    photo_url, 
+                    description, 
+                    user_id,
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, created_at
+            """, (
+                photo_url, 
+                description, 
+                current_user["id"],
+        #         shooting_time,
+        #         location,
+        #         camera_settings
+            ))
+            new_post = cur.fetchone()
+            db.commit()
 
-#         return {"status": "success", "url": photo_url}
+        return {"status": "success", "url": photo_url}
 
-#     except Exception as e:
-#         logger.error(f"Upload error: {str(e)}", exc_info=True)
-#         raise HTTPException(500, detail="File upload failed")
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="File upload failed")
 
 @app.get("/profile/{username}")
 async def profile_page(username: str, db=Depends(get_db)):
@@ -500,76 +500,76 @@ async def delete_post(
         
         return {"status": "ok", "post_id": post_id}
 
-@app.post("/posts")
-async def create_post(
-    photo: UploadFile = File(...),
-    description: str = Form(default=""),
-    db=Depends(get_db),
-    current_user=Depends(get_current_user)
-):
-    if not photo.filename or not photo.content_type:
-        raise HTTPException(400, "Invalid file")
+# @app.post("/posts")
+# async def create_post(
+#     photo: UploadFile = File(...),
+#     description: str = Form(default=""),
+#     db=Depends(get_db),
+#     current_user=Depends(get_current_user)
+# ):
+#     if not photo.filename or not photo.content_type:
+#         raise HTTPException(400, "Invalid file")
 
-    try:
-        # Генерируем уникальное имя файла
-        file_ext = photo.filename.split('.')[-1].lower()
-        file_name = f"{uuid.uuid4()}.{file_ext}"
+#     try:
+#         # Генерируем уникальное имя файла
+#         file_ext = photo.filename.split('.')[-1].lower()
+#         file_name = f"{uuid.uuid4()}.{file_ext}"
         
-        # Читаем содержимое файла
-        file_content = await photo.read()
+#         # Читаем содержимое файла
+#         file_content = await photo.read()
         
-        # Формируем URL для загрузки
-        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+#         # Формируем URL для загрузки
+#         url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-        # Создаем подпись запроса
-        now = datetime.utcnow()
-        date = now.strftime('%Y%m%d')
-        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+#         # Создаем подпись запроса
+#         now = datetime.utcnow()
+#         date = now.strftime('%Y%m%d')
+#         timestamp = now.strftime('%Y%m%dT%H%M%SZ')
         
-        headers = {
-            'Content-Type': photo.content_type,
-            'x-amz-date': timestamp,
-            'x-amz-acl': 'public-read'
-        }
+#         headers = {
+#             'Content-Type': photo.content_type,
+#             'x-amz-date': timestamp,
+#             'x-amz-acl': 'public-read'
+#         }
         
-        # Создаем подпись
-        auth = AWS4Auth(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            'ru-1',
-            's3',
-            session_token=None
-        )
+#         # Создаем подпись
+#         auth = AWS4Auth(
+#             BEGET_S3_ACCESS_KEY,
+#             BEGET_S3_SECRET_KEY,
+#             'ru-1',
+#             's3',
+#             session_token=None
+#         )
         
-        # Отправляем запрос напрямую
-        response = requests.put(
-            url,
-            data=file_content,
-            headers=headers,
-            auth=auth
-        )
+#         # Отправляем запрос напрямую
+#         response = requests.put(
+#             url,
+#             data=file_content,
+#             headers=headers,
+#             auth=auth
+#         )
         
-        if response.status_code != 200:
-            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+#         if response.status_code != 200:
+#             raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
         
-        # Формируем URL к файлу
-        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+#         # Формируем URL к файлу
+#         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-        # Сохраняем в базу данных
-        with db.cursor() as cur:
-            cur.execute("""
-                INSERT INTO posts (photo_url, description, user_id)
-                VALUES (%s, %s, %s)
-                RETURNING id, created_at
-            """, (photo_url, description, current_user["id"]))
-            new_post = cur.fetchone()
-            db.commit()
+#         # Сохраняем в базу данных
+#         with db.cursor() as cur:
+#             cur.execute("""
+#                 INSERT INTO posts (photo_url, description, user_id)
+#                 VALUES (%s, %s, %s)
+#                 RETURNING id, created_at
+#             """, (photo_url, description, current_user["id"]))
+#             new_post = cur.fetchone()
+#             db.commit()
 
-        return {"status": "success", "url": photo_url}
+#         return {"status": "success", "url": photo_url}
 
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="File upload failed")
+#     except Exception as e:
+#         logger.error(f"Upload error: {str(e)}", exc_info=True)
+#         raise HTTPException(500, detail="File upload failed")
 
 @app.get("/posts/{post_id}")
 async def get_post(
