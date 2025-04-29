@@ -372,7 +372,13 @@ async def create_post(
 
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
-        # Сохраняем в базу данных с ограничением длины
+        # Формируем данные для вставки с учетом ограничений
+        shooting_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        tags = ""[:5]  # Обрезаем до 5 символов
+        altitude = "0"[:5]  # Для координат используем 0 если нет значения
+        latitude = "0"[:5]  # Для координат используем 0 если нет значения
+
+        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
@@ -388,30 +394,20 @@ async def create_post(
                     latitude,
                     camera_settings
                 ) VALUES (
-                    %s,  -- photo_url
-                    %s,  -- shooting_time
-                    %s,  -- description
-                    %s,  -- user_id
-                    NOW(),  -- created_at
-                    %s,  -- likes_count
-                    %s,  -- comments_count
-                    %s,  -- tags (ограничено 5 символами)
-                    %s,  -- altitude (ограничено 5 символами)
-                    %s,  -- latitude (ограничено 5 символами)
-                    %s   -- camera_settings
+                    %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s
                 )
                 RETURNING id, created_at
             """, (
                 photo_url,
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                shooting_time,
                 description,
                 current_user["id"],
                 0,  # likes_count
                 0,  # comments_count
-                ""[:5],  # tags обрезается до 5 символов
-                ""[:5],  # altitude обрезается до 5 символов
-                ""[:5],  # latitude обрезается до 5 символов
-                "{}"     # camera_settings
+                tags,
+                altitude,
+                latitude,
+                "{}"  # camera_settings как пустой JSON
             ))
             new_post = cur.fetchone()
             db.commit()
