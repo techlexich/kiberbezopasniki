@@ -792,6 +792,11 @@
                     const postDate = new Date(post.created_at).toLocaleString();
                     const postElement = document.createElement('div');
                     postElement.className = 'post';
+                    postElement.dataset.postId = post.id; // Добавляем ID поста в data-атрибут
+                    
+                    // Проверяем, принадлежит ли пост текущему пользователю
+                    const isCurrentUserPost = currentUser && currentUser.username === post.username;
+                    
                     postElement.innerHTML = `
                         <div class="post-header">
                             <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
@@ -799,6 +804,10 @@
                                 <div class="post-username">${post.username}</div>
                                 <div class="post-time">${postDate}</div>
                             </div>
+                            ${isCurrentUserPost ? `
+                            <button class="delete-post-btn" style="background: none; border: none; color: var(--text-light); cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                            </button>` : ''}
                         </div>
                         ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
                         <img src="${post.photo_url}" class="post-image" alt="Фото">
@@ -812,6 +821,12 @@
                         </div>
                     `;
                     container.appendChild(postElement);
+                    
+                    // Добавляем обработчик удаления для своих постов
+                    if (isCurrentUserPost) {
+                        const deleteBtn = postElement.querySelector('.delete-post-btn');
+                        deleteBtn.addEventListener('click', () => deletePost(post.id));
+                    }
                 });
                 
             } catch (error) {
