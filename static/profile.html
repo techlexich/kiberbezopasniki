@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <title>FRAMES | Профиль</title>
     <style>
         :root {
@@ -642,6 +644,13 @@
                     <img id="preview-image" class="preview-image" alt="Предпросмотр">
                 </div>
                 <div class="form-group">
+                    <label for="location-input">Местоположение</label>
+                    <div id="post-map" style="width: 100%; height: 300px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border);"></div>
+                    <input type="hidden" id="latitude" name="latitude">
+                    <input type="hidden" id="longitude" name="longitude">
+                    <small style="display: block; margin-top: 8px; color: var(--text-light);">Кликните на карте, чтобы выбрать местоположение</small>
+                </div>
+                <div class="form-group">
                     <textarea id="post-description" placeholder="Добавьте описание..." rows="4"></textarea>
                 </div>
                 <button type="submit" class="save-btn" id="submit-post-btn">
@@ -975,14 +984,21 @@
         });
 
         // Отправка формы создания поста
-        createPostForm.addEventListener('submit', async (e) => {
+        createPostForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             
             const photoFile = postPhotoInput.files[0];
             const description = document.getElementById('post-description').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
             
             if (!photoFile) {
                 alert('Выберите фото для публикации');
+                return;
+            }
+
+            if (!latitude || !longitude) {
+                alert('Укажите местоположение на карте');
                 return;
             }
 
@@ -991,8 +1007,10 @@
 
             try {
                 const formData = new FormData();
-                formData.append('photo', photoFile); // Используем photoFile вместо file
-                formData.append('description', description || ''); // Добавляем описание
+                formData.append('photo', photoFile);
+                formData.append('description', description || '');
+                formData.append('latitude', latitude);
+                formData.append('altitude', longitude);
 
                 const token = localStorage.getItem('access_token');
                 if (!token) {
@@ -1018,12 +1036,11 @@
                 alert('Пост успешно опубликован!');
                 postModal.classList.remove('active');
                 resetPostForm();
-                await loadUserPosts(); // Обновляем список постов
+                await loadUserPosts();
             } catch (error) {
                 console.error('Ошибка при публикации:', error);
                 alert('Ошибка при публикации: ' + error.message);
                 
-                // Если ошибка авторизации, удаляем токен
                 if (error.message.includes('auth') || error.message.includes('401')) {
                     localStorage.removeItem('access_token');
                 }
@@ -1047,6 +1064,57 @@
         window.addEventListener('DOMContentLoaded', async () => {
             await loadProfile();
             await loadUserPosts();
+        });
+
+        // Инициализация карты для поста
+        let postMap;
+        let postMarker;
+
+        function initPostMap() {
+            const center = [56.835184, 60.609573];
+            
+            // Создаем карту
+            postMap = L.map('post-map', {
+                zoomControl: false,
+                preferCanvas: true,
+                attributionControl: false
+            }).setView(center, 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                minZoom: 2
+            }).addTo(postMap);
+            
+            // Клик по карте - ставим маркер
+            postMap.on('click', (e) => {
+                const { lat, lng } = e.latlng;
+                
+                // Удаляем старый маркер, если есть
+                if (postMarker) postMap.removeLayer(postMarker);
+                
+                // Добавляем новый маркер
+                postMarker = L.marker([lat, lng]).addTo(postMap);
+                
+                // Заполняем скрытые поля координатами
+                document.getElementById('latitude').value = lat;
+                document.getElementById('longitude').value = lng;
+            });
+        }
+
+        // Инициализируем карту при открытии модального окна
+        newPostBtn.addEventListener("click", () => {
+            if (!currentUser) return;
+            
+            setTimeout(() => {
+                if (!postMap) initPostMap();
+            }, 300);
+        });
+
+        // Сбрасываем карту при закрытии модального окна
+        closePostModal.addEventListener("click", () => {
+            if (postMarker) postMap.removeLayer(postMarker);
+            document.getElementById('latitude').value = '';
+            document.getElementById('longitude').value = '';
         });
     </script>
 </body>
