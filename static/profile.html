@@ -509,6 +509,22 @@
             color: #ff4757;
         }
 
+        .delete-post-btn {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-left: auto;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .delete-post-btn:hover {
+            color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+        }
+
         @media (max-width: 600px) {
             .profile-header {
                 flex-direction: column;
@@ -1131,6 +1147,42 @@
             document.getElementById('latitude').value = '';
             document.getElementById('longitude').value = '';
         });
+
+        async function deletePost(postId) {
+            if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    throw new Error('Требуется авторизация');
+                }
+
+                const response = await fetch(`/posts/${postId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || 'Ошибка при удалении поста');
+                }
+
+                const result = await response.json();
+                console.log('Пост удален:', result);
+                
+                alert('Пост успешно удален!');
+                await loadUserPosts(); // Обновляем список постов
+            } catch (error) {
+                console.error('Ошибка при удалении поста:', error);
+                alert('Ошибка при удалении поста: ' + error.message);
+                
+                if (error.message.includes('auth') || error.message.includes('401')) {
+                    localStorage.removeItem('access_token');
+                }
+            }
+        }
     </script>
 </body>
 </html>
