@@ -324,8 +324,8 @@ logger = logging.getLogger(__name__)
 async def create_post(
     photo: UploadFile = File(...),
     description: str = Form(default=""),
-    latitude: str = Form(...),
     altitude: str = Form(...),
+    latitude: str = Form(...),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
