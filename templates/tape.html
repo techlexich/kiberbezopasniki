@@ -898,7 +898,78 @@
             element.textContent = message;
             element.style.display = 'block';
         }
-    
+        async function loadPosts() {
+            try {
+                const response = await fetch(`${API_URL}/points`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                return await response.json();
+                } 
+                catch (error) {
+                console.error("Ошибка:", error);
+                return [];
+                }
+        }
+
+        function renderPost(post) {
+            const postElement = document.createElement('div');
+            postElement.className = 'post';
+            
+            // Форматируем дату (можете использовать библиотеку date-fns или moment.js для лучшего форматирования)
+            const postDate = new Date(post.created_at).toLocaleString('ru-RU');
+            
+            postElement.innerHTML = `
+                <div class="post-header">
+                    <div class="avatar">${post.username ? post.username.charAt(0).toUpperCase() : 'U'}</div>
+                    <div class="user-info">
+                        <div class="username">${post.username || 'Неизвестный пользователь'}</div>
+                        <div class="post-time">${postDate}</div>
+                    </div>
+                </div>
+                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
+                <div class="post-actions">
+                    <button class="action-button like-button">
+                        <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                    </button>
+                    <button class="action-button">
+                        <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
+                    </button>
+                    <button class="action-button">
+                        <i class="fas fa-share-alt"></i>
+                    </button>
+                    <button class="action-button">
+                        <i class="far fa-bookmark"></i>
+                    </button>
+                </div>
+            `;
+            
+            return postElement;
+        }
+
+        async function renderPosts() {
+            const container = document.getElementById('posts-container');
+            const posts = await loadPosts();
+            
+            // Очищаем контейнер перед добавлением новых постов
+            container.innerHTML = '';
+            
+            if (posts.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет постов</p>';
+                return;
+            }
+            
+            posts.forEach(post => {
+                container.appendChild(renderPost(post));
+            });
+        }
+
+    // Вызываем при загрузке страницы
+    document.addEventListener('DOMContentLoaded', async () => {
+        await updateAuthUI();
+        await renderPosts();
+        
+        // Остальной ваш код инициализации...
+    });
         closeProfile.addEventListener('click', () => hideModal(profileModal));
     
         backFromLogin.addEventListener('click', resetAuthForms);
