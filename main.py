@@ -534,7 +534,132 @@ async def get_post(
             raise HTTPException(404, "Post not found")
         
         return post
+# Добавьте эти новые эндпоинты в ваш FastAPI app
 
+# Эндпоинт для лайка поста
+@app.post("/posts/{post_id}/like")
+async def like_post(
+    post_id: int,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    try:
+        with db.cursor() as cur:
+            # Проверяем, существует ли пост
+            cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Post not found")
+            
+            # Проверяем, не лайкал ли уже пользователь
+            cur.execute("""
+                SELECT id FROM likes 
+                WHERE user_id = %s AND post_id = %s
+            """, (current_user["id"], post_id))
+            
+            if cur.fetchone():
+                raise HTTPException(400, "You already liked this post")
+            
+            # Добавляем лайк
+            cur.execute("""
+                INSERT INTO likes (user_id, post_id)
+                VALUES (%s, %s)
+            """, (current_user["id"], post_id))
+            
+            # Обновляем счетчик лайков
+            cur.execute("""
+                UPDATE posts 
+                SET likes_count = likes_count + 1 
+                WHERE id = %s
+                RETURNING likes_count
+            """, (post_id,))
+            
+            updated_count = cur.fetchone()["likes_count"]
+            db.commit()
+            
+            return {"status": "success", "likes_count": updated_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, detail=f"Database error: {str(e)}")
+
+# Эндпоинт для удаления лайка
+@app.post("/posts/{post_id}/unlike")
+async def unlike_post(
+    post_id: int,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    try:
+        with db.cursor() as cur:
+            # Проверяем, существует ли пост
+            cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Post not found")
+            
+            # Удаляем лайк
+            cur.execute("""
+                DELETE FROM likes 
+                WHERE user_id = %s AND post_id = %s
+                RETURNING id
+            """, (current_user["id"], post_id))
+            
+            if not cur.fetchone():
+                raise HTTPException(400, "You haven't liked this post yet")
+            
+            # Обновляем счетчик лайков
+            cur.execute("""
+                UPDATE posts 
+                SET likes_count = likes_count - 1 
+                WHERE id = %s
+                RETURNING likes_count
+            """, (post_id,))
+            
+            updated_count = cur.fetchone()["likes_count"]
+            db.commit()
+            
+            return {"status": "success", "likes_count": updated_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, detail=f"Database error: {str(e)}")
+
+# Эндпоинт для получения ленты постов
+@app.get("/tape/posts")
+async def get_tape_posts(
+    skip: int = 0,
+    limit: int = 10,
+    db=Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user)
+):
+    try:
+        with db.cursor() as cur:
+            # Получаем посты с информацией о лайках пользователя
+            cur.execute("""
+                SELECT 
+                    p.*,
+                    u.username,
+                    u.avatar_url as user_avatar,
+                    EXISTS(
+                        SELECT 1 FROM likes l 
+                        WHERE l.user_id = %s AND l.post_id = p.id
+                    ) as is_liked
+                FROM posts p
+                JOIN users u ON p.user_id = u.id
+                ORDER BY p.created_at DESC
+                LIMIT %s OFFSET %s
+            """, (current_user["id"] if current_user else None, limit, skip))
+            
+            posts = cur.fetchall()
+            
+            # Преобразуем данные
+            for post in posts:
+                post["latitude"] = float(post["latitude"])
+                post["altitude"] = float(post["altitude"])
+                post["is_liked"] = post["is_liked"] if current_user else False
+            
+            return posts
+    except Exception as e:
+        raise HTTPException(500, detail=f"Ошибка базы данных: {str(e)}")
+    
+    
 @app.get("/check-s3-connection")
 async def check_s3_connection():
     try:
