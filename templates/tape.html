@@ -519,7 +519,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="feed-container">
+    <div class="feed-container" id="posts-container">
         <header class="header">
             <div class="logo">FRAMES</div>
             <div class="nav-buttons">
@@ -533,109 +533,6 @@
                 </form>
             </div>
         </header>
-
-        <div class="post">
-            <div class="post-header">
-                <div class="avatar">A</div>
-                <div class="user-info">
-                    <div class="username">Anna Clean</div>
-                    <div class="post-time">2 часа назад</div>
-                </div>
-            </div>
-            <div class="post-text">
-                Нашла это потрясающее место в центре города! Чистые линии и продуманное пространство создают удивительную атмосферу гармонии.
-            </div>
-            <img src="https://source.unsplash.com/random/600x400/?minimal,architecture" alt="Минималистичная архитектура" class="post-image loading">
-            <div class="post-tags">
-                <span class="tag">#архитектура</span>
-                <span class="tag">#гармония</span>
-                <span class="tag">#пространство</span>
-            </div>
-            <div class="post-actions">
-                <button class="action-button like-button">
-                    <i class="far fa-heart"></i> <span>124</span>
-                </button>
-                <button class="action-button">
-                    <i class="far fa-comment"></i> <span>23</span>
-                </button>
-                <button class="action-button">
-                    <i class="fas fa-share-alt"></i>
-                </button>
-                <button class="action-button">
-                    <i class="far fa-bookmark"></i>
-                </button>
-            </div>
-        </div>
-
-        <div class="post">
-            <div class="post-header">
-                <div class="avatar">M</div>
-                <div class="user-info">
-                    <div class="username">Mike Simple</div>
-                    <div class="post-time">5 часов назад</div>
-                </div>
-            </div>
-            <div class="post-text">
-                Простота - это сложная вещь. Эти чистые линии и отсутствие лишних деталей завораживают. Как вам такой подход к дизайну?
-            </div>
-            <img src="https://source.unsplash.com/random/600x400/?minimal,design" alt="Минималистичный дизайн" class="post-image loading">
-            <div class="post-tags">
-                <span class="tag">#дизайн</span>
-                <span class="tag">#простота</span>
-                <span class="tag">#эстетика</span>
-            </div>
-            <div class="post-actions">
-                <button class="action-button like-button">
-                    <i class="far fa-heart"></i> <span>89</span>
-                </button>
-                <button class="action-button">
-                    <i class="far fa-comment"></i> <span>14</span>
-                </button>
-                <button class="action-button">
-                    <i class="fas fa-share-alt"></i>
-                </button>
-                <button class="action-button">
-                    <i class="far fa-bookmark"></i>
-                </button>
-            </div>
-        </div>
-
-        <div class="divider">
-            <span class="divider-text">Новые публикации</span>
-        </div>
-
-        <div class="post">
-            <div class="post-header">
-                <div class="avatar">D</div>
-                <div class="user-info">
-                    <div class="username">Design Studio</div>
-                    <div class="post-time">сегодня</div>
-                </div>
-            </div>
-            <div class="post-text">
-                Наш новый проект в стиле минимализм. Меньше - значит больше. Каждый элемент продуман и несет свою функцию. Что вы думаете о таком подходе?
-            </div>
-            <img src="https://source.unsplash.com/random/600x400/?minimal,interior" alt="Минималистичный интерьер" class="post-image loading">
-            <div class="post-tags">
-                <span class="tag">#интерьер</span>
-                <span class="tag">#проект</span>
-                <span class="tag">#функциональность</span>
-            </div>
-            <div class="post-actions">
-                <button class="action-button like-button liked">
-                    <i class="fas fa-heart"></i> <span>256</span>
-                </button>
-                <button class="action-button">
-                    <i class="far fa-comment"></i> <span>42</span>
-                </button>
-                <button class="action-button">
-                    <i class="fas fa-share-alt"></i>
-                </button>
-                <button class="action-button">
-                    <i class="fas fa-bookmark"></i>
-                </button>
-            </div>
-        </div>
     </div>
 
     <button class="new-post-button">
@@ -898,24 +795,26 @@
             element.textContent = message;
             element.style.display = 'block';
         }
+
+        // Функции для работы с постами
         async function loadPosts() {
             try {
                 const response = await fetch(`${API_URL}/points`);
                 if (!response.ok) throw new Error("Ошибка загрузки данных");
-                return await response.json();
-                } 
-                catch (error) {
+                const posts = await response.json();
+                return posts;
+            } catch (error) {
                 console.error("Ошибка:", error);
                 return [];
-                }
+            }
         }
 
         function renderPost(post) {
             const postElement = document.createElement('div');
             postElement.className = 'post';
             
-            // Форматируем дату (можете использовать библиотеку date-fns или moment.js для лучшего форматирования)
-            const postDate = new Date(post.created_at).toLocaleString('ru-RU');
+            // Форматируем дату
+            const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
             
             postElement.innerHTML = `
                 <div class="post-header">
@@ -948,6 +847,10 @@
 
         async function renderPosts() {
             const container = document.getElementById('posts-container');
+            
+            // Добавляем индикатор загрузки
+            container.innerHTML = '<p style="text-align: center;">Загрузка постов...</p>';
+            
             const posts = await loadPosts();
             
             // Очищаем контейнер перед добавлением новых постов
@@ -958,18 +861,67 @@
                 return;
             }
             
+            // Добавляем хедер обратно (он был удален при очистке)
+            const header = document.createElement('header');
+            header.className = 'header';
+            header.innerHTML = `
+                <div class="logo">FRAMES</div>
+                <div class="nav-buttons">
+                    <button id="profile-button" class="nav-button">
+                        <i class="fas fa-user"></i> Профиль
+                    </button>
+                    <form action="/">
+                        <button class="nav-button">
+                            <i class="fas fa-map-marker-alt"></i> Карта
+                        </button>
+                    </form>
+                </div>
+            `;
+            container.appendChild(header);
+            
+            // Добавляем посты
             posts.forEach(post => {
                 container.appendChild(renderPost(post));
             });
         }
 
-    // Вызываем при загрузке страницы
-    document.addEventListener('DOMContentLoaded', async () => {
-        await updateAuthUI();
-        await renderPosts();
-        
-        // Остальной ваш код инициализации...
-    });
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateAuthUI();
+            await renderPosts();
+            
+            // Обновляем обработчик клика для профиля после перерисовки
+            document.getElementById('profile-button')?.addEventListener('click', () => {
+                showModal(profileModal);
+                resetAuthForms();
+            });
+            
+            // Логика для лайков
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.like-button')) {
+                    const button = e.target.closest('.like-button');
+                    const icon = button.querySelector('i');
+                    const countSpan = button.querySelector('span');
+                    let count = parseInt(countSpan.textContent) || 0;
+                    
+                    if (button.classList.contains('liked')) {
+                        icon.classList.replace('fas', 'far');
+                        countSpan.textContent = count - 1;
+                        button.classList.remove('liked');
+                    } else {
+                        icon.classList.replace('far', 'fas');
+                        countSpan.textContent = count + 1;
+                        button.classList.add('liked');
+                    }
+                }
+            });
+    
+            // Кнопка нового поста
+            document.querySelector('.new-post-button').addEventListener('click', function() {
+                alert('Форма создания нового поста будет здесь');
+            });
+        });
+
         closeProfile.addEventListener('click', () => hideModal(profileModal));
     
         backFromLogin.addEventListener('click', resetAuthForms);
@@ -1048,43 +1000,6 @@
             currentUser = null;
             updateAuthUI();
             hideModal(profileModal);
-        });
-    
-        // Инициализация при загрузке
-        document.addEventListener('DOMContentLoaded', async () => {
-            await updateAuthUI();
-            
-            // Логика для лайков
-            document.querySelectorAll('.like-button').forEach(button => {
-                button.addEventListener('click', function() {
-                    const icon = this.querySelector('i');
-                    const countSpan = this.querySelector('span');
-                    let count = parseInt(countSpan.textContent) || 0;
-                    
-                    if (this.classList.contains('liked')) {
-                        icon.classList.replace('fas', 'far');
-                        countSpan.textContent = count - 1;
-                        this.classList.remove('liked');
-                    } else {
-                        icon.classList.replace('far', 'fas');
-                        countSpan.textContent = count + 1;
-                        this.classList.add('liked');
-                    }
-                });
-            });
-    
-            // Кнопка нового поста
-            document.querySelector('.new-post-button').addEventListener('click', function() {
-                alert('Форма создания нового поста будет здесь');
-            });
-    
-            // Имитация загрузки изображений
-            document.querySelectorAll('.post-image').forEach(img => {
-                setTimeout(() => {
-                    img.src = img.getAttribute('src');
-                    img.classList.remove('loading');
-                }, 1000 + Math.random() * 2000);
-            });
         });
     </script>
 </body>
