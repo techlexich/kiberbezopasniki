@@ -293,26 +293,7 @@
             animation: shimmer 1.5s infinite linear;
         }
 
-        /* Минималистичные разделители */
-        .divider {
-            height: 1px;
-            background: var(--border);
-            margin: 24px 0;
-            position: relative;
-        }
-
-        .divider-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: var(--card);
-            padding: 0 12px;
-            font-size: 12px;
-            color: var(--text-light);
-        }
-
-        /* Стили модального окна */
+        /* Стили модального окна профиля */
         .modal {
             display: none;
             position: fixed;
@@ -854,7 +835,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
                 
-                const response = await fetch(`${API_URL}/points`, {
+                const response = await fetch(`${API_URL}/posts?limit=10`, {
                     headers: headers
                 });
                 
@@ -904,9 +885,9 @@
             
             postElement.innerHTML = `
                 <div class="post-header">
-                    <div class="avatar">${post.username ? post.username.charAt(0).toUpperCase() : 'U'}</div>
+                    <div class="avatar">${post.user?.username?.charAt(0)?.toUpperCase() || 'U'}</div>
                     <div class="user-info">
-                        <div class="username">${post.username || 'Неизвестный пользователь'}</div>
+                        <div class="username">${post.user?.username || 'Неизвестный пользователь'}</div>
                         <div class="post-time">${postDate}</div>
                     </div>
                 </div>
