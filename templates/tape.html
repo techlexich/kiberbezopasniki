@@ -143,6 +143,7 @@
             aspect-ratio: 16/9;
             object-fit: cover;
             transition: transform 0.3s ease;
+            cursor: pointer;
         }
 
         .post:hover .post-image {
@@ -154,6 +155,7 @@
             color: var(--text);
             font-size: 15px;
             line-height: 1.6;
+            white-space: pre-line;
         }
 
         .post-tags {
@@ -235,6 +237,35 @@
         .new-post-button:hover {
             transform: scale(1.05) translateY(-3px);
             box-shadow: 0 6px 16px rgba(67, 97, 238, 0.4);
+        }
+
+        /* Модальное окно для изображения */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .image-modal-content {
+            max-width: 90%;
+            max-height: 90%;
+        }
+
+        .close-image-modal {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
         }
 
         /* Разнообразие цветов для постов */
@@ -535,6 +566,12 @@
         </header>
     </div>
 
+    <!-- Модальное окно для изображения -->
+    <div id="image-modal" class="image-modal">
+        <span class="close-image-modal">&times;</span>
+        <img class="image-modal-content" id="expanded-image">
+    </div>
+
     <button class="new-post-button">
         <i class="fas fa-plus"></i>
     </button>
@@ -619,18 +656,11 @@
         const loginButton = document.getElementById('login-button');
         const registerButton = document.getElementById('register-button');
         const logoutButton = document.getElementById('logout-btn');
-        
-        // Поля ввода
-        const loginEmail = document.getElementById('login-email');
-        const loginPassword = document.getElementById('login-password');
-        const registerEmail = document.getElementById('register-email');
-        const registerLogin = document.getElementById('register-login');
-        const registerPassword = document.getElementById('register-password');
-        const registerPasswordRepeat = document.getElementById('register-password-repeat');
-        
-        // Сообщения об ошибках
-        const loginError = document.getElementById('login-error');
-        const registerError = document.getElementById('register-error');
+
+        // Модальное окно для изображения
+        const imageModal = document.getElementById('image-modal');
+        const expandedImage = document.getElementById('expanded-image');
+        const closeImageModal = document.querySelector('.close-image-modal');
 
         // Функции для работы с модальными окнами
         function showModal(modal) {
@@ -686,8 +716,26 @@
         function handleEscape(e) {
             if (e.key === 'Escape') {
                 hideModal(profileModal);
+                hideImageModal();
             }
         }
+
+        function showImageModal(imageUrl) {
+            expandedImage.src = imageUrl;
+            imageModal.style.display = 'flex';
+        }
+
+        function hideImageModal() {
+            imageModal.style.display = 'none';
+        }
+
+        // Обработчики для модального окна изображения
+        closeImageModal.addEventListener('click', hideImageModal);
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) {
+                hideImageModal();
+            }
+        });
 
         function resetAuthForms() {
             if (currentUser) {
@@ -799,7 +847,17 @@
         // Функции для работы с постами
         async function loadPosts() {
             try {
-                const response = await fetch(`${API_URL}/points`);
+                const token = localStorage.getItem('access_token');
+                const headers = {};
+                
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                const response = await fetch(`${API_URL}/points`, {
+                    headers: headers
+                });
+                
                 if (!response.ok) throw new Error("Ошибка загрузки данных");
                 const posts = await response.json();
                 return posts;
@@ -809,9 +867,37 @@
             }
         }
 
+        async function toggleLike(postId, isLiked) {
+            try {
+                const token = localStorage.getItem('access_token');
+                if (!token) {
+                    alert('Для этого действия нужно войти в аккаунт');
+                    return false;
+                }
+                
+                const response = await fetch(`${API_URL}/posts/${postId}/like`, {
+                    method: isLiked ? 'DELETE' : 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка при обновлении лайка');
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Ошибка:', error);
+                return false;
+            }
+        }
+
         function renderPost(post) {
             const postElement = document.createElement('div');
             postElement.className = 'post';
+            postElement.dataset.postId = post.id;
             
             // Форматируем дату
             const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
@@ -827,8 +913,8 @@
                 ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
                 ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
                 <div class="post-actions">
-                    <button class="action-button like-button">
-                        <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                    <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
+                        <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i> <span>${post.likes_count || 0}</span>
                     </button>
                     <button class="action-button">
                         <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
@@ -841,6 +927,39 @@
                     </button>
                 </div>
             `;
+            
+            // Добавляем обработчики событий
+            const likeButton = postElement.querySelector('.like-button');
+            const postImage = postElement.querySelector('.post-image');
+            
+            if (likeButton) {
+                likeButton.addEventListener('click', async () => {
+                    const isLiked = likeButton.classList.contains('liked');
+                    const success = await toggleLike(post.id, isLiked);
+                    
+                    if (success) {
+                        const icon = likeButton.querySelector('i');
+                        const countSpan = likeButton.querySelector('span');
+                        let count = parseInt(countSpan.textContent) || 0;
+                        
+                        if (isLiked) {
+                            icon.classList.replace('fas', 'far');
+                            countSpan.textContent = count - 1;
+                            likeButton.classList.remove('liked');
+                        } else {
+                            icon.classList.replace('far', 'fas');
+                            countSpan.textContent = count + 1;
+                            likeButton.classList.add('liked');
+                        }
+                    }
+                });
+            }
+            
+            if (postImage) {
+                postImage.addEventListener('click', () => {
+                    showImageModal(post.photo_url);
+                });
+            }
             
             return postElement;
         }
@@ -879,6 +998,12 @@
             `;
             container.appendChild(header);
             
+            // Обновляем обработчик клика для профиля
+            document.getElementById('profile-button').addEventListener('click', () => {
+                showModal(profileModal);
+                resetAuthForms();
+            });
+            
             // Добавляем посты
             posts.forEach(post => {
                 container.appendChild(renderPost(post));
@@ -890,35 +1015,14 @@
             await updateAuthUI();
             await renderPosts();
             
-            // Обновляем обработчик клика для профиля после перерисовки
-            document.getElementById('profile-button')?.addEventListener('click', () => {
-                showModal(profileModal);
-                resetAuthForms();
-            });
-            
-            // Логика для лайков
-            document.addEventListener('click', function(e) {
-                if (e.target.closest('.like-button')) {
-                    const button = e.target.closest('.like-button');
-                    const icon = button.querySelector('i');
-                    const countSpan = button.querySelector('span');
-                    let count = parseInt(countSpan.textContent) || 0;
-                    
-                    if (button.classList.contains('liked')) {
-                        icon.classList.replace('fas', 'far');
-                        countSpan.textContent = count - 1;
-                        button.classList.remove('liked');
-                    } else {
-                        icon.classList.replace('far', 'fas');
-                        countSpan.textContent = count + 1;
-                        button.classList.add('liked');
-                    }
-                }
-            });
-    
             // Кнопка нового поста
             document.querySelector('.new-post-button').addEventListener('click', function() {
-                alert('Форма создания нового поста будет здесь');
+                if (!currentUser) {
+                    alert('Для создания поста нужно войти в аккаунт');
+                    showModal(profileModal);
+                    return;
+                }
+                window.location.href = '/new-post';
             });
         });
 
@@ -959,6 +1063,7 @@
                 await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
+                await renderPosts(); // Обновляем посты после регистрации
             } catch (error) {
                 showError(registerError, error.message || 'Ошибка соединения');
             }
@@ -989,6 +1094,7 @@
                 await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
+                await renderPosts(); // Обновляем посты после входа
             } catch (error) {
                 showError(loginError, error.message || 'Ошибка соединения');
             }
@@ -1000,6 +1106,7 @@
             currentUser = null;
             updateAuthUI();
             hideModal(profileModal);
+            renderPosts(); // Обновляем посты после выхода
         });
     </script>
 </body>
