@@ -827,26 +827,28 @@
 
         // Функции для работы с постами
         async function loadPosts() {
-            try {
-                const token = localStorage.getItem('access_token');
-                const headers = {};
-                
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
-                }
-                
-                const response = await fetch(`${API_URL}/posts?limit=10`, {
-                    headers: headers
-                });
-                
-                if (!response.ok) throw new Error("Ошибка загрузки данных");
-                const posts = await response.json();
-                return posts;
-            } catch (error) {
-                console.error("Ошибка:", error);
-                return [];
+        try {
+            const token = localStorage.getItem('access_token');
+            const headers = {};
+            
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
             }
-        }
+            
+            // Изменяем URL с '/tape/posts' на '/posts'
+            const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
+                headers: headers
+            });
+            
+            if (!response.ok) throw new Error("Ошибка загрузки данных");
+            const posts = await response.json();
+            return posts;
+            } 
+            catch (error) {
+            console.error("Ошибка:", error);
+            return [];
+            }
+}
 
         async function toggleLike(postId, isLiked) {
             try {
