@@ -630,49 +630,48 @@ async def get_tape_posts(
     current_user: Optional[dict] = Depends(get_current_user, use_cache=False)
 ):
     try:
-        with db.cursor() as cur:
-            # Для авторизованных пользователей
-            if current_user:
-                cur.execute("""
-                    SELECT 
-                        p.*,
-                        u.username,
-                        u.avatar_url as user_avatar,
-                        EXISTS(
-                            SELECT 1 FROM likes l 
-                            WHERE l.user_id = %s AND l.post_id = p.id
-                        ) as is_liked
-                    FROM posts p
-                    JOIN users u ON p.user_id = u.id
-                    ORDER BY p.created_at DESC
-                    LIMIT %s OFFSET %s
-                """, (current_user["id"], limit, skip))
-            # Для неавторизованных
-            else:
-                cur.execute("""
-                    SELECT 
-                        p.*,
-                        u.username,
-                        u.avatar_url as user_avatar,
-                        FALSE as is_liked
-                    FROM posts p
-                    JOIN users u ON p.user_id = u.id
-                    ORDER BY p.created_at DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, skip))
+        conn = await db.__anext__()  # Получаем соединение из генератора
+        with conn.cursor() as cur:
+            base_query = """
+                SELECT 
+                    p.id,
+                    p.photo_url,
+                    p.description,
+                    p.created_at,
+                    p.likes_count,
+                    p.comments_count,
+                    p.latitude,
+                    p.altitude,
+                    u.username,
+                    u.avatar_url as user_avatar,
+                    %s as is_liked
+                FROM posts p
+                JOIN users u ON p.user_id = u.id
+                ORDER BY p.created_at DESC
+                LIMIT %s OFFSET %s
+            """
             
+            if current_user:
+                params = (f"EXISTS(SELECT 1 FROM likes l WHERE l.user_id = {current_user['id']} AND l.post_id = p.id)", limit, skip)
+            else:
+                params = (False, limit, skip)
+            
+            cur.execute(base_query, params)
             posts = cur.fetchall()
             
-            # Преобразуем данные
+            # Преобразование типов данных
             for post in posts:
-                post["latitude"] = float(post["latitude"])
-                post["altitude"] = float(post["altitude"])
-                post["is_liked"] = post.get("is_liked", False)
-            
+                post['latitude'] = float(post['latitude']) if post['latitude'] else 0.0
+                post['altitude'] = float(post['altitude']) if post['altitude'] else 0.0
+                post['is_liked'] = bool(post['is_liked'])
+                
             return posts
+            
     except Exception as e:
-        logger.error(f"Error in get_tape_posts: {str(e)}")
-        raise HTTPException(500, detail=f"Ошибка базы данных: {str(e)}")    
+        logger.error(f"Error in get_tape_posts: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="Internal server error")
+    finally:
+        await conn.close()
 
 @app.get("/check-s3-connection")
 async def check_s3_connection():
