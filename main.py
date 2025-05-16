@@ -641,39 +641,41 @@ async def get_tape_posts(
                     p.latitude,
                     p.altitude,
                     u.username,
-                    u.avatar_url as user_avatar
+                    u.avatar_url as user_avatar,
+                    %s as is_liked
                 FROM posts p
                 JOIN users u ON p.user_id = u.id
                 ORDER BY p.created_at DESC
                 LIMIT 20
             """
             
-            cur.execute(base_query)
+            # Для авторизованных пользователей
+            if current_user:
+                cur.execute("""
+                    SELECT 
+                        p.*,
+                        u.username,
+                        u.avatar_url as user_avatar,
+                        EXISTS(
+                            SELECT 1 FROM likes l 
+                            WHERE l.user_id = %s AND l.post_id = p.id
+                        ) as is_liked
+                    FROM posts p
+                    JOIN users u ON p.user_id = u.id
+                    ORDER BY p.created_at DESC
+                    LIMIT 20
+                """, (current_user["id"],))
+            # Для неавторизованных
+            else:
+                cur.execute(base_query, (False,))
+            
             posts = cur.fetchall()
             
-            # Для авторизованных добавляем информацию о лайках
-            if current_user:
-                post_ids = [str(post['id']) for post in posts]
-                if post_ids:
-                    cur.execute(f"""
-                        SELECT post_id FROM likes 
-                        WHERE user_id = %s AND post_id IN ({','.join(post_ids)})
-                    """, (current_user['id'],))
-                    liked_posts = {row['post_id']: True for row in cur.fetchall()}
-                    
-                    for post in posts:
-                        post['is_liked'] = liked_posts.get(post['id'], False)
-                else:
-                    for post in posts:
-                        post['is_liked'] = False
-            else:
-                for post in posts:
-                    post['is_liked'] = False
-            
-            # Преобразование типов
+            # Преобразование типов данных
             for post in posts:
                 post['latitude'] = float(post.get('latitude', 0))
                 post['altitude'] = float(post.get('altitude', 0))
+                post['is_liked'] = bool(post.get('is_liked', False))
             
             return posts
             

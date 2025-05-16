@@ -526,6 +526,54 @@
                 transform: translateX(-50%) translateY(0);
             }
         }
+
+        .post.loading {
+            background: #f8f9fa;
+            border-color: #e9ecef;
+        }
+
+        .loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite linear;
+            border-radius: 4px;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+        }
+
+        .error-message p {
+            margin-bottom: 20px;
+        }
+
+        .retry-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .error-detail {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #dc3545;
+        }
+
+        .no-posts {
+            text-align: center;
+            padding: 40px 20px;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -829,11 +877,23 @@
             for (let i = 0; i < retries; i++) {
                 try {
                     const token = localStorage.getItem('access_token');
+                    const headers = {};
+                    
+                    // Добавляем токен только если он есть
+                    if (token) {
+                        headers['Authorization'] = `Bearer ${token}`;
+                    }
+                    
                     const response = await fetch(`${API_URL}/tape/posts`, {
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                        headers: headers
                     });
                     
                     if (!response.ok) {
+                        // Если 401 - возможно токен устарел, удаляем его
+                        if (response.status === 401) {
+                            localStorage.removeItem('access_token');
+                            await updateAuthUI();
+                        }
                         const error = await response.json().catch(() => null);
                         throw new Error(error?.detail || `HTTP error ${response.status}`);
                     }
@@ -852,7 +912,7 @@
             const container = document.getElementById('posts-container');
             
             try {
-                // Показываем скелетоны загрузки
+                // Показываем индикатор загрузки
                 container.innerHTML = `
                     <header class="header">
                         <div class="logo">FRAMES</div>
@@ -867,23 +927,35 @@
                             </form>
                         </div>
                     </header>
-                    ${Array(3).fill().map(() => `
-                        <div class="post loading">
-                            <div class="post-header">
-                                <div class="avatar"></div>
-                                <div class="user-info">
-                                    <div class="username loading" style="width: 120px; height: 16px;"></div>
-                                    <div class="post-time loading" style="width: 80px; height: 12px; margin-top: 5px;"></div>
-                                </div>
-                            </div>
-                            <div class="post-image loading" style="height: 200px;"></div>
-                        </div>
-                    `).join('')}
+                    <div style="text-align: center; margin: 40px 0;">
+                        <div class="loading" style="width: 100%; height: 100px; border-radius: 12px;"></div>
+                        <div class="loading" style="width: 80%; height: 300px; border-radius: 12px; margin: 20px auto;"></div>
+                        <div class="loading" style="width: 100%; height: 80px; border-radius: 12px;"></div>
+                    </div>
                 `;
+
+                const token = localStorage.getItem('access_token');
+                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
                 
-                const posts = await loadPostsWithRetry();
+                const response = await fetch(`${API_URL}/tape/posts`, { headers });
                 
-                // Полный рендеринг после загрузки
+                if (!response.ok) {
+                    // Если 401 - возможно токен устарел
+                    if (response.status === 401) {
+                        localStorage.removeItem('access_token');
+                        await updateAuthUI();
+                        // Пробуем снова без токена
+                        return await renderPosts();
+                    }
+                    throw new Error(`Ошибка загрузки: ${response.status}`);
+                }
+
+                const posts = await response.json();
+                
+                // Очищаем контейнер
+                container.innerHTML = '';
+                
+                // Добавляем хедер
                 container.innerHTML = `
                     <header class="header">
                         <div class="logo">FRAMES</div>
@@ -898,68 +970,120 @@
                             </form>
                         </div>
                     </header>
-                    ${posts.length ? posts.map(post => {
-                        const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
-                        return `
-                            <div class="post" data-post-id="${post.id}">
-                                <div class="post-header">
-                                    <div class="avatar">${post.username?.charAt(0)?.toUpperCase() || 'U'}</div>
-                                    <div class="user-info">
-                                        <div class="username">${post.username || 'Неизвестный пользователь'}</div>
-                                        <div class="post-time">${postDate}</div>
-                                    </div>
-                                </div>
-                                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                                ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
-                                <div class="post-actions">
-                                    <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
-                                        <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
-                                        <span>${post.likes_count || 0}</span>
-                                    </button>
-                                    <button class="action-button">
-                                        <i class="far fa-comment"></i>
-                                        <span>${post.comments_count || 0}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('') : `
-                        <div class="no-posts">
-                            <p>Пока нет постов</p>
+                `;
+
+                if (!posts || posts.length === 0) {
+                    container.innerHTML += `
+                        <div style="text-align: center; padding: 40px 20px;">
+                            <p style="color: var(--text-light); margin-bottom: 20px;">Пока нет постов</p>
                             ${!currentUser ? `
-                                <button class="auth-option primary" onclick="showModal(profileModal)">
-                                    Войти, чтобы добавить пост
+                                <button onclick="showModal(profileModal)" class="auth-option primary" 
+                                    style="margin: 0 auto; width: auto; display: inline-block;">
+                                    <i class="fas fa-sign-in-alt"></i> Войти, чтобы добавить пост
                                 </button>
                             ` : ''}
                         </div>
-                    `}
-                `;
-                
+                    `;
+                    return;
+                }
+
+                // Добавляем посты
+                posts.forEach(post => {
+                    const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
+                    const postHTML = `
+                        <div class="post" data-post-id="${post.id}">
+                            <div class="post-header">
+                                <div class="avatar">${post.username?.charAt(0)?.toUpperCase() || 'U'}</div>
+                                <div class="user-info">
+                                    <div class="username">${post.username || 'Неизвестный пользователь'}</div>
+                                    <div class="post-time">${postDate}</div>
+                                </div>
+                            </div>
+                            ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                            ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
+                            <div class="post-actions">
+                                <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
+                                    <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
+                                    <span>${post.likes_count || 0}</span>
+                                </button>
+                                <button class="action-button">
+                                    <i class="far fa-comment"></i>
+                                    <span>${post.comments_count || 0}</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', postHTML);
+                });
+
                 // Назначаем обработчики
                 document.querySelectorAll('.like-button').forEach(btn => {
-                    btn.addEventListener('click', handleLikeAction);
+                    btn.addEventListener('click', async function() {
+                        if (!currentUser) {
+                            showModal(profileModal);
+                            return;
+                        }
+                        const postId = this.closest('.post').dataset.postId;
+                        const isLiked = this.classList.contains('liked');
+                        
+                        try {
+                            const response = await fetch(`${API_URL}/posts/${postId}/${isLiked ? 'unlike' : 'like'}`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                            });
+                            
+                            if (response.ok) {
+                                const icon = this.querySelector('i');
+                                const countSpan = this.querySelector('span');
+                                let count = parseInt(countSpan.textContent);
+                                
+                                if (isLiked) {
+                                    this.classList.remove('liked');
+                                    icon.classList.replace('fas', 'far');
+                                    countSpan.textContent = count - 1;
+                                } else {
+                                    this.classList.add('liked');
+                                    icon.classList.replace('far', 'fas');
+                                    countSpan.textContent = count + 1;
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Like error:', error);
+                        }
+                    });
                 });
-                
+
                 document.querySelectorAll('.post-image').forEach(img => {
                     img.addEventListener('click', () => showImageModal(img.src));
                 });
-                
+
                 document.getElementById('profile-button').addEventListener('click', () => {
                     showModal(profileModal);
                     resetAuthForms();
                 });
-                
+
             } catch (error) {
-                console.error('Failed to render posts:', error);
+                console.error('Ошибка загрузки ленты:', error);
                 container.innerHTML = `
-                    <div class="error-message">
-                        <p>Не удалось загрузить ленту</p>
-                        <button onclick="window.location.reload()" class="retry-button">
+                    <header class="header">
+                        <div class="logo">FRAMES</div>
+                        <div class="nav-buttons">
+                            <button id="profile-button" class="nav-button">
+                                <i class="fas fa-user"></i> Профиль
+                            </button>
+                            <form action="/">
+                                <button class="nav-button">
+                                    <i class="fas fa-map-marker-alt"></i> Карта
+                                </button>
+                            </form>
+                        </div>
+                    </header>
+                    <div style="text-align: center; padding: 40px 20px;">
+                        <p style="color: var(--text-light); margin-bottom: 20px;">Не удалось загрузить ленту</p>
+                        <button onclick="location.reload()" class="nav-button">
                             <i class="fas fa-sync-alt"></i> Попробовать снова
                         </button>
-                        ${currentUser ? `
-                            <p class="error-detail">${error.message}</p>
-                        ` : ''}
+                        ${currentUser ? `<p style="color: #dc3545; margin-top: 10px; font-size: 14px;">${error.message || 'Ошибка соединения'}</p>` : ''}
                     </div>
                 `;
             }
