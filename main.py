@@ -628,7 +628,6 @@ async def unlike_post(
 
 # Эндпоинт для получения ленты постов
 @app.get("/tape/posts")
-@app.get("/tape/posts")
 async def get_tape_posts(db=Depends(get_db)):
     try:
         with db.cursor() as cur:
@@ -665,6 +664,26 @@ async def get_tape_posts(db=Depends(get_db)):
     except Exception as e:
         logger.error(f"Error in get_tape_posts: {str(e)}", exc_info=True)
         raise HTTPException(500, detail="Ошибка при загрузке ленты")
+
+@app.get("/post/{post_id}")
+async def get_single_post_page(request: Request, post_id: int, db=Depends(get_db)):
+    # Проверяем существование поста
+    with db.cursor() as cur:
+        cur.execute("""
+            SELECT p.*, u.username, u.avatar_url as user_avatar
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.id = %s
+        """, (post_id,))
+        post = cur.fetchone()
+        
+        if not post:
+            raise HTTPException(404, "Post not found")
+    
+    return templates.TemplateResponse("post.html", {
+        "request": request,
+        "post": post
+    })
 
 @app.get("/check-s3-connection")
 async def check_s3_connection():

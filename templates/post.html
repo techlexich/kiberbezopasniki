@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRAMES | Просмотр поста</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-light: #4895ef;
+            --secondary: #7209b7;
+            --text: #2b2d42;
+            --text-light: #8d99ae;
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --border: #e9ecef;
+            --shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+        }
+
+        .back-button {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .post-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--card);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        .post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .post-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 12px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 20px;
+        }
+
+        .post-user-info {
+            flex-grow: 1;
+        }
+
+        .post-username {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .post-time {
+            font-size: 13px;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        .post-text {
+            margin-bottom: 20px;
+            color: var(--text);
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .post-image {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            max-height: 70vh;
+            object-fit: contain;
+            background: #f1f3f5;
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .action-button {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .action-button:hover {
+            background: #f1f3f5;
+            color: var(--text);
+        }
+
+        .action-button i {
+            font-size: 16px;
+        }
+
+        .like-button.liked {
+            color: #ff4757;
+        }
+
+        .delete-post-btn {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-left: auto;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .delete-post-btn:hover {
+            color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+        }
+
+        .location-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .location-info i {
+            color: var(--primary);
+        }
+
+        @media (max-width: 600px) {
+            .post-container {
+                padding: 16px;
+            }
+            
+            .post-avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
+            
+            .post-text {
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">FRAMES</div>
+        <button class="back-button" onclick="window.history.back()">
+            <i class="fas fa-arrow-left"></i> Назад
+        </button>
+    </header>
+
+    <div class="post-container">
+        <div class="post-header">
+            <div class="post-avatar">{{ post.username[0] }}</div>
+            <div class="post-user-info">
+                <div class="post-username">{{ post.username }}</div>
+                <div class="post-time">{{ post.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+            </div>
+        </div>
+
+        {% if post.description %}
+        <div class="post-text">{{ post.description }}</div>
+        {% endif %}
+
+        <div class="location-info">
+            <i class="fas fa-map-marker-alt"></i>
+            <span>Местоположение: {{ "%.4f, %.4f"|format(post.latitude, post.altitude) }}</span>
+        </div>
+
+        <img src="{{ post.photo_url }}" class="post-image" alt="Фото">
+
+        <div class="post-actions">
+            <button class="action-button like-button">
+                <i class="far fa-heart"></i> <span>{{ post.likes_count }}</span>
+            </button>
+            <button class="action-button">
+                <i class="far fa-comment"></i> <span>{{ post.comments_count }}</span>
+            </button>
+            <button class="action-button">
+                <i class="fas fa-share"></i> <span>Поделиться</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Получаем данные о посте
+        const postId = new URLSearchParams(window.location.search).get('id') || '{{ post.id }}';
+        let currentUser = null;
+        
+        // Проверяем авторизацию
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            try {
+                const response = await fetch('/users/me', {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                
+                if (response.ok) {
+                    currentUser = await response.json();
+                }
+            } catch (e) {
+                console.error('Auth check failed:', e);
+            }
+        }
+        
+        // Обработчик лайков
+        document.querySelector('.like-button').addEventListener('click', async function() {
+            if (!token) {
+                alert('Для этого действия нужно войти в аккаунт');
+                return;
+            }
+            
+            const isLiked = this.classList.contains('liked');
+            const endpoint = isLiked ? 'unlike' : 'like';
+            
+            try {
+                const response = await fetch(`/posts/${postId}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to update like');
+                }
+                
+                const result = await response.json();
+                const likeCount = this.querySelector('span');
+                
+                if (isLiked) {
+                    this.classList.remove('liked');
+                    this.querySelector('i').className = 'far fa-heart';
+                    likeCount.textContent = parseInt(likeCount.textContent) - 1;
+                } else {
+                    this.classList.add('liked');
+                    this.querySelector('i').className = 'fas fa-heart';
+                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                }
+            } catch (error) {
+                console.error('Like error:', error);
+                alert('Ошибка при обновлении лайка');
+            }
+        });
+        
+        // Проверяем, лайкнул ли текущий пользователь этот пост
+        async function checkLikeStatus() {
+            if (!token) return;
+            
+            try {
+                const response = await fetch(`/posts/${postId}/like`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const likeButton = document.querySelector('.like-button');
+                    likeButton.classList.add('liked');
+                    likeButton.querySelector('i').className = 'fas fa-heart';
+                }
+            } catch (error) {
+                console.error('Like check error:', error);
+            }
+        }
+        
+        // Инициализация при загрузке страницы
+        window.addEventListener('DOMContentLoaded', () => {
+            checkLikeStatus();
+            
+            // Обновляем URL в адресной строке без перезагрузки
+            if (!window.location.pathname.includes('/post/')) {
+                history.replaceState(null, null, `/post/${postId}`);
+            }
+        });
+    </script>
+</body>
+</html>

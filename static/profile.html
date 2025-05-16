@@ -554,6 +554,11 @@
                 font-size: 20px;
             }
         }
+        .post-image-link {
+            display: block;
+            cursor: pointer;
+            margin-bottom: 14px;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -808,7 +813,7 @@
                     const postDate = new Date(post.created_at).toLocaleString();
                     const postElement = document.createElement('div');
                     postElement.className = 'post';
-                    postElement.dataset.postId = post.id; // Добавляем ID поста в data-атрибут
+                    postElement.dataset.postId = post.id;
                     
                     // Проверяем, принадлежит ли пост текущему пользователю
                     const isCurrentUserPost = currentUser && currentUser.username === post.username;
@@ -821,12 +826,14 @@
                                 <div class="post-time">${postDate}</div>
                             </div>
                             ${isCurrentUserPost ? `
-                            <button class="delete-post-btn" style="background: none; border: none; color: var(--text-light); cursor: pointer;">
+                            <button class="delete-post-btn">
                                 <i class="fas fa-trash"></i>
                             </button>` : ''}
                         </div>
                         ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                        <img src="${post.photo_url}" class="post-image" alt="Фото">
+                        <a href="/post/${post.id}" class="post-image-link" target="_blank">
+                            <img src="${post.photo_url}" class="post-image" alt="Фото">
+                        </a>
                         <div class="post-actions">
                             <button class="action-button like-button">
                                 <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
@@ -843,6 +850,48 @@
                         const deleteBtn = postElement.querySelector('.delete-post-btn');
                         deleteBtn.addEventListener('click', () => deletePost(post.id));
                     }
+                    
+                    // Добавляем обработчик лайков
+                    const likeBtn = postElement.querySelector('.like-button');
+                    likeBtn.addEventListener('click', async function() {
+                        if (!currentUser) {
+                            alert('Для этого действия нужно войти в аккаунт');
+                            return;
+                        }
+                        
+                        const isLiked = this.classList.contains('liked');
+                        const endpoint = isLiked ? 'unlike' : 'like';
+                        
+                        try {
+                            const token = localStorage.getItem('access_token');
+                            const response = await fetch(`/posts/${post.id}/${endpoint}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                }
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error('Failed to update like');
+                            }
+                            
+                            const result = await response.json();
+                            const likeCount = this.querySelector('span');
+                            
+                            if (isLiked) {
+                                this.classList.remove('liked');
+                                this.querySelector('i').className = 'far fa-heart';
+                                likeCount.textContent = parseInt(likeCount.textContent) - 1;
+                            } else {
+                                this.classList.add('liked');
+                                this.querySelector('i').className = 'fas fa-heart';
+                                likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                            }
+                        } catch (error) {
+                            console.error('Like error:', error);
+                            alert('Ошибка при обновлении лайка');
+                        }
+                    });
                 });
                 
             } catch (error) {
