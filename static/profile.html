@@ -774,39 +774,45 @@
 
         // Загружаем данные профиля
         async function loadProfile() {
-            if (!username) return;
+            if (!username) {
+                console.error("Username is not defined");
+                return;
+            }
             
             try {
+                console.log("Fetching profile for:", username);
                 const profileResponse = await fetch(`/users/${username}`);
                 
-                // Проверяем, что ответ JSON
-                const contentType = profileResponse.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('Invalid response format');
+                // Проверяем статус ответа
+                if (!profileResponse.ok) {
+                    const errorText = await profileResponse.text();
+                    console.error("Profile load failed:", profileResponse.status, errorText);
+                    throw new Error(`HTTP error! status: ${profileResponse.status}`);
                 }
                 
-                if (!profileResponse.ok) {
-                    if (profileResponse.status === 404) {
-                        window.location.href = '/404';
-                        return;
-                    }
-                    const errorData = await profileResponse.json();
-                    throw new Error(errorData.message || 'Failed to load profile');
+                // Проверяем Content-Type
+                const contentType = profileResponse.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const responseData = await profileResponse.text();
+                    console.error("Invalid content type:", contentType, "Response:", responseData);
+                    throw new Error(`Invalid content type: ${contentType}`);
                 }
                 
                 const user = await profileResponse.json();
+                console.log("User data received:", user);
                 
                 // Заполняем данные профиля
                 document.getElementById('profileName').textContent = user.username;
-                document.getElementById('profileBio').textContent = user.profile.bio || "Пока ничего не рассказал о себе";
+                document.getElementById('profileBio').textContent = user.profile?.bio || "Пока ничего не рассказал о себе";
                 
                 // Настраиваем аватар
                 const avatar = document.getElementById('profileAvatar');
-                avatar.textContent = user.username[0].toUpperCase();
-                if (user.profile.avatar && !user.profile.avatar.startsWith('/')) {
+                if (user.profile?.avatar && !user.profile.avatar.startsWith('/')) {
                     avatar.style.backgroundImage = `url(${user.profile.avatar})`;
                     avatar.style.backgroundSize = 'cover';
                     avatar.textContent = '';
+                } else {
+                    avatar.textContent = user.username[0].toUpperCase();
                 }
                 
                 // Проверяем авторизацию
@@ -815,11 +821,13 @@
                 
                 if (token) {
                     try {
+                        console.log("Checking auth with token");
                         const meResponse = await fetch('/users/me', {
                             headers: {'Authorization': `Bearer ${token}`}
                         });
                         
                         if (!meResponse.ok) {
+                            console.error("Auth check failed:", meResponse.status);
                             if (meResponse.status === 401) {
                                 localStorage.removeItem('access_token');
                             }
@@ -828,6 +836,8 @@
                         }
                         
                         currentUser = await meResponse.json();
+                        console.log("Current user:", currentUser);
+                        
                         if (currentUser.username === username) {
                             editBtn.style.display = 'block';
                             editBtn.onclick = () => openEditModal(user);
@@ -837,7 +847,7 @@
                             newPostBtn.style.display = 'none';
                         }
                     } catch (e) {
-                        console.error('Auth check failed:', e);
+                        console.error('Auth check error:', e);
                         localStorage.removeItem('access_token');
                         editBtn.style.display = 'none';
                         newPostBtn.style.display = 'none';
@@ -847,23 +857,39 @@
                     newPostBtn.style.display = 'none';
                 }
                 
+                // После загрузки профиля грузим посты
+                await loadUserPosts();
+                
             } catch (error) {
                 console.error('Profile load error:', error);
-                alert('Ошибка загрузки профиля. Пожалуйста, попробуйте позже.');
+                document.getElementById('profile-container').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: var(--text-light);">
+                        Ошибка загрузки профиля. Пожалуйста, попробуйте позже.
+                    </div>
+                `;
             }
         }
 
         // Загружаем посты пользователя
         async function loadUserPosts() {
-            if (!username) return;
+            if (!username) {
+                console.error("Username is not defined in loadUserPosts");
+                return;
+            }
             
             try {
+                console.log("Loading posts for:", username);
                 const response = await fetch(`/users/${username}/posts`);
+                
                 if (!response.ok) {
-                    throw new Error('Failed to load posts');
+                    const errorText = await response.text();
+                    console.error("Posts load failed:", response.status, errorText);
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                console.log("Posts data received:", data);
+                
                 const container = document.getElementById('posts-container');
                 
                 if (!data.posts || data.posts.length === 0) {
@@ -876,106 +902,111 @@
                 container.innerHTML = '';
                 
                 data.posts.forEach(post => {
-                    const postDate = new Date(post.created_at).toLocaleString();
-                    const postElement = document.createElement('div');
-                    postElement.className = 'post';
-                    postElement.dataset.postId = post.id;
-                    
-                    // Проверяем, принадлежит ли пост текущему пользователю
-                    const isCurrentUserPost = currentUser && currentUser.username === post.username;
-                    
-                    postElement.innerHTML = `
-                        <div class="post-header">
-                            <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
-                            <div class="post-user-info">
-                                <div class="post-username">${post.username}</div>
-                                <div class="post-time">${postDate}</div>
-                            </div>
-                            ${isCurrentUserPost ? `
-                            <button class="delete-post-btn">
-                                <i class="fas fa-trash"></i>
-                            </button>` : ''}
-                        </div>
-                        ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                        <img src="${post.photo_url}" class="post-image" alt="Фото">
-                        <div class="post-actions">
-                            <button class="action-button like-button">
-                                <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
-                            </button>
-                            <button class="action-button">
-                                <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
-                            </button>
-                        </div>
-                    `;
+                    const postElement = createPostElement(post);
                     container.appendChild(postElement);
-                    
-                    // Обработчик клика на весь пост
-                    postElement.addEventListener('click', (e) => {
-                        // Не открываем пост, если клик был по кнопке
-                        if (e.target.closest('.delete-post-btn, .action-button')) return;
-                        
-                        openPostModal(post);
-                        updateUrl(post.id);
-                    });
-                    
-                    // Добавляем обработчик удаления для своих постов
-                    if (isCurrentUserPost) {
-                        const deleteBtn = postElement.querySelector('.delete-post-btn');
-                        deleteBtn.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            deletePost(post.id);
-                        });
-                    }
-                    
-                    // Добавляем обработчик лайков
-                    const likeBtn = postElement.querySelector('.like-button');
-                    likeBtn.addEventListener('click', async function(e) {
-                        e.stopPropagation();
-                        
-                        if (!currentUser) {
-                            alert('Для этого действия нужно войти в аккаунт');
-                            return;
-                        }
-                        
-                        const isLiked = this.classList.contains('liked');
-                        const endpoint = isLiked ? 'unlike' : 'like';
-                        
-                        try {
-                            const token = localStorage.getItem('access_token');
-                            const response = await fetch(`/posts/${post.id}/${endpoint}`, {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`
-                                }
-                            });
-                            
-                            if (!response.ok) {
-                                throw new Error('Failed to update like');
-                            }
-                            
-                            const result = await response.json();
-                            const likeCount = this.querySelector('span');
-                            
-                            if (isLiked) {
-                                this.classList.remove('liked');
-                                this.querySelector('i').className = 'far fa-heart';
-                                likeCount.textContent = parseInt(likeCount.textContent) - 1;
-                            } else {
-                                this.classList.add('liked');
-                                this.querySelector('i').className = 'fas fa-heart';
-                                likeCount.textContent = parseInt(likeCount.textContent) + 1;
-                            }
-                        } catch (error) {
-                            console.error('Like error:', error);
-                            alert('Ошибка при обновлении лайка');
-                        }
-                    });
                 });
                 
             } catch (error) {
                 console.error('Error loading posts:', error);
-                document.getElementById('posts-container').innerHTML = 
-                    '<p style="text-align: center; color: var(--text-light);">Ошибка загрузки публикаций</p>';
+                document.getElementById('posts-container').innerHTML = `
+                    <p style="text-align: center; color: var(--text-light);">
+                        Ошибка загрузки публикаций. Пожалуйста, попробуйте позже.
+                    </p>
+                `;
+            }
+        }
+
+        function createPostElement(post) {
+            const postDate = new Date(post.created_at).toLocaleString();
+            const postElement = document.createElement('div');
+            postElement.className = 'post';
+            postElement.dataset.postId = post.id;
+            
+            const isCurrentUserPost = currentUser && currentUser.username === post.username;
+            
+            postElement.innerHTML = `
+                <div class="post-header">
+                    <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
+                    <div class="post-user-info">
+                        <div class="post-username">${post.username}</div>
+                        <div class="post-time">${postDate}</div>
+                    </div>
+                    ${isCurrentUserPost ? `
+                    <button class="delete-post-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>` : ''}
+                </div>
+                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                <img src="${post.photo_url}" class="post-image" alt="Фото">
+                <div class="post-actions">
+                    <button class="action-button like-button">
+                        <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                    </button>
+                    <button class="action-button">
+                        <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
+                    </button>
+                </div>
+            `;
+            
+            // Обработчик клика на весь пост
+            postElement.addEventListener('click', (e) => {
+                if (!e.target.closest('.delete-post-btn, .action-button')) {
+                    openPostModal(post);
+                }
+            });
+            
+            if (isCurrentUserPost) {
+                const deleteBtn = postElement.querySelector('.delete-post-btn');
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deletePost(post.id);
+                });
+            }
+            
+            const likeBtn = postElement.querySelector('.like-button');
+            likeBtn.addEventListener('click', async function(e) {
+                e.stopPropagation();
+                await handleLike(post.id, this);
+            });
+            
+            return postElement;
+        }
+
+        async function handleLike(postId, likeButton) {
+            if (!currentUser) {
+                alert('Для этого действия нужно войти в аккаунт');
+                return;
+            }
+            
+            try {
+                const isLiked = likeButton.classList.contains('liked');
+                const endpoint = isLiked ? 'unlike' : 'like';
+                const token = localStorage.getItem('access_token');
+                
+                const response = await fetch(`/posts/${postId}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Failed to update like');
+                
+                const result = await response.json();
+                const likeCount = likeButton.querySelector('span');
+                
+                if (isLiked) {
+                    likeButton.classList.remove('liked');
+                    likeButton.querySelector('i').className = 'far fa-heart';
+                    likeCount.textContent = parseInt(likeCount.textContent) - 1;
+                } else {
+                    likeButton.classList.add('liked');
+                    likeButton.querySelector('i').className = 'fas fa-heart';
+                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                }
+            } catch (error) {
+                console.error('Like error:', error);
+                alert('Ошибка при обновлении лайка');
             }
         }
 
