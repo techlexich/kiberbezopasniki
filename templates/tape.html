@@ -840,13 +840,18 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`Ошибка загрузки данных: ${response.status}`);
+                    const errorData = await response.json().catch(() => null);
+                    throw new Error(errorData?.detail || `Ошибка загрузки данных: ${response.status}`);
                 }
-                return await response.json();
+                
+                const posts = await response.json();
+                
+                // Добавляем отладочную информацию
+                console.log('Loaded posts:', posts);
+                return posts;
             } catch (error) {
                 console.error("Ошибка загрузки постов:", error);
-                // Возвращаем пустой массив в случае ошибки
-                return [];
+                throw error; // Пробрасываем ошибку дальше для обработки в renderPosts
             }
         }
 
@@ -911,75 +916,35 @@
                     <p style="text-align: center; color: var(--text-light);">
                         Произошла ошибка при загрузке постов. Попробуйте обновить страницу.
                     </p>
-                `;
-            }
-        }
-
-        async function renderPosts() {
-            const container = document.getElementById('posts-container');
-            
-            // Добавляем индикатор загрузки
-            container.innerHTML = '<p style="text-align: center;">Загрузка постов...</p>';
-            
-            try {
-                const posts = await loadPosts();
-                
-                // Очищаем контейнер перед добавлением новых постов
-                container.innerHTML = '';
-                
-                // Добавляем хедер обратно (он был удален при очистке)
-                const header = document.createElement('header');
-                header.className = 'header';
-                header.innerHTML = `
-                    <div class="logo">FRAMES</div>
-                    <div class="nav-buttons">
-                        <button id="profile-button" class="nav-button">
-                            <i class="fas fa-user"></i> Профиль
+                    ${currentUser ? `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button onclick="location.reload()" class="nav-button">
+                            <i class="fas fa-sync-alt"></i> Обновить
                         </button>
-                        <form action="/">
-                            <button class="nav-button">
-                                <i class="fas fa-map-marker-alt"></i> Карта
-                            </button>
-                        </form>
                     </div>
+                    ` : ''}
                 `;
-                container.appendChild(header);
-                
-                // Обновляем обработчик клика для профиля
-                document.getElementById('profile-button').addEventListener('click', () => {
-                    showModal(profileModal);
-                    resetAuthForms();
-                });
-                
-                if (posts.length === 0) {
-                    container.innerHTML += '<p style="text-align: center; color: var(--text-light);">Пока нет постов</p>';
-                    return;
-                }
-                
-                // Добавляем посты
-                posts.forEach(post => {
-                    container.appendChild(renderPost(post));
-                });
-            } catch (error) {
-                console.error("Ошибка при загрузке постов:", error);
-                container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Ошибка загрузки постов</p>';
             }
         }
 
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', async () => {
-            await updateAuthUI();
-            await renderPosts();
-            
-            // Кнопка нового поста
-            document.querySelector('.new-post-button').addEventListener('click', function() {
-                if (!currentUser) {
-                    alert('Для создания поста нужно войти в аккаунт');
-                    showModal(profileModal);
-                    return;
-                }
-                window.location.href = '/new-post';
-            });
+            try {
+                await updateAuthUI();
+                await renderPosts();
+                
+                // Кнопка нового поста
+                document.querySelector('.new-post-button').addEventListener('click', function() {
+                    if (!currentUser) {
+                        alert('Для создания поста нужно войти в аккаунт');
+                        showModal(profileModal);
+                        return;
+                    }
+                    window.location.href = '/new-post';
+                });
+            } catch (error) {
+                console.error("Ошибка инициализации:", error);
+            }
         });
 
         closeProfile.addEventListener('click', () => hideModal(profileModal));
