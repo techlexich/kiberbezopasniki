@@ -524,7 +524,65 @@
             color: #ff4757;
             background: rgba(255, 71, 87, 0.1);
         }
+        /* Стили для модального окна просмотра поста */
+        .post-view-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
 
+        .post-view-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .post-view-content {
+            position: relative;
+            background: var(--card);
+            border-radius: 12px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 40px 20px 20px;
+        }
+
+        .close-post-view {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--text-light);
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .close-post-view:hover {
+            color: var(--text);
+        }
+
+        .post-view-container .post {
+            border: none;
+            box-shadow: none;
+            padding: 0;
+        }
+
+        .post-view-container .post-image {
+            max-height: 60vh;
+        }
         @media (max-width: 600px) {
             .profile-header {
                 flex-direction: column;
@@ -680,7 +738,15 @@
             </form>
         </div>
     </div>
-
+    <!-- Модальное окно просмотра поста -->
+    <div class="post-view-modal" id="postViewModal">
+        <div class="post-view-content">
+            <button class="close-post-view" id="closePostView">&times;</button>
+            <div class="post-view-container" id="postViewContainer">
+                <!-- Контент поста будет загружен сюда -->
+            </div>
+        </div>
+    </div>
     <script>
         // Получаем username из URL
         const pathParts = window.location.pathname.split('/profile/');
@@ -831,9 +897,7 @@
                             </button>` : ''}
                         </div>
                         ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                        <a href="/post/${post.id}" class="post-image-link" target="_blank">
-                            <img src="${post.photo_url}" class="post-image" alt="Фото">
-                        </a>
+                        <img src="${post.photo_url}" class="post-image" alt="Фото">
                         <div class="post-actions">
                             <button class="action-button like-button">
                                 <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
@@ -845,15 +909,29 @@
                     `;
                     container.appendChild(postElement);
                     
+                    // Обработчик клика на весь пост
+                    postElement.addEventListener('click', (e) => {
+                        // Не открываем пост, если клик был по кнопке
+                        if (e.target.closest('.delete-post-btn, .action-button')) return;
+                        
+                        openPostModal(post);
+                        updateUrl(post.id);
+                    });
+                    
                     // Добавляем обработчик удаления для своих постов
                     if (isCurrentUserPost) {
                         const deleteBtn = postElement.querySelector('.delete-post-btn');
-                        deleteBtn.addEventListener('click', () => deletePost(post.id));
+                        deleteBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            deletePost(post.id);
+                        });
                     }
                     
                     // Добавляем обработчик лайков
                     const likeBtn = postElement.querySelector('.like-button');
-                    likeBtn.addEventListener('click', async function() {
+                    likeBtn.addEventListener('click', async function(e) {
+                        e.stopPropagation();
+                        
                         if (!currentUser) {
                             alert('Для этого действия нужно войти в аккаунт');
                             return;
@@ -1230,6 +1308,153 @@
                 if (error.message.includes('auth') || error.message.includes('401')) {
                     localStorage.removeItem('access_token');
                 }
+            }
+        }
+        // Функции для работы с модальным окном поста
+        function openPostModal(post) {
+            const modal = document.getElementById('postViewModal');
+            const container = document.getElementById('postViewContainer');
+            
+            const postDate = new Date(post.created_at).toLocaleString();
+            const isCurrentUserPost = currentUser && currentUser.username === post.username;
+            
+            container.innerHTML = `
+                <div class="post">
+                    <div class="post-header">
+                        <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
+                        <div class="post-user-info">
+                            <div class="post-username">${post.username}</div>
+                            <div class="post-time">${postDate}</div>
+                        </div>
+                        ${isCurrentUserPost ? `
+                        <button class="delete-post-btn">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''}
+                    </div>
+                    ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                    <img src="${post.photo_url}" class="post-image" alt="Фото">
+                    <div class="post-actions">
+                        <button class="action-button like-button">
+                            <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                        </button>
+                        <button class="action-button">
+                            <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Добавляем обработчик удаления
+            if (isCurrentUserPost) {
+                container.querySelector('.delete-post-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deletePost(post.id);
+                    closePostModal();
+                });
+            }
+            
+            // Добавляем обработчик лайков
+            const likeBtn = container.querySelector('.like-button');
+            likeBtn.addEventListener('click', async function(e) {
+                e.stopPropagation();
+                
+                if (!currentUser) {
+                    alert('Для этого действия нужно войти в аккаунт');
+                    return;
+                }
+                
+                const isLiked = this.classList.contains('liked');
+                const endpoint = isLiked ? 'unlike' : 'like';
+                
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await fetch(`/posts/${post.id}/${endpoint}`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to update like');
+                    }
+                    
+                    const result = await response.json();
+                    const likeCount = this.querySelector('span');
+                    
+                    if (isLiked) {
+                        this.classList.remove('liked');
+                        this.querySelector('i').className = 'far fa-heart';
+                        likeCount.textContent = parseInt(likeCount.textContent) - 1;
+                    } else {
+                        this.classList.add('liked');
+                        this.querySelector('i').className = 'fas fa-heart';
+                        likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                    }
+                } catch (error) {
+                    console.error('Like error:', error);
+                    alert('Ошибка при обновлении лайка');
+                }
+            });
+            
+            modal.classList.add('active');
+        }
+
+        function closePostModal() {
+            const modal = document.getElementById('postViewModal');
+            modal.classList.remove('active');
+            updateUrl(); // Убираем ID поста из URL
+        }
+
+        // Обновление URL
+        function updateUrl(postId = null) {
+            if (postId) {
+                history.pushState({ postId }, '', `?post=${postId}`);
+            } else {
+                history.pushState(null, '', window.location.pathname);
+            }
+        }
+
+        // Обработчик закрытия по клику вне области
+        document.getElementById('postViewModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                closePostModal();
+            }
+        });
+
+        // Обработчик закрытия по крестику
+        document.getElementById('closePostView').addEventListener('click', closePostModal);
+
+        // Обработчик навигации по истории
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.postId) {
+                // Загружаем пост по ID из истории
+                loadAndShowPost(e.state.postId);
+            } else {
+                closePostModal();
+            }
+        });
+
+        // Проверяем URL при загрузке страницы
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const postId = urlParams.get('post');
+            
+            if (postId) {
+                loadAndShowPost(postId);
+            }
+        });
+
+        async function loadAndShowPost(postId) {
+            try {
+                const response = await fetch(`/posts/${postId}`);
+                if (!response.ok) throw new Error('Post not found');
+                
+                const post = await response.json();
+                openPostModal(post);
+            } catch (error) {
+                console.error('Error loading post:', error);
+                updateUrl(); // Убираем невалидный ID из URL
             }
         }
     </script>
