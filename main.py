@@ -631,21 +631,35 @@ async def get_tape_posts(
 ):
     try:
         with db.cursor() as cur:
-            # Получаем посты с информацией о лайках пользователя
-            cur.execute("""
-                SELECT 
-                    p.*,
-                    u.username,
-                    u.avatar_url as user_avatar,
-                    EXISTS(
-                        SELECT 1 FROM likes l 
-                        WHERE l.user_id = %s AND l.post_id = p.id
-                    ) as is_liked
-                FROM posts p
-                JOIN users u ON p.user_id = u.id
-                ORDER BY p.created_at DESC
-                LIMIT %s OFFSET %s
-            """, (current_user["id"] if current_user else None, limit, skip))
+            # Для авторизованных пользователей проверяем лайки
+            if current_user:
+                cur.execute("""
+                    SELECT 
+                        p.*,
+                        u.username,
+                        u.avatar_url as user_avatar,
+                        EXISTS(
+                            SELECT 1 FROM likes l 
+                            WHERE l.user_id = %s AND l.post_id = p.id
+                        ) as is_liked
+                    FROM posts p
+                    JOIN users u ON p.user_id = u.id
+                    ORDER BY p.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (current_user["id"], limit, skip))
+            else:
+                # Для неавторизованных просто получаем посты без проверки лайков
+                cur.execute("""
+                    SELECT 
+                        p.*,
+                        u.username,
+                        u.avatar_url as user_avatar,
+                        FALSE as is_liked
+                    FROM posts p
+                    JOIN users u ON p.user_id = u.id
+                    ORDER BY p.created_at DESC
+                    LIMIT %s OFFSET %s
+                """, (limit, skip))
             
             posts = cur.fetchall()
             
@@ -653,13 +667,12 @@ async def get_tape_posts(
             for post in posts:
                 post["latitude"] = float(post["latitude"])
                 post["altitude"] = float(post["altitude"])
-                post["is_liked"] = post["is_liked"] if current_user else False
+                post["is_liked"] = post.get("is_liked", False)
             
             return posts
     except Exception as e:
         raise HTTPException(500, detail=f"Ошибка базы данных: {str(e)}")
-    
-    
+
 @app.get("/check-s3-connection")
 async def check_s3_connection():
     try:

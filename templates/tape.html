@@ -827,28 +827,26 @@
 
         // Функции для работы с постами
         async function loadPosts() {
-        try {
-            const token = localStorage.getItem('access_token');
-            const headers = {};
-            
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+            try {
+                const token = localStorage.getItem('access_token');
+                const headers = {};
+                
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
+                    headers: headers
+                });
+                
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                const posts = await response.json();
+                return posts;
+            } catch (error) {
+                console.error("Ошибка:", error);
+                return [];
             }
-            
-            // Изменяем URL с '/tape/posts' на '/posts'
-            const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
-                headers: headers
-            });
-            
-            if (!response.ok) throw new Error("Ошибка загрузки данных");
-            const posts = await response.json();
-            return posts;
-            } 
-            catch (error) {
-            console.error("Ошибка:", error);
-            return [];
-            }
-}
+        }
 
         async function toggleLike(postId, isLiked) {
             try {
@@ -953,44 +951,49 @@
             // Добавляем индикатор загрузки
             container.innerHTML = '<p style="text-align: center;">Загрузка постов...</p>';
             
-            const posts = await loadPosts();
-            
-            // Очищаем контейнер перед добавлением новых постов
-            container.innerHTML = '';
-            
-            if (posts.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет постов</p>';
-                return;
-            }
-            
-            // Добавляем хедер обратно (он был удален при очистке)
-            const header = document.createElement('header');
-            header.className = 'header';
-            header.innerHTML = `
-                <div class="logo">FRAMES</div>
-                <div class="nav-buttons">
-                    <button id="profile-button" class="nav-button">
-                        <i class="fas fa-user"></i> Профиль
-                    </button>
-                    <form action="/">
-                        <button class="nav-button">
-                            <i class="fas fa-map-marker-alt"></i> Карта
+            try {
+                const posts = await loadPosts();
+                
+                // Очищаем контейнер перед добавлением новых постов
+                container.innerHTML = '';
+                
+                // Добавляем хедер обратно (он был удален при очистке)
+                const header = document.createElement('header');
+                header.className = 'header';
+                header.innerHTML = `
+                    <div class="logo">FRAMES</div>
+                    <div class="nav-buttons">
+                        <button id="profile-button" class="nav-button">
+                            <i class="fas fa-user"></i> Профиль
                         </button>
-                    </form>
-                </div>
-            `;
-            container.appendChild(header);
-            
-            // Обновляем обработчик клика для профиля
-            document.getElementById('profile-button').addEventListener('click', () => {
-                showModal(profileModal);
-                resetAuthForms();
-            });
-            
-            // Добавляем посты
-            posts.forEach(post => {
-                container.appendChild(renderPost(post));
-            });
+                        <form action="/">
+                            <button class="nav-button">
+                                <i class="fas fa-map-marker-alt"></i> Карта
+                            </button>
+                        </form>
+                    </div>
+                `;
+                container.appendChild(header);
+                
+                // Обновляем обработчик клика для профиля
+                document.getElementById('profile-button').addEventListener('click', () => {
+                    showModal(profileModal);
+                    resetAuthForms();
+                });
+                
+                if (posts.length === 0) {
+                    container.innerHTML += '<p style="text-align: center; color: var(--text-light);">Пока нет постов</p>';
+                    return;
+                }
+                
+                // Добавляем посты
+                posts.forEach(post => {
+                    container.appendChild(renderPost(post));
+                });
+            } catch (error) {
+                console.error("Ошибка при загрузке постов:", error);
+                container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Ошибка загрузки постов</p>';
+            }
         }
 
         // Инициализация при загрузке страницы
