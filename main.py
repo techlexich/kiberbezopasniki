@@ -623,6 +623,7 @@ async def unlike_post(
 
 # Эндпоинт для получения ленты постов
 @app.get("/tape/posts")
+@app.get("/tape/posts")
 async def get_tape_posts(db=Depends(get_db)):
     try:
         with db.cursor() as cur:
@@ -639,7 +640,7 @@ async def get_tape_posts(db=Depends(get_db)):
                     p.altitude,
                     u.username,
                     u.avatar_url as user_avatar,
-                    FALSE as is_liked  # Для неавторизованных всегда False
+                    FALSE as is_liked
                 FROM posts p
                 JOIN users u ON p.user_id = u.id
                 ORDER BY p.created_at DESC
