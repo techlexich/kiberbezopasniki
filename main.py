@@ -627,13 +627,26 @@ async def get_tape_posts(
     skip: int = 0,
     limit: int = 10,
     db=Depends(get_db),
-    current_user: Optional[dict] = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_current_user, use_cache=False)
 ):
     try:
         with db.cursor() as cur:
-            # Для авторизованных пользователей проверяем лайки
+            # Базовый запрос для получения постов
+            query = """
+                SELECT 
+                    p.*,
+                    u.username,
+                    u.avatar_url as user_avatar,
+                    %s as is_liked
+                FROM posts p
+                JOIN users u ON p.user_id = u.id
+                ORDER BY p.created_at DESC
+                LIMIT %s OFFSET %s
+            """
+            
+            # Если пользователь авторизован, проверяем лайки
             if current_user:
-                cur.execute("""
+                query = """
                     SELECT 
                         p.*,
                         u.username,
@@ -646,21 +659,13 @@ async def get_tape_posts(
                     JOIN users u ON p.user_id = u.id
                     ORDER BY p.created_at DESC
                     LIMIT %s OFFSET %s
-                """, (current_user["id"], limit, skip))
+                """
+                params = (current_user["id"], limit, skip)
             else:
-                # Для неавторизованных просто получаем посты без проверки лайков
-                cur.execute("""
-                    SELECT 
-                        p.*,
-                        u.username,
-                        u.avatar_url as user_avatar,
-                        FALSE as is_liked
-                    FROM posts p
-                    JOIN users u ON p.user_id = u.id
-                    ORDER BY p.created_at DESC
-                    LIMIT %s OFFSET %s
-                """, (limit, skip))
+                # Для неавторизованных просто получаем посты
+                params = (False, limit, skip)
             
+            cur.execute(query, params)
             posts = cur.fetchall()
             
             # Преобразуем данные

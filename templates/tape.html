@@ -835,114 +835,84 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
                 
-                const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
+                const response = await fetch(`${API_URL}/tape/posts?limit=20`, {
                     headers: headers
                 });
                 
-                if (!response.ok) throw new Error("Ошибка загрузки данных");
-                const posts = await response.json();
-                return posts;
+                if (!response.ok) {
+                    throw new Error(`Ошибка загрузки данных: ${response.status}`);
+                }
+                return await response.json();
             } catch (error) {
-                console.error("Ошибка:", error);
+                console.error("Ошибка загрузки постов:", error);
+                // Возвращаем пустой массив в случае ошибки
                 return [];
             }
         }
 
-        async function toggleLike(postId, isLiked) {
+        async function renderPosts() {
+            const container = document.getElementById('posts-container');
+            
+            // Добавляем индикатор загрузки
+            container.innerHTML = '<p style="text-align: center;">Загрузка постов...</p>';
+            
             try {
-                const token = localStorage.getItem('access_token');
-                if (!token) {
-                    alert('Для этого действия нужно войти в аккаунт');
-                    return false;
-                }
+                const posts = await loadPosts();
                 
-                const response = await fetch(`${API_URL}/posts/${postId}/like`, {
-                    method: isLiked ? 'DELETE' : 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                // Очищаем контейнер перед добавлением новых постов
+                container.innerHTML = '';
                 
-                if (!response.ok) {
-                    throw new Error('Ошибка при обновлении лайка');
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('Ошибка:', error);
-                return false;
-            }
-        }
-
-        function renderPost(post) {
-            const postElement = document.createElement('div');
-            postElement.className = 'post';
-            postElement.dataset.postId = post.id;
-            
-            // Форматируем дату
-            const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
-            
-            postElement.innerHTML = `
-                <div class="post-header">
-                    <div class="avatar">${post.user?.username?.charAt(0)?.toUpperCase() || 'U'}</div>
-                    <div class="user-info">
-                        <div class="username">${post.user?.username || 'Неизвестный пользователь'}</div>
-                        <div class="post-time">${postDate}</div>
+                // Добавляем хедер обратно
+                const header = document.createElement('header');
+                header.className = 'header';
+                header.innerHTML = `
+                    <div class="logo">FRAMES</div>
+                    <div class="nav-buttons">
+                        <button id="profile-button" class="nav-button">
+                            <i class="fas fa-user"></i> Профиль
+                        </button>
+                        <form action="/">
+                            <button class="nav-button">
+                                <i class="fas fa-map-marker-alt"></i> Карта
+                            </button>
+                        </form>
                     </div>
-                </div>
-                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
-                <div class="post-actions">
-                    <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
-                        <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i> <span>${post.likes_count || 0}</span>
-                    </button>
-                    <button class="action-button">
-                        <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
-                    </button>
-                    <button class="action-button">
-                        <i class="fas fa-share-alt"></i>
-                    </button>
-                    <button class="action-button">
-                        <i class="far fa-bookmark"></i>
-                    </button>
-                </div>
-            `;
-            
-            // Добавляем обработчики событий
-            const likeButton = postElement.querySelector('.like-button');
-            const postImage = postElement.querySelector('.post-image');
-            
-            if (likeButton) {
-                likeButton.addEventListener('click', async () => {
-                    const isLiked = likeButton.classList.contains('liked');
-                    const success = await toggleLike(post.id, isLiked);
-                    
-                    if (success) {
-                        const icon = likeButton.querySelector('i');
-                        const countSpan = likeButton.querySelector('span');
-                        let count = parseInt(countSpan.textContent) || 0;
-                        
-                        if (isLiked) {
-                            icon.classList.replace('fas', 'far');
-                            countSpan.textContent = count - 1;
-                            likeButton.classList.remove('liked');
-                        } else {
-                            icon.classList.replace('far', 'fas');
-                            countSpan.textContent = count + 1;
-                            likeButton.classList.add('liked');
-                        }
-                    }
+                `;
+                container.appendChild(header);
+                
+                // Обновляем обработчик клика для профиля
+                document.getElementById('profile-button').addEventListener('click', () => {
+                    showModal(profileModal);
+                    resetAuthForms();
                 });
-            }
-            
-            if (postImage) {
-                postImage.addEventListener('click', () => {
-                    showImageModal(post.photo_url);
+                
+                if (!posts || posts.length === 0) {
+                    container.innerHTML += `
+                        <div style="text-align: center; margin-top: 40px;">
+                            <p style="color: var(--text-light); margin-bottom: 20px;">Пока нет постов</p>
+                            ${!currentUser ? `
+                                <button class="auth-option primary" onclick="showModal(profileModal); resetAuthForms();" 
+                                    style="width: auto; display: inline-block; padding: 10px 20px;">
+                                    <i class="fas fa-sign-in-alt"></i> Войти, чтобы добавить пост
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Добавляем посты
+                posts.forEach(post => {
+                    container.appendChild(renderPost(post));
                 });
+            } catch (error) {
+                console.error("Ошибка при рендеринге постов:", error);
+                container.innerHTML = `
+                    <p style="text-align: center; color: var(--text-light);">
+                        Произошла ошибка при загрузке постов. Попробуйте обновить страницу.
+                    </p>
+                `;
             }
-            
-            return postElement;
         }
 
         async function renderPosts() {
