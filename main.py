@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 import hashlib
 import base64
 from botocore.exceptions import ClientError
+from slugify import slugify
 
 # Настройки
 load_dotenv()
@@ -516,9 +517,10 @@ async def delete_post(
         
         return {"status": "ok", "post_id": post_id}
 
-@app.get("/posts/{post_id}")
+@app.get("/posts/{post_id}/{optional_slug}")
 async def get_post(
     post_id: int,
+    optional_slug: Optional[str] = None,
     db=Depends(get_db)
 ):
     with db.cursor() as cur:
@@ -529,12 +531,15 @@ async def get_post(
             WHERE p.id = %s
         """, (post_id,))
         post = cur.fetchone()
-        
         if not post:
             raise HTTPException(404, "Post not found")
-        
+
+        # Редирект на URL с slug, если его нет
+        if not optional_slug:
+            slug = slugify(post["description"]) if post["description"] else f"post-{post_id}"
+            return RedirectResponse(f"/posts/{post_id}/{slug}")
+
         return post
-# Добавьте эти новые эндпоинты в ваш FastAPI app
 
 # Эндпоинт для лайка поста
 @app.post("/posts/{post_id}/like")
