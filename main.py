@@ -623,14 +623,11 @@ async def unlike_post(
 
 # Эндпоинт для получения ленты постов
 @app.get("/tape/posts")
-async def get_tape_posts(
-    db=Depends(get_db),
-    current_user: Optional[dict] = Depends(get_current_user, use_cache=False)
-):
+async def get_tape_posts(db=Depends(get_db)):
     try:
         with db.cursor() as cur:
-            # Базовый запрос для всех пользователей
-            base_query = """
+            # Базовый запрос для всех пользователей (авторизованных и нет)
+            cur.execute("""
                 SELECT 
                     p.id,
                     p.photo_url,
@@ -642,32 +639,12 @@ async def get_tape_posts(
                     p.altitude,
                     u.username,
                     u.avatar_url as user_avatar,
-                    %s as is_liked
+                    FALSE as is_liked  # Для неавторизованных всегда False
                 FROM posts p
                 JOIN users u ON p.user_id = u.id
                 ORDER BY p.created_at DESC
                 LIMIT 20
-            """
-            
-            # Для авторизованных пользователей
-            if current_user:
-                cur.execute("""
-                    SELECT 
-                        p.*,
-                        u.username,
-                        u.avatar_url as user_avatar,
-                        EXISTS(
-                            SELECT 1 FROM likes l 
-                            WHERE l.user_id = %s AND l.post_id = p.id
-                        ) as is_liked
-                    FROM posts p
-                    JOIN users u ON p.user_id = u.id
-                    ORDER BY p.created_at DESC
-                    LIMIT 20
-                """, (current_user["id"],))
-            # Для неавторизованных
-            else:
-                cur.execute(base_query, (False,))
+            """)
             
             posts = cur.fetchall()
             
