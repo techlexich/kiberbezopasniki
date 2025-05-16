@@ -825,42 +825,35 @@
             element.style.display = 'block';
         }
 
-        async function loadPosts() {
-            try {
-                const token = localStorage.getItem('access_token');
-                const headers = {};
-                
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
+        async function loadPostsWithRetry(retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await fetch(`${API_URL}/tape/posts`, {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => null);
+                        throw new Error(error?.detail || `HTTP error ${response.status}`);
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed:`, error);
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delay));
                 }
-                
-                const response = await fetch(`${API_URL}/tape/posts?limit=20`, {
-                    headers: headers
-                });
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Server response:', errorText);
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                return await response.json();
-            } catch (error) {
-                console.error('Error loading posts:', error);
-                throw error;
             }
         }
 
+        // Улучшенный рендеринг постов
         async function renderPosts() {
             const container = document.getElementById('posts-container');
-            container.innerHTML = '<p style="text-align: center;">Загрузка постов...</p>';
             
             try {
-                const posts = await loadPosts();
-                container.innerHTML = '';
-                
-                // Восстанавливаем хедер
-                const header = `
+                // Показываем скелетоны загрузки
+                container.innerHTML = `
                     <header class="header">
                         <div class="logo">FRAMES</div>
                         <div class="nav-buttons">
@@ -874,75 +867,118 @@
                             </form>
                         </div>
                     </header>
+                    ${Array(3).fill().map(() => `
+                        <div class="post loading">
+                            <div class="post-header">
+                                <div class="avatar"></div>
+                                <div class="user-info">
+                                    <div class="username loading" style="width: 120px; height: 16px;"></div>
+                                    <div class="post-time loading" style="width: 80px; height: 12px; margin-top: 5px;"></div>
+                                </div>
+                            </div>
+                            <div class="post-image loading" style="height: 200px;"></div>
+                        </div>
+                    `).join('')}
                 `;
-                container.insertAdjacentHTML('afterbegin', header);
                 
-                if (!posts || posts.length === 0) {
-                    container.innerHTML += `
-                        <div style="text-align: center; margin-top: 40px;">
-                            <p style="color: var(--text-light);">Пока нет постов</p>
+                const posts = await loadPostsWithRetry();
+                
+                // Полный рендеринг после загрузки
+                container.innerHTML = `
+                    <header class="header">
+                        <div class="logo">FRAMES</div>
+                        <div class="nav-buttons">
+                            <button id="profile-button" class="nav-button">
+                                <i class="fas fa-user"></i> Профиль
+                            </button>
+                            <form action="/">
+                                <button class="nav-button">
+                                    <i class="fas fa-map-marker-alt"></i> Карта
+                                </button>
+                            </form>
+                        </div>
+                    </header>
+                    ${posts.length ? posts.map(post => {
+                        const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
+                        return `
+                            <div class="post" data-post-id="${post.id}">
+                                <div class="post-header">
+                                    <div class="avatar">${post.username?.charAt(0)?.toUpperCase() || 'U'}</div>
+                                    <div class="user-info">
+                                        <div class="username">${post.username || 'Неизвестный пользователь'}</div>
+                                        <div class="post-time">${postDate}</div>
+                                    </div>
+                                </div>
+                                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                                ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
+                                <div class="post-actions">
+                                    <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
+                                        <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
+                                        <span>${post.likes_count || 0}</span>
+                                    </button>
+                                    <button class="action-button">
+                                        <i class="far fa-comment"></i>
+                                        <span>${post.comments_count || 0}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('') : `
+                        <div class="no-posts">
+                            <p>Пока нет постов</p>
                             ${!currentUser ? `
-                                <button onclick="showModal(profileModal)" class="auth-option primary" 
-                                    style="margin: 20px auto; width: auto;">
+                                <button class="auth-option primary" onclick="showModal(profileModal)">
                                     Войти, чтобы добавить пост
                                 </button>
                             ` : ''}
                         </div>
-                    `;
-                    return;
-                }
+                    `}
+                `;
                 
-                posts.forEach(post => {
-                    const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
-                    const postHTML = `
-                        <div class="post" data-post-id="${post.id}">
-                            <div class="post-header">
-                                <div class="avatar">${post.username?.charAt(0)?.toUpperCase() || 'U'}</div>
-                                <div class="user-info">
-                                    <div class="username">${post.username || 'Неизвестный пользователь'}</div>
-                                    <div class="post-time">${postDate}</div>
-                                </div>
-                            </div>
-                            ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                            ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
-                            <div class="post-actions">
-                                <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
-                                    <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i> 
-                                    <span>${post.likes_count || 0}</span>
-                                </button>
-                                <button class="action-button">
-                                    <i class="far fa-comment"></i> 
-                                    <span>${post.comments_count || 0}</span>
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                    container.insertAdjacentHTML('beforeend', postHTML);
-                });
-                
-                // Назначаем обработчики событий
+                // Назначаем обработчики
                 document.querySelectorAll('.like-button').forEach(btn => {
-                    btn.addEventListener('click', handleLikeClick);
+                    btn.addEventListener('click', handleLikeAction);
                 });
                 
                 document.querySelectorAll('.post-image').forEach(img => {
-                    img.addEventListener('click', () => {
-                        showImageModal(img.src);
-                    });
+                    img.addEventListener('click', () => showImageModal(img.src));
+                });
+                
+                document.getElementById('profile-button').addEventListener('click', () => {
+                    showModal(profileModal);
+                    resetAuthForms();
                 });
                 
             } catch (error) {
-                console.error('Render error:', error);
+                console.error('Failed to render posts:', error);
                 container.innerHTML = `
-                    <div style="text-align: center; color: var(--text-light); padding: 40px 0;">
-                        <p>Произошла ошибка при загрузке ленты</p>
-                        <button onclick="location.reload()" class="nav-button" style="margin-top: 20px;">
+                    <div class="error-message">
+                        <p>Не удалось загрузить ленту</p>
+                        <button onclick="window.location.reload()" class="retry-button">
                             <i class="fas fa-sync-alt"></i> Попробовать снова
                         </button>
+                        ${currentUser ? `
+                            <p class="error-detail">${error.message}</p>
+                        ` : ''}
                     </div>
                 `;
             }
         }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateAuthUI();
+            await renderPosts();
+            
+            document.querySelector('.new-post-button').addEventListener('click', () => {
+                if (!currentUser) {
+                    showModal(profileModal);
+                    alert('Для создания поста необходимо войти в систему');
+                    return;
+                }
+                window.location.href = '/new-post';
+            });
+        });
 
         async function handleLikeClick(e) {
             const button = e.currentTarget;
@@ -984,25 +1020,6 @@
             }
         }
 
-        // Инициализация при загрузке страницы
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await updateAuthUI();
-                await renderPosts();
-                
-                // Кнопка нового поста
-                document.querySelector('.new-post-button').addEventListener('click', function() {
-                    if (!currentUser) {
-                        alert('Для создания поста нужно войти в аккаунт');
-                        showModal(profileModal);
-                        return;
-                    }
-                    window.location.href = '/new-post';
-                });
-            } catch (error) {
-                console.error("Ошибка инициализации:", error);
-            }
-        });
 
         closeProfile.addEventListener('click', () => hideModal(profileModal));
     

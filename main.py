@@ -624,14 +624,12 @@ async def unlike_post(
 # Эндпоинт для получения ленты постов
 @app.get("/tape/posts")
 async def get_tape_posts(
-    skip: int = 0,
-    limit: int = 20,
     db=Depends(get_db),
     current_user: Optional[dict] = Depends(get_current_user, use_cache=False)
 ):
     try:
-        conn = await db.__anext__()  # Получаем соединение из генератора
-        with conn.cursor() as cur:
+        with db.cursor() as cur:
+            # Базовый запрос для всех пользователей
             base_query = """
                 SELECT 
                     p.id,
@@ -643,35 +641,45 @@ async def get_tape_posts(
                     p.latitude,
                     p.altitude,
                     u.username,
-                    u.avatar_url as user_avatar,
-                    %s as is_liked
+                    u.avatar_url as user_avatar
                 FROM posts p
                 JOIN users u ON p.user_id = u.id
                 ORDER BY p.created_at DESC
-                LIMIT %s OFFSET %s
+                LIMIT 20
             """
             
-            if current_user:
-                params = (f"EXISTS(SELECT 1 FROM likes l WHERE l.user_id = {current_user['id']} AND l.post_id = p.id)", limit, skip)
-            else:
-                params = (False, limit, skip)
-            
-            cur.execute(base_query, params)
+            cur.execute(base_query)
             posts = cur.fetchall()
             
-            # Преобразование типов данных
+            # Для авторизованных добавляем информацию о лайках
+            if current_user:
+                post_ids = [str(post['id']) for post in posts]
+                if post_ids:
+                    cur.execute(f"""
+                        SELECT post_id FROM likes 
+                        WHERE user_id = %s AND post_id IN ({','.join(post_ids)})
+                    """, (current_user['id'],))
+                    liked_posts = {row['post_id']: True for row in cur.fetchall()}
+                    
+                    for post in posts:
+                        post['is_liked'] = liked_posts.get(post['id'], False)
+                else:
+                    for post in posts:
+                        post['is_liked'] = False
+            else:
+                for post in posts:
+                    post['is_liked'] = False
+            
+            # Преобразование типов
             for post in posts:
-                post['latitude'] = float(post['latitude']) if post['latitude'] else 0.0
-                post['altitude'] = float(post['altitude']) if post['altitude'] else 0.0
-                post['is_liked'] = bool(post['is_liked'])
-                
+                post['latitude'] = float(post.get('latitude', 0))
+                post['altitude'] = float(post.get('altitude', 0))
+            
             return posts
             
     except Exception as e:
         logger.error(f"Error in get_tape_posts: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="Internal server error")
-    finally:
-        await conn.close()
+        raise HTTPException(500, detail="Ошибка при загрузке ленты")
 
 @app.get("/check-s3-connection")
 async def check_s3_connection():
