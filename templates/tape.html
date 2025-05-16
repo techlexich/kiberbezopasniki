@@ -879,7 +879,6 @@
                     const token = localStorage.getItem('access_token');
                     const headers = {};
                     
-                    // Добавляем токен только если он есть
                     if (token) {
                         headers['Authorization'] = `Bearer ${token}`;
                     }
@@ -889,10 +888,11 @@
                     });
                     
                     if (!response.ok) {
-                        // Если 401 - возможно токен устарел, удаляем его
                         if (response.status === 401) {
                             localStorage.removeItem('access_token');
                             await updateAuthUI();
+                            // Пробуем снова без токена
+                            continue;
                         }
                         const error = await response.json().catch(() => null);
                         throw new Error(error?.detail || `HTTP error ${response.status}`);
@@ -934,26 +934,8 @@
                     </div>
                 `;
 
-                // Получаем токен (может быть null для неавторизованных)
-                const token = localStorage.getItem('access_token');
-                
-                // Создаем заголовки только если токен есть
-                const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-                
-                // Делаем запрос
-                const response = await fetch(`${API_URL}/tape/posts`, { headers });
-                
-                if (!response.ok) {
-                    // Если 401 - удаляем невалидный токен и пробуем снова без него
-                    if (response.status === 401) {
-                        localStorage.removeItem('access_token');
-                        await updateAuthUI();
-                        return await renderPosts(); // Рекурсивный вызов без токена
-                    }
-                    throw new Error(`Ошибка загрузки: ${response.status}`);
-                }
-
-                const posts = await response.json();
+                // Загружаем посты (функция сама разберется с токеном)
+                const posts = await loadPostsWithRetry();
                 
                 // Очищаем контейнер
                 container.innerHTML = '';
