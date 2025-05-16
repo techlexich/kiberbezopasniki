@@ -934,18 +934,21 @@
                     </div>
                 `;
 
+                // Получаем токен (может быть null для неавторизованных)
                 const token = localStorage.getItem('access_token');
+                
+                // Создаем заголовки только если токен есть
                 const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
                 
+                // Делаем запрос
                 const response = await fetch(`${API_URL}/tape/posts`, { headers });
                 
                 if (!response.ok) {
-                    // Если 401 - возможно токен устарел
+                    // Если 401 - удаляем невалидный токен и пробуем снова без него
                     if (response.status === 401) {
                         localStorage.removeItem('access_token');
                         await updateAuthUI();
-                        // Пробуем снова без токена
-                        return await renderPosts();
+                        return await renderPosts(); // Рекурсивный вызов без токена
                     }
                     throw new Error(`Ошибка загрузки: ${response.status}`);
                 }
@@ -972,6 +975,7 @@
                     </header>
                 `;
 
+                // Проверяем наличие постов
                 if (!posts || posts.length === 0) {
                     container.innerHTML += `
                         <div style="text-align: center; padding: 40px 20px;">
@@ -1016,7 +1020,7 @@
                     container.insertAdjacentHTML('beforeend', postHTML);
                 });
 
-                // Назначаем обработчики
+                // Назначаем обработчики для лайков
                 document.querySelectorAll('.like-button').forEach(btn => {
                     btn.addEventListener('click', async function() {
                         if (!currentUser) {
@@ -1053,10 +1057,12 @@
                     });
                 });
 
+                // Обработчики для изображений
                 document.querySelectorAll('.post-image').forEach(img => {
                     img.addEventListener('click', () => showImageModal(img.src));
                 });
 
+                // Обработчик для кнопки профиля
                 document.getElementById('profile-button').addEventListener('click', () => {
                     showModal(profileModal);
                     resetAuthForms();
@@ -1088,7 +1094,6 @@
                 `;
             }
         }
-
         // Инициализация
         document.addEventListener('DOMContentLoaded', async () => {
             await updateAuthUI();
