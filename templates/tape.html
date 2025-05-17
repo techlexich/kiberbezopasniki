@@ -294,7 +294,7 @@
         }
 
         /* Стили модального окна профиля */
-        .modal {
+        .profile-modal {
             display: none;
             position: fixed;
             top: 80px;
@@ -312,7 +312,7 @@
             border: 1px solid var(--border);
         }
 
-        .modal.show {
+        .profile-modal.show {
             opacity: 1;
             transform: translateY(0);
         }
@@ -514,7 +514,7 @@
         }
 
         @media (max-width: 768px) {
-            .modal {
+            .profile-modal {
                 width: 280px;
                 left: 50%;
                 right: auto;
@@ -522,7 +522,7 @@
                 top: 100px;
             }
             
-            .modal.show {
+            .profile-modal.show {
                 transform: translateX(-50%) translateY(0);
             }
         }
@@ -601,11 +601,8 @@
         <img class="image-modal-content" id="expanded-image">
     </div>
 
-    <button class="new-post-button">
-        <i class="fas fa-plus"></i>
-    </button>
-
-    <div id="profile-modal" class="modal">
+    <!-- Модальное окно профиля -->
+    <div id="profile-modal" class="profile-modal">
         <div class="modal-header">
             <h3 class="modal-title">Профиль</h3>
             <button class="close-button" id="close-profile">
@@ -627,7 +624,7 @@
                     <i class="fas fa-sign-out-alt"></i> Выйти
                 </button>
             </div>
-    
+
             <!-- Гостевой вид -->
             <div id="guest-view" class="guest-state">
                 <button id="login-option" class="auth-option primary">
@@ -665,6 +662,10 @@
         </div>
     </div>
 
+    <button class="new-post-button">
+        <i class="fas fa-plus"></i>
+    </button>
+
     <script>
         // Настройки API
         const API_URL = 'https://kiberbezopasniki.onrender.com';
@@ -685,47 +686,35 @@
         const loginButton = document.getElementById('login-button');
         const registerButton = document.getElementById('register-button');
         const logoutButton = document.getElementById('logout-btn');
-
+    
+        // Поля ввода
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const registerEmail = document.getElementById('register-email');
+        const registerLogin = document.getElementById('register-login');
+        const registerPassword = document.getElementById('register-password');
+        const registerPasswordRepeat = document.getElementById('register-password-repeat');
+    
+        // Сообщения об ошибках
+        const loginError = document.getElementById('login-error');
+        const registerError = document.getElementById('register-error');
+    
         // Модальное окно для изображения
         const imageModal = document.getElementById('image-modal');
         const expandedImage = document.getElementById('expanded-image');
         const closeImageModal = document.querySelector('.close-image-modal');
-
+    
         // Функции для работы с модальными окнами
         function showModal(modal) {
-            if (window.innerWidth <= 768) {
-                // Для мобильных - по центру экрана
-                modal.style.position = 'fixed';
-                modal.style.top = '50%';
-                modal.style.left = '50%';
-                modal.style.transform = 'translateX(-50%) translateY(-10px)';
-                modal.style.display = 'block';
-            } else {
-                // Для десктопов - рядом с кнопкой
-                const buttonRect = profileButton.getBoundingClientRect();
-                
-                modal.style.position = 'fixed';
-                modal.style.top = `${buttonRect.bottom + window.scrollY + 10}px`;
-                modal.style.right = `${window.innerWidth - buttonRect.right}px`;
-                modal.style.transform = 'translateY(-10px)';
-                modal.style.display = 'block';
-            }
-            
-            setTimeout(() => {
-                modal.classList.add('show');
-                if (window.innerWidth <= 768) {
-                    modal.style.transform = 'translateX(-50%) translateY(0)';
-                } else {
-                    modal.style.transform = 'translateY(0)';
-                }
-            }, 10);
+            modal.style.display = 'block';
+            setTimeout(() => modal.classList.add('show'), 10);
             
             // Добавляем обработчик для закрытия при клике вне окна
             document.addEventListener('click', clickOutsideHandler);
             // Добавляем обработчик для закрытия по Escape
             document.addEventListener('keydown', handleEscape);
         }
-
+    
         function hideModal(modal) {
             modal.classList.remove('show');
             setTimeout(() => {
@@ -735,37 +724,29 @@
                 document.removeEventListener('keydown', handleEscape);
             }, 200);
         }
-
+    
         function clickOutsideHandler(e) {
             if (!profileModal.contains(e.target) && e.target !== profileButton) {
                 hideModal(profileModal);
             }
         }
-
+    
         function handleEscape(e) {
             if (e.key === 'Escape') {
                 hideModal(profileModal);
                 hideImageModal();
             }
         }
-
+    
         function showImageModal(imageUrl) {
             expandedImage.src = imageUrl;
             imageModal.style.display = 'flex';
         }
-
+    
         function hideImageModal() {
             imageModal.style.display = 'none';
         }
-
-        // Обработчики для модального окна изображения
-        closeImageModal.addEventListener('click', hideImageModal);
-        imageModal.addEventListener('click', (e) => {
-            if (e.target === imageModal) {
-                hideImageModal();
-            }
-        });
-
+    
         function resetAuthForms() {
             if (currentUser) {
                 document.getElementById('guest-view').style.display = 'none';
@@ -872,7 +853,7 @@
             element.textContent = message;
             element.style.display = 'block';
         }
-
+    
         async function loadPostsWithRetry(retries = 3, delay = 1000) {
             for (let i = 0; i < retries; i++) {
                 try {
@@ -891,7 +872,7 @@
                 }
             }
         }
-
+    
         // Улучшенный рендеринг постов
         async function renderPosts() {
             const container = document.getElementById('posts-container');
@@ -918,7 +899,7 @@
                         <div class="loading" style="width: 100%; height: 80px; border-radius: 12px;"></div>
                     </div>
                 `;
-
+    
                 // Загружаем посты (функция сама разберется с токеном)
                 const posts = await loadPostsWithRetry();
                 
@@ -941,7 +922,7 @@
                         </div>
                     </header>
                 `;
-
+    
                 // Проверяем наличие постов
                 if (!posts || posts.length === 0) {
                     container.innerHTML += `
@@ -962,7 +943,7 @@
                     `;
                     return;
                 }
-
+    
                 // Добавляем посты
                 posts.forEach(post => {
                     const postDate = post.created_at ? new Date(post.created_at).toLocaleString('ru-RU') : 'Недавно';
@@ -991,7 +972,7 @@
                     `;
                     container.insertAdjacentHTML('beforeend', postHTML);
                 });
-
+    
                 // Назначаем обработчики для лайков
                 document.querySelectorAll('.like-button').forEach(btn => {
                     btn.addEventListener('click', async function() {
@@ -1034,18 +1015,18 @@
                         }
                     });
                 });
-
+    
                 // Обработчики для изображений
                 document.querySelectorAll('.post-image').forEach(img => {
                     img.addEventListener('click', () => showImageModal(img.src));
                 });
-
+    
                 // Обработчик для кнопки профиля
                 document.getElementById('profile-button').addEventListener('click', () => {
                     showModal(profileModal);
                     resetAuthForms();
                 });
-
+    
             } catch (error) {
                 console.error('Ошибка загрузки ленты:', error);
                 container.innerHTML = `
@@ -1072,62 +1053,8 @@
                 `;
             }
         }
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', async () => {
-            await updateAuthUI();
-            await renderPosts();
-            
-            document.querySelector('.new-post-button').addEventListener('click', () => {
-                if (!currentUser) {
-                    showModal(profileModal);
-                    alert('Для создания поста необходимо войти в систему');
-                    return;
-                }
-                window.location.href = '/new-post';
-            });
-        });
-
-        async function handleLikeClick(e) {
-            const button = e.currentTarget;
-            const postId = button.closest('.post').dataset.postId;
-            const isLiked = button.classList.contains('liked');
-            
-            if (!currentUser) {
-                showModal(profileModal);
-                return;
-            }
-            
-            try {
-                const response = await fetch(`${API_URL}/posts/${postId}/${isLiked ? 'unlike' : 'like'}`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) throw new Error('Like action failed');
-                
-                const icon = button.querySelector('i');
-                const countSpan = button.querySelector('span');
-                let count = parseInt(countSpan.textContent);
-                
-                if (isLiked) {
-                    button.classList.remove('liked');
-                    icon.classList.replace('fas', 'far');
-                    countSpan.textContent = count - 1;
-                } else {
-                    button.classList.add('liked');
-                    icon.classList.replace('far', 'fas');
-                    countSpan.textContent = count + 1;
-                }
-            } catch (error) {
-                console.error('Like error:', error);
-                alert('Не удалось обновить лайк');
-            }
-        }
-
-
+    
+        // Обработчики событий
         closeProfile.addEventListener('click', () => hideModal(profileModal));
     
         backFromLogin.addEventListener('click', resetAuthForms);
@@ -1209,6 +1136,30 @@
             updateAuthUI();
             hideModal(profileModal);
             renderPosts(); // Обновляем посты после выхода
+        });
+    
+        // Обработчик для кнопки нового поста
+        document.querySelector('.new-post-button').addEventListener('click', () => {
+            if (!currentUser) {
+                showModal(profileModal);
+                alert('Для создания поста необходимо войти в систему');
+                return;
+            }
+            window.location.href = '/new-post';
+        });
+    
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateAuthUI();
+            await renderPosts();
+            
+            // Обработчик для закрытия модального окна изображения
+            closeImageModal.addEventListener('click', hideImageModal);
+            imageModal.addEventListener('click', (e) => {
+                if (e.target === imageModal) {
+                    hideImageModal();
+                }
+            });
         });
     </script>
 </body>
