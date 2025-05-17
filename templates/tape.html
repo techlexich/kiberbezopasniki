@@ -723,7 +723,7 @@
             // Добавляем обработчик для закрытия при клике вне окна с задержкой
             let clickOutsideHandler = (e) => {
                 // Не закрываем, если клик внутри модального окна или на кнопке профиля
-                if (modal.contains(e.target) return;
+                if (modal.contains(e.target)) return;
                 if (e.target === profileButton) return;
                 
                 // Закрываем с небольшой задержкой для UX
