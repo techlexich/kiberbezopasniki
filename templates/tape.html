@@ -706,63 +706,96 @@
     
         // Функции для работы с модальными окнами
         function showModal(modal) {
-            // Позиционируем модальное окно под кнопкой профиля
+            // Позиционируем модальное окно под кнопкой профиля справа
             const buttonRect = profileButton.getBoundingClientRect();
+            const modalWidth = 300; // Ширина модального окна
+            
+            // Вычисляем позицию, чтобы окно не выходило за правый край экрана
+            let leftPosition = buttonRect.right - modalWidth;
+            if (leftPosition < 10) leftPosition = 10; // Минимальный отступ от края
             
             modal.style.position = 'fixed';
             modal.style.top = `${buttonRect.bottom + window.scrollY + 5}px`;
-            modal.style.left = `${buttonRect.left + window.scrollX}px`;
+            modal.style.left = `${leftPosition}px`;
             modal.style.display = 'block';
+            modal.style.opacity = '0';
+            modal.style.transform = 'translateY(-10px)';
             
+            // Небольшая задержка перед анимацией появления
             setTimeout(() => {
                 modal.classList.add('show');
                 modal.style.opacity = '1';
                 modal.style.transform = 'translateY(0)';
             }, 10);
             
-            // Добавляем обработчик для закрытия при клике вне окна с задержкой
-            let clickOutsideHandler = (e) => {
+            // Флаг, чтобы предотвратить немедленное закрытие
+            let ignoreClose = true;
+            setTimeout(() => { ignoreClose = false; }, 100);
+            
+            // Обработчик кликов вне модального окна
+            const clickOutsideHandler = (e) => {
+                if (ignoreClose) return;
+                
                 // Не закрываем, если клик внутри модального окна или на кнопке профиля
                 if (modal.contains(e.target)) return;
-                if (e.target === profileButton) return;
+                if (e.target === profileButton || profileButton.contains(e.target)) return;
                 
-                // Закрываем с небольшой задержкой для UX
-                setTimeout(() => {
-                    hideModal(modal);
-                }, 200);
+                hideModal(modal);
             };
             
-            // Сохраняем ссылку на обработчик для последующего удаления
-            modal._clickOutsideHandler = clickOutsideHandler;
-            document.addEventListener('click', clickOutsideHandler);
-            
-            // Добавляем обработчик для закрытия по Escape
-            let handleEscape = (e) => {
+            // Обработчик Escape
+            const handleEscape = (e) => {
                 if (e.key === 'Escape') {
                     hideModal(modal);
                 }
             };
             
+            // Сохраняем ссылки на обработчики для последующего удаления
+            modal._clickOutsideHandler = clickOutsideHandler;
             modal._handleEscape = handleEscape;
-            document.addEventListener('keydown', handleEscape);
+            
+            // Добавляем обработчики с небольшой задержкой
+            setTimeout(() => {
+                document.addEventListener('click', clickOutsideHandler);
+                document.addEventListener('keydown', handleEscape);
+            }, 50);
         }
 
         function hideModal(modal) {
+            if (!modal || !modal.classList) return;
+            
             modal.classList.remove('show');
             modal.style.opacity = '0';
             modal.style.transform = 'translateY(-10px)';
             
             setTimeout(() => {
-                modal.style.display = 'none';
-                // Удаляем обработчики при закрытии модального окна
-                if (modal._clickOutsideHandler) {
-                    document.removeEventListener('click', modal._clickOutsideHandler);
-                }
-                if (modal._handleEscape) {
-                    document.removeEventListener('keydown', modal._handleEscape);
+                if (modal) {
+                    modal.style.display = 'none';
+                    
+                    // Удаляем обработчики
+                    if (modal._clickOutsideHandler) {
+                        document.removeEventListener('click', modal._clickOutsideHandler);
+                    }
+                    if (modal._handleEscape) {
+                        document.removeEventListener('keydown', modal._handleEscape);
+                    }
                 }
             }, 200);
         }
+
+        // Обновленный обработчик кнопки профиля
+        profileButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Предотвращаем всплытие события
+            
+            // Если модальное окно уже открыто - закрываем его
+            if (profileModal.style.display === 'block') {
+                hideModal(profileModal);
+                return;
+            }
+            
+            showModal(profileModal);
+            resetAuthForms();
+        });
     
         function clickOutsideHandler(e) {
             if (!profileModal.contains(e.target) && e.target !== profileButton) {
@@ -807,11 +840,6 @@
             registerError.style.display = 'none';
         }
     
-        // Обработчик открытия профиля
-        profileButton.addEventListener('click', () => {
-            showModal(profileModal);
-            resetAuthForms();
-        });
     
         // Функции для работы с авторизацией
         async function checkAuth() {
