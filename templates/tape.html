@@ -514,9 +514,13 @@
         @media (max-width: 768px) {
             .profile-modal {
                 left: 50% !important;
-                transform: translateX(-50%) !important;
+                transform: translateX(-50%) translateY(-10px) !important;
                 top: 70px !important;
                 width: 280px;
+            }
+            
+            .profile-modal.show {
+                transform: translateX(-50%) translateY(0) !important;
             }
         }
 
@@ -697,25 +701,32 @@
         const expandedImage = document.getElementById('expanded-image');
         const closeImageModal = document.querySelector('.close-image-modal');
     
+        // Переменная для отслеживания состояния модального окна
+        let isProfileModalOpen = false;
+        let modalClickHandler = null;
+        let modalEscapeHandler = null;
+
         // Функции для работы с модальными окнами
         function showModal(modal) {
-            // Получаем позицию кнопки профиля
+            if (isProfileModalOpen) return;
+            
+            // Позиционируем модальное окно под кнопкой профиля
             const buttonRect = profileButton.getBoundingClientRect();
-            const modalWidth = 300; // Ширина модального окна
+            const modalWidth = 300;
             
-            // Вычисляем позицию для модального окна
-            let leftPosition = buttonRect.left;
-            let topPosition = buttonRect.bottom + window.scrollY;
+            // Вычисляем позицию
+            let left = buttonRect.left + window.scrollX;
+            let top = buttonRect.bottom + window.scrollY + 5;
             
-            // Проверяем, чтобы окно не выходило за правый край экрана
-            if (leftPosition + modalWidth > window.innerWidth) {
-                leftPosition = window.innerWidth - modalWidth - 10;
+            // Корректируем позицию, если окно выходит за границы экрана
+            if (left + modalWidth > window.innerWidth) {
+                left = window.innerWidth - modalWidth - 10;
             }
             
-            // Устанавливаем позицию модального окна
+            // Устанавливаем позицию
             modal.style.position = 'absolute';
-            modal.style.top = `${topPosition}px`;
-            modal.style.left = `${leftPosition}px`;
+            modal.style.top = `${top}px`;
+            modal.style.left = `${left}px`;
             modal.style.display = 'block';
             modal.style.opacity = '0';
             modal.style.transform = 'translateY(-10px)';
@@ -727,32 +738,32 @@
             }, 10);
             
             // Обработчик кликов вне модального окна
-            const clickOutsideHandler = (e) => {
+            modalClickHandler = (e) => {
                 // Не закрываем, если клик внутри модального окна или на кнопке профиля
-                if (modal.contains(e.target)) return;
+                if (modal.contains(e.target) return;
                 if (e.target === profileButton || profileButton.contains(e.target)) return;
                 
                 hideModal(modal);
             };
             
             // Обработчик Escape
-            const handleEscape = (e) => {
+            modalEscapeHandler = (e) => {
                 if (e.key === 'Escape') {
                     hideModal(modal);
                 }
             };
             
-            // Добавляем обработчики
-            document.addEventListener('click', clickOutsideHandler);
-            document.addEventListener('keydown', handleEscape);
+            // Добавляем обработчики с небольшой задержкой
+            setTimeout(() => {
+                document.addEventListener('click', modalClickHandler);
+                document.addEventListener('keydown', modalEscapeHandler);
+            }, 50);
             
-            // Сохраняем ссылки на обработчики для последующего удаления
-            modal._clickOutsideHandler = clickOutsideHandler;
-            modal._handleEscape = handleEscape;
+            isProfileModalOpen = true;
         }
 
         function hideModal(modal) {
-            if (!modal) return;
+            if (!isProfileModalOpen) return;
             
             modal.style.opacity = '0';
             modal.style.transform = 'translateY(-10px)';
@@ -761,27 +772,34 @@
                 modal.style.display = 'none';
                 
                 // Удаляем обработчики
-                if (modal._clickOutsideHandler) {
-                    document.removeEventListener('click', modal._clickOutsideHandler);
+                if (modalClickHandler) {
+                    document.removeEventListener('click', modalClickHandler);
                 }
-                if (modal._handleEscape) {
-                    document.removeEventListener('keydown', modal._handleEscape);
+                if (modalEscapeHandler) {
+                    document.removeEventListener('keydown', modalEscapeHandler);
                 }
+                
+                isProfileModalOpen = false;
             }, 200);
         }
 
-        // Обновленный обработчик кнопки профиля
-        profileButton.addEventListener('click', (e) => {
+        // Обработчик кнопки профиля
+        profileButton.addEventListener('click', function(e) {
             e.stopPropagation();
+            e.preventDefault();
             
-            // Если модальное окно уже открыто - закрываем его
-            if (profileModal.style.display === 'block') {
+            if (isProfileModalOpen) {
                 hideModal(profileModal);
-                return;
+            } else {
+                showModal(profileModal);
+                resetAuthForms();
             }
-            
-            showModal(profileModal);
-            resetAuthForms();
+        });
+
+        // Обработчик кнопки закрытия
+        closeProfile.addEventListener('click', function(e) {
+            e.stopPropagation();
+            hideModal(profileModal);
         });
     
         function clickOutsideHandler(e) {
