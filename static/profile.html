@@ -749,181 +749,121 @@
     </div>
     <script>
         // Получаем username из URL
-        const pathParts = window.location.pathname.split('/profile/');
-        const username = pathParts.length > 1 ? pathParts[1] : '';
+        function getUsernameFromPath() {
+            const path = window.location.pathname;
+            const match = path.match(/\/profile\/([^\/]+)/);
+            return match ? match[1] : null;
+        }
+    
+        const username = getUsernameFromPath();
         let currentUser = null;
-        
-        // Элементы модального окна редактирования профиля
-        const editModal = document.getElementById('editModal');
-        const closeModalBtn = document.getElementById('closeModal');
-        const editProfileForm = document.getElementById('editProfileForm');
-        const editBio = document.getElementById('editBio');
-        const editAvatar = document.getElementById('editAvatar');
-        const avatarPreview = document.getElementById('avatarPreview');
-        const avatarPreviewText = document.getElementById('avatarPreviewText');
-        
-        // Элементы модального окна создания поста
-        const newPostBtn = document.getElementById('newPostBtn');
-        const postModal = document.getElementById('post-modal');
-        const closePostModal = document.getElementById('closePostModal');
-        const fileUploadLabel = document.getElementById('file-upload-label');
-        const postPhotoInput = document.getElementById('post-photo');
-        const previewImage = document.getElementById('preview-image');
-        const createPostForm = document.getElementById('create-post-form');
-        const submitPostBtn = document.getElementById('submit-post-btn');
-
-        // Загружаем данные профиля
+        let postMap = null;
+        let postMarker = null;
+    
+        // Проверка ответа сервера
+        async function checkResponse(response) {
+            if (!response.ok) {
+                const error = await response.json().catch(() => null);
+                throw new Error(error?.detail || `HTTP error ${response.status}`);
+            }
+            return response.json();
+        }
+    
+        // Загрузка профиля
         async function loadProfile() {
             if (!username) {
-                console.error("Username is not defined");
+                showError("Не удалось определить пользователя");
                 return;
             }
-            
+    
             try {
-                console.log("Fetching profile for:", username);
-                const profileResponse = await fetch(`/users/${username}`);
-                
-                // Проверяем статус ответа
-                if (!profileResponse.ok) {
-                    const errorText = await profileResponse.text();
-                    console.error("Profile load failed:", profileResponse.status, errorText);
-                    throw new Error(`HTTP error! status: ${profileResponse.status}`);
-                }
-                
-                // Проверяем Content-Type
-                const contentType = profileResponse.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const responseData = await profileResponse.text();
-                    console.error("Invalid content type:", contentType, "Response:", responseData);
-                    throw new Error(`Invalid content type: ${contentType}`);
-                }
-                
-                const user = await profileResponse.json();
-                console.log("User data received:", user);
-                
-                // Заполняем данные профиля
-                document.getElementById('profileName').textContent = user.username;
-                document.getElementById('profileBio').textContent = user.profile?.bio || "Пока ничего не рассказал о себе";
-                
-                // Настраиваем аватар
-                const avatar = document.getElementById('profileAvatar');
-                if (user.profile?.avatar && !user.profile.avatar.startsWith('/')) {
-                    avatar.style.backgroundImage = `url(${user.profile.avatar})`;
-                    avatar.style.backgroundSize = 'cover';
-                    avatar.textContent = '';
-                } else {
-                    avatar.textContent = user.username[0].toUpperCase();
-                }
-                
-                // Проверяем авторизацию
-                const token = localStorage.getItem('access_token');
-                const editBtn = document.getElementById('editProfileBtn');
-                
-                if (token) {
-                    try {
-                        console.log("Checking auth with token");
-                        const meResponse = await fetch('/users/me', {
-                            headers: {'Authorization': `Bearer ${token}`}
-                        });
-                        
-                        if (!meResponse.ok) {
-                            console.error("Auth check failed:", meResponse.status);
-                            if (meResponse.status === 401) {
-                                localStorage.removeItem('access_token');
-                            }
-                            editBtn.style.display = 'none';
-                            return;
-                        }
-                        
-                        currentUser = await meResponse.json();
-                        console.log("Current user:", currentUser);
-                        
-                        if (currentUser.username === username) {
-                            editBtn.style.display = 'block';
-                            editBtn.onclick = () => openEditModal(user);
-                            newPostBtn.style.display = 'flex';
-                        } else {
-                            editBtn.style.display = 'none';
-                            newPostBtn.style.display = 'none';
-                        }
-                    } catch (e) {
-                        console.error('Auth check error:', e);
-                        localStorage.removeItem('access_token');
-                        editBtn.style.display = 'none';
-                        newPostBtn.style.display = 'none';
-                    }
-                } else {
-                    editBtn.style.display = 'none';
-                    newPostBtn.style.display = 'none';
-                }
-                
-                // После загрузки профиля грузим посты
+                const user = await fetch(`/users/${username}`).then(checkResponse);
+                renderProfile(user);
+                await checkAuth();
                 await loadUserPosts();
-                
             } catch (error) {
-                console.error('Profile load error:', error);
-                document.getElementById('profile-container').innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: var(--text-light);">
-                        Ошибка загрузки профиля. Пожалуйста, попробуйте позже.
-                    </div>
-                `;
+                console.error("Profile load error:", error);
+                showError("Ошибка загрузки профиля");
             }
         }
-
-        // Загружаем посты пользователя
-        async function loadUserPosts() {
-            if (!username) {
-                console.error("Username is not defined in loadUserPosts");
+    
+        function renderProfile(user) {
+            document.getElementById('profileName').textContent = user.username;
+            document.getElementById('profileBio').textContent = user.profile?.bio || "Нет описания";
+            
+            const avatar = document.getElementById('profileAvatar');
+            avatar.textContent = user.username[0].toUpperCase();
+            if (user.profile?.avatar) {
+                avatar.style.backgroundImage = `url(${user.profile.avatar})`;
+                avatar.style.backgroundSize = 'cover';
+            }
+        }
+    
+        async function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                hideAuthElements();
                 return;
             }
-            
+    
             try {
-                console.log("Loading posts for:", username);
-                const response = await fetch(`/users/${username}/posts`);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error("Posts load failed:", response.status, errorText);
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log("Posts data received:", data);
-                
-                const container = document.getElementById('posts-container');
-                
-                if (!data.posts || data.posts.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет публикаций</p>';
-                    document.getElementById('postsCount').textContent = '0';
-                    return;
-                }
-                
-                document.getElementById('postsCount').textContent = data.total || data.posts.length;
-                container.innerHTML = '';
-                
-                data.posts.forEach(post => {
-                    const postElement = createPostElement(post);
-                    container.appendChild(postElement);
-                });
+                currentUser = await fetch('/users/me', {
+                    headers: {'Authorization': `Bearer ${token}`}
+                }).then(checkResponse);
+    
+                const isCurrentUser = currentUser.username === username;
+                document.getElementById('editProfileBtn').style.display = isCurrentUser ? 'block' : 'none';
+                document.getElementById('newPostBtn').style.display = isCurrentUser ? 'flex' : 'none';
                 
             } catch (error) {
-                console.error('Error loading posts:', error);
-                document.getElementById('posts-container').innerHTML = `
-                    <p style="text-align: center; color: var(--text-light);">
-                        Ошибка загрузки публикаций. Пожалуйста, попробуйте позже.
-                    </p>
-                `;
+                console.error("Auth check failed:", error);
+                localStorage.removeItem('access_token');
+                hideAuthElements();
             }
         }
-
+    
+        function hideAuthElements() {
+            document.getElementById('editProfileBtn').style.display = 'none';
+            document.getElementById('newPostBtn').style.display = 'none';
+        }
+    
+        // Загрузка постов
+        async function loadUserPosts() {
+            try {
+                const data = await fetch(`/users/${username}/posts`).then(checkResponse);
+                renderPosts(data.posts || []);
+            } catch (error) {
+                console.error("Posts load error:", error);
+                showPostsError();
+            }
+        }
+    
+        function renderPosts(posts) {
+            const container = document.getElementById('posts-container');
+            
+            if (!posts?.length) {
+                container.innerHTML = '<p class="no-posts">Пока нет публикаций</p>';
+                document.getElementById('postsCount').textContent = '0';
+                return;
+            }
+    
+            document.getElementById('postsCount').textContent = posts.length;
+            container.innerHTML = '';
+    
+            posts.forEach(post => {
+                const postElement = createPostElement(post);
+                container.appendChild(postElement);
+            });
+        }
+    
         function createPostElement(post) {
-            const postDate = new Date(post.created_at).toLocaleString();
             const postElement = document.createElement('div');
             postElement.className = 'post';
             postElement.dataset.postId = post.id;
             
-            const isCurrentUserPost = currentUser && currentUser.username === post.username;
-            
+            const isCurrentUserPost = currentUser?.username === post.username;
+            const postDate = new Date(post.created_at).toLocaleString();
+    
             postElement.innerHTML = `
                 <div class="post-header">
                     <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
@@ -947,31 +887,96 @@
                     </button>
                 </div>
             `;
-            
-            // Обработчик клика на весь пост
+    
+            // Обработчики событий
             postElement.addEventListener('click', (e) => {
                 if (!e.target.closest('.delete-post-btn, .action-button')) {
                     openPostModal(post);
                 }
             });
-            
+    
             if (isCurrentUserPost) {
-                const deleteBtn = postElement.querySelector('.delete-post-btn');
-                deleteBtn.addEventListener('click', (e) => {
+                postElement.querySelector('.delete-post-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
                     deletePost(post.id);
                 });
             }
-            
-            const likeBtn = postElement.querySelector('.like-button');
-            likeBtn.addEventListener('click', async function(e) {
+    
+            postElement.querySelector('.like-button').addEventListener('click', (e) => {
                 e.stopPropagation();
-                await handleLike(post.id, this);
+                handleLike(post.id, e.currentTarget);
             });
-            
+    
             return postElement;
         }
-
+    
+        // Модальное окно просмотра поста
+        function openPostModal(post) {
+            const modal = document.getElementById('postViewModal');
+            const container = document.getElementById('postViewContainer');
+            
+            const postDate = new Date(post.created_at).toLocaleString();
+            const isCurrentUserPost = currentUser?.username === post.username;
+            
+            container.innerHTML = `
+                <div class="post">
+                    <div class="post-header">
+                        <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
+                        <div class="post-user-info">
+                            <div class="post-username">${post.username}</div>
+                            <div class="post-time">${postDate}</div>
+                        </div>
+                        ${isCurrentUserPost ? `
+                        <button class="delete-post-btn">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''}
+                    </div>
+                    ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                    <img src="${post.photo_url}" class="post-image" alt="Фото">
+                    <div class="post-actions">
+                        <button class="action-button like-button">
+                            <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
+                        </button>
+                        <button class="action-button">
+                            <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            if (isCurrentUserPost) {
+                container.querySelector('.delete-post-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deletePost(post.id);
+                    closePostModal();
+                });
+            }
+            
+            container.querySelector('.like-button').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await handleLike(post.id, e.currentTarget);
+            });
+            
+            modal.classList.add('active');
+            updateUrl(post.id);
+        }
+    
+        function closePostModal() {
+            const modal = document.getElementById('postViewModal');
+            modal.classList.remove('active');
+            updateUrl();
+        }
+    
+        // Управление URL
+        function updateUrl(postId = null) {
+            if (postId) {
+                history.pushState({ postId }, '', `?post=${postId}`);
+            } else {
+                history.pushState(null, '', window.location.pathname);
+            }
+        }
+    
+        // Обработка лайков
         async function handleLike(postId, likeButton) {
             if (!currentUser) {
                 alert('Для этого действия нужно войти в аккаунт');
@@ -1009,260 +1014,38 @@
                 alert('Ошибка при обновлении лайка');
             }
         }
-
-        // Открытие модального окна редактирования профиля
-        function openEditModal(user) {
-            editBio.value = user.profile.bio || '';
-            editAvatar.value = user.profile.avatar || '';
-            
-            updateAvatarPreview(user.username[0].toUpperCase(), user.profile.avatar);
-            
-            editModal.classList.add('active');
-            
-            editAvatar.addEventListener('input', () => {
-                updateAvatarPreview(user.username[0].toUpperCase(), editAvatar.value);
-            });
-        }
-
-        // Обновление превью аватара
-        function updateAvatarPreview(letter, avatarUrl) {
-            if (avatarUrl && avatarUrl.trim() !== '') {
-                avatarPreview.style.backgroundImage = `url(${avatarUrl})`;
-                avatarPreview.style.backgroundSize = 'cover';
-                avatarPreviewText.style.display = 'none';
-                avatarPreview.style.backgroundColor = 'transparent';
-            } else {
-                avatarPreview.style.backgroundImage = 'none';
-                avatarPreview.style.backgroundColor = 'linear-gradient(135deg, var(--primary), var(--secondary))';
-                avatarPreviewText.style.display = 'flex';
-                avatarPreviewText.textContent = letter;
-            }
-        }
-
-        // Закрытие модального окна редактирования профиля
-        function closeEditModal() {
-            editModal.classList.remove('active');
-        }
-
-        // Сохранение изменений профиля
-        async function saveProfileChanges(event) {
-            event.preventDefault();
-            
-            const newBio = editBio.value;
-            const newAvatar = editAvatar.value;
+    
+        // Удаление поста
+        async function deletePost(postId) {
+            if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
             
             try {
                 const token = localStorage.getItem('access_token');
-                if (!token) {
-                    alert('Ошибка авторизации. Пожалуйста, войдите снова.');
-                    return;
-                }
-                
-                const response = await fetch(`/users/${username}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        bio: newBio,
-                        avatar: newAvatar || '/default-avatar.jpg'
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Ошибка при сохранении изменений');
-                }
-                
-                const updatedUser = await response.json();
-                
-                // Обновляем данные на странице
-                document.getElementById('profileBio').textContent = updatedUser.profile.bio || "Пока ничего не рассказал о себе";
-                
-                const avatar = document.getElementById('profileAvatar');
-                avatar.textContent = updatedUser.username[0].toUpperCase();
-                if (updatedUser.profile.avatar && !updatedUser.profile.avatar.startsWith('/')) {
-                    avatar.style.backgroundImage = `url(${updatedUser.profile.avatar})`;
-                    avatar.style.backgroundSize = 'cover';
-                    avatar.textContent = '';
-                } else {
-                    avatar.style.backgroundImage = 'none';
-                    avatar.textContent = updatedUser.username[0].toUpperCase();
-                }
-                
-                closeEditModal();
-                
-            } catch (error) {
-                console.error('Error saving profile:', error);
-                alert('Ошибка при сохранении изменений: ' + error.message);
-                
-                if (error.message.includes('401') || error.message.includes('auth')) {
-                    localStorage.removeItem('access_token');
-                }
-            }
-        }
-
-        // Показываем модальное окно создания поста
-        newPostBtn.addEventListener('click', () => {
-            if (!currentUser) {
-                alert('Для публикации войдите в аккаунт');
-                return;
-            }
-            postModal.classList.add('active');
-        });
-
-        // Закрываем модальное окно создания поста
-        closePostModal.addEventListener('click', () => {
-            postModal.classList.remove('active');
-            resetPostForm();
-        });
-
-        // Закрытие при клике вне окна
-        postModal.addEventListener('click', (e) => {
-            if (e.target === postModal) {
-                postModal.classList.remove('active');
-                resetPostForm();
-            }
-        });
-
-        // Превью выбранного изображения
-        postPhotoInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    previewImage.src = event.target.result;
-                    previewImage.style.display = 'block';
-                    fileUploadLabel.style.display = 'none';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Сброс формы создания поста
-        function resetPostForm() {
-            createPostForm.reset();
-            previewImage.style.display = 'none';
-            previewImage.src = '';
-            fileUploadLabel.style.display = 'block';
-        }
-
-        // Drag and drop для файла
-        fileUploadLabel.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            fileUploadLabel.style.borderColor = 'var(--primary)';
-            fileUploadLabel.style.backgroundColor = 'rgba(67, 97, 238, 0.1)';
-        });
-
-        fileUploadLabel.addEventListener('dragleave', () => {
-            fileUploadLabel.style.borderColor = 'var(--border)';
-            fileUploadLabel.style.backgroundColor = 'transparent';
-        });
-
-        fileUploadLabel.addEventListener('drop', (e) => {
-            e.preventDefault();
-            fileUploadLabel.style.borderColor = 'var(--border)';
-            fileUploadLabel.style.backgroundColor = 'transparent';
-            
-            if (e.dataTransfer.files.length) {
-                postPhotoInput.files = e.dataTransfer.files;
-                const event = new Event('change');
-                postPhotoInput.dispatchEvent(event);
-            }
-        });
-
-        // Отправка формы создания поста
-        createPostForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            
-            const photoFile = postPhotoInput.files[0];
-            const description = document.getElementById('post-description').value;
-            const latitude = document.getElementById('latitude').value;
-            const longitude = document.getElementById('longitude').value;
-            
-            if (!photoFile) {
-                alert('Выберите фото для публикации');
-                return;
-            }
-
-            if (!latitude || !longitude) {
-                alert('Укажите местоположение на карте');
-                return;
-            }
-
-            submitPostBtn.disabled = true;
-            submitPostBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Публикация...';
-
-            try {
-                const formData = new FormData();
-                formData.append('photo', photoFile);
-                formData.append('description', description || '');
-                formData.append('latitude', latitude);
-                formData.append('altitude', longitude);
-
-                const token = localStorage.getItem('access_token');
-                if (!token) {
-                    throw new Error('Требуется авторизация');
-                }
-
-                const response = await fetch('/posts', {
-                    method: 'POST',
+                if (!token) throw new Error('Требуется авторизация');
+    
+                const response = await fetch(`/posts/${postId}`, {
+                    method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
+                    }
                 });
-
+    
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || 'Ошибка при публикации');
+                    throw new Error(errorData.detail || 'Ошибка при удалении поста');
                 }
-
-                const result = await response.json();
-                console.log('Пост создан:', result);
-                
-                alert('Пост успешно опубликован!');
-                postModal.classList.remove('active');
-                resetPostForm();
+    
                 await loadUserPosts();
+                alert('Пост успешно удален!');
             } catch (error) {
-                console.error('Ошибка при публикации:', error);
-                alert('Ошибка при публикации: ' + error.message);
-                
-                if (error.message.includes('auth') || error.message.includes('401')) {
-                    localStorage.removeItem('access_token');
-                }
-            } finally {
-                submitPostBtn.disabled = false;
-                submitPostBtn.innerHTML = '<i class="fas fa-share"></i> Опубликовать';
+                console.error('Delete post error:', error);
+                alert('Ошибка при удалении поста: ' + error.message);
             }
-        });
-
-        // Назначаем обработчики событий
-        closeModalBtn.addEventListener('click', closeEditModal);
-        editProfileForm.addEventListener('submit', saveProfileChanges);
-        
-        editModal.addEventListener('click', (event) => {
-            if (event.target === editModal) {
-                closeEditModal();
-            }
-        });
-
-        // Инициализация при загрузке страницы
-        window.addEventListener('DOMContentLoaded', async () => {
-            await loadProfile();
-            await loadUserPosts();
-        });
-
-        // Инициализация карты для поста
-        let postMap;
-        let postMarker;
-
+        }
+    
+        // Инициализация карты
         function initPostMap() {
             const center = [56.835184, 60.609573];
-            
-            // Создаем карту
             postMap = L.map('post-map', {
                 zoomControl: false,
                 preferCanvas: true,
@@ -1274,220 +1057,46 @@
                 minZoom: 2
             }).addTo(postMap);
             
-            // Клик по карте - ставим маркер
             postMap.on('click', (e) => {
                 const { lat, lng } = e.latlng;
-                
-                // Удаляем старый маркер, если есть
                 if (postMarker) postMap.removeLayer(postMarker);
-                
-                // Добавляем новый маркер
                 postMarker = L.marker([lat, lng]).addTo(postMap);
-                
-                // Заполняем скрытые поля координатами
                 document.getElementById('latitude').value = lat;
                 document.getElementById('longitude').value = lng;
             });
         }
-
-        // Инициализируем карту при открытии модального окна
-        newPostBtn.addEventListener("click", () => {
-            if (!currentUser) return;
-            
-            setTimeout(() => {
-                if (!postMap) initPostMap();
-            }, 300);
-        });
-
-        // Сбрасываем карту при закрытии модального окна
-        closePostModal.addEventListener("click", () => {
-            if (postMarker) postMap.removeLayer(postMarker);
-            document.getElementById('latitude').value = '';
-            document.getElementById('longitude').value = '';
-        });
-
-        async function deletePost(postId) {
-            if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
-            
-            try {
-                const token = localStorage.getItem('access_token');
-                if (!token) {
-                    throw new Error('Требуется авторизация');
-                }
-
-                const response = await fetch(`/posts/${postId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || 'Ошибка при удалении поста');
-                }
-
-                const result = await response.json();
-                console.log('Пост удален:', result);
-                
-                alert('Пост успешно удален!');
-                await loadUserPosts(); // Обновляем список постов
-            } catch (error) {
-                console.error('Ошибка при удалении поста:', error);
-                alert('Ошибка при удалении поста: ' + error.message);
-                
-                if (error.message.includes('auth') || error.message.includes('401')) {
-                    localStorage.removeItem('access_token');
-                }
-            }
-        }
-        // Функции для работы с модальным окном поста
-        function openPostModal(post) {
-            const modal = document.getElementById('postViewModal');
-            const container = document.getElementById('postViewContainer');
-            
-            const postDate = new Date(post.created_at).toLocaleString();
-            const isCurrentUserPost = currentUser && currentUser.username === post.username;
-            
-            container.innerHTML = `
-                <div class="post">
-                    <div class="post-header">
-                        <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
-                        <div class="post-user-info">
-                            <div class="post-username">${post.username}</div>
-                            <div class="post-time">${postDate}</div>
-                        </div>
-                        ${isCurrentUserPost ? `
-                        <button class="delete-post-btn">
-                            <i class="fas fa-trash"></i>
-                        </button>` : ''}
-                    </div>
-                    ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                    <img src="${post.photo_url}" class="post-image" alt="Фото">
-                    <div class="post-actions">
-                        <button class="action-button like-button">
-                            <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
-                        </button>
-                        <button class="action-button">
-                            <i class="far fa-comment"></i> <span>${post.comments_count || 0}</span>
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            // Добавляем обработчик удаления
-            if (isCurrentUserPost) {
-                container.querySelector('.delete-post-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deletePost(post.id);
-                    closePostModal();
-                });
-            }
-            
-            // Добавляем обработчик лайков
-            const likeBtn = container.querySelector('.like-button');
-            likeBtn.addEventListener('click', async function(e) {
-                e.stopPropagation();
-                
-                if (!currentUser) {
-                    alert('Для этого действия нужно войти в аккаунт');
-                    return;
-                }
-                
-                const isLiked = this.classList.contains('liked');
-                const endpoint = isLiked ? 'unlike' : 'like';
-                
-                try {
-                    const token = localStorage.getItem('access_token');
-                    const response = await fetch(`/posts/${post.id}/${endpoint}`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Failed to update like');
-                    }
-                    
-                    const result = await response.json();
-                    const likeCount = this.querySelector('span');
-                    
-                    if (isLiked) {
-                        this.classList.remove('liked');
-                        this.querySelector('i').className = 'far fa-heart';
-                        likeCount.textContent = parseInt(likeCount.textContent) - 1;
-                    } else {
-                        this.classList.add('liked');
-                        this.querySelector('i').className = 'fas fa-heart';
-                        likeCount.textContent = parseInt(likeCount.textContent) + 1;
-                    }
-                } catch (error) {
-                    console.error('Like error:', error);
-                    alert('Ошибка при обновлении лайка');
-                }
-            });
-            
-            modal.classList.add('active');
-        }
-
-        function closePostModal() {
-            const modal = document.getElementById('postViewModal');
-            modal.classList.remove('active');
-            updateUrl(); // Убираем ID поста из URL
-        }
-
-        // Обновление URL
-        function updateUrl(postId = null) {
-            if (postId) {
-                history.pushState({ postId }, '', `?post=${postId}`);
-            } else {
-                history.pushState(null, '', window.location.pathname);
-            }
-        }
-
-        // Обработчик закрытия по клику вне области
-        document.getElementById('postViewModal').addEventListener('click', (e) => {
-            if (e.target === e.currentTarget) {
-                closePostModal();
-            }
-        });
-
-        // Обработчик закрытия по крестику
+    
+        // Обработчики событий
         document.getElementById('closePostView').addEventListener('click', closePostModal);
-
-        // Обработчик навигации по истории
+        document.getElementById('postViewModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closePostModal();
+        });
+    
         window.addEventListener('popstate', (e) => {
-            if (e.state && e.state.postId) {
-                // Загружаем пост по ID из истории
-                loadAndShowPost(e.state.postId);
+            if (e.state?.postId) {
+                fetch(`/posts/${e.state.postId}`)
+                    .then(checkResponse)
+                    .then(post => openPostModal(post))
+                    .catch(console.error);
             } else {
                 closePostModal();
             }
         });
-
-        // Проверяем URL при загрузке страницы
-        window.addEventListener('DOMContentLoaded', () => {
+    
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            loadProfile();
+            
+            // Проверяем наличие поста в URL
             const urlParams = new URLSearchParams(window.location.search);
             const postId = urlParams.get('post');
-            
             if (postId) {
-                loadAndShowPost(postId);
+                fetch(`/posts/${postId}`)
+                    .then(checkResponse)
+                    .then(post => openPostModal(post))
+                    .catch(console.error);
             }
         });
-
-        async function loadAndShowPost(postId) {
-            try {
-                const response = await fetch(`/posts/${postId}`);
-                if (!response.ok) throw new Error('Post not found');
-                
-                const post = await response.json();
-                openPostModal(post);
-            } catch (error) {
-                console.error('Error loading post:', error);
-                updateUrl(); // Убираем невалидный ID из URL
-            }
-        }
     </script>
 </body>
 </html>
