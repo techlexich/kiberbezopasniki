@@ -701,12 +701,13 @@
         const expandedImage = document.getElementById('expanded-image');
         const closeImageModal = document.querySelector('.close-image-modal');
     
-        // Переменная для отслеживания состояния модального окна
+        // Состояние модального окна
         let isProfileModalOpen = false;
         let modalClickHandler = null;
         let modalEscapeHandler = null;
-
-        // Функции для работы с модальными окнами
+    
+        // ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С МОДАЛЬНЫМИ ОКНАМИ ====================
+    
         function showModal(modal) {
             if (isProfileModalOpen) return;
             
@@ -715,8 +716,8 @@
             const modalWidth = 300;
             
             // Вычисляем позицию
-            let left = buttonRect.left + window.scrollX;
-            let top = buttonRect.bottom + window.scrollY + 5;
+            let left = buttonRect.left;
+            let top = buttonRect.bottom + 5;
             
             // Корректируем позицию, если окно выходит за границы экрана
             if (left + modalWidth > window.innerWidth) {
@@ -724,7 +725,7 @@
             }
             
             // Устанавливаем позицию
-            modal.style.position = 'absolute';
+            modal.style.position = 'fixed';
             modal.style.top = `${top}px`;
             modal.style.left = `${left}px`;
             modal.style.display = 'block';
@@ -740,7 +741,7 @@
             // Обработчик кликов вне модального окна
             modalClickHandler = (e) => {
                 // Не закрываем, если клик внутри модального окна или на кнопке профиля
-                if (modal.contains(e.target) return;
+                if (modal.contains(e.target)) return;
                 if (e.target === profileButton || profileButton.contains(e.target)) return;
                 
                 hideModal(modal);
@@ -753,15 +754,13 @@
                 }
             };
             
-            // Добавляем обработчики с небольшой задержкой
-            setTimeout(() => {
-                document.addEventListener('click', modalClickHandler);
-                document.addEventListener('keydown', modalEscapeHandler);
-            }, 50);
+            // Добавляем обработчики
+            document.addEventListener('click', modalClickHandler);
+            document.addEventListener('keydown', modalEscapeHandler);
             
             isProfileModalOpen = true;
         }
-
+    
         function hideModal(modal) {
             if (!isProfileModalOpen) return;
             
@@ -782,11 +781,10 @@
                 isProfileModalOpen = false;
             }, 200);
         }
-
+    
         // Обработчик кнопки профиля
         profileButton.addEventListener('click', function(e) {
             e.stopPropagation();
-            e.preventDefault();
             
             if (isProfileModalOpen) {
                 hideModal(profileModal);
@@ -795,25 +793,14 @@
                 resetAuthForms();
             }
         });
-
+    
         // Обработчик кнопки закрытия
         closeProfile.addEventListener('click', function(e) {
             e.stopPropagation();
             hideModal(profileModal);
         });
     
-        function clickOutsideHandler(e) {
-            if (!profileModal.contains(e.target) && e.target !== profileButton) {
-                hideModal(profileModal);
-            }
-        }
-    
-        function handleEscape(e) {
-            if (e.key === 'Escape') {
-                hideModal(profileModal);
-                hideImageModal();
-            }
-        }
+        // ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С ИЗОБРАЖЕНИЯМИ ====================
     
         function showImageModal(imageUrl) {
             expandedImage.src = imageUrl;
@@ -823,6 +810,8 @@
         function hideImageModal() {
             imageModal.style.display = 'none';
         }
+    
+        // ==================== ФУНКЦИИ АВТОРИЗАЦИИ ====================
     
         function resetAuthForms() {
             if (currentUser) {
@@ -845,8 +834,6 @@
             registerError.style.display = 'none';
         }
     
-    
-        // Функции для работы с авторизацией
         async function checkAuth() {
             const token = localStorage.getItem('access_token');
             if (!token) return null;
@@ -926,6 +913,8 @@
             element.style.display = 'block';
         }
     
+        // ==================== ФУНКЦИИ ДЛЯ РАБОТЫ С ПОСТАМИ ====================
+    
         async function loadPostsWithRetry(retries = 3, delay = 1000) {
             for (let i = 0; i < retries; i++) {
                 try {
@@ -945,7 +934,6 @@
             }
         }
     
-        // Улучшенный рендеринг постов
         async function renderPosts() {
             const container = document.getElementById('posts-container');
             
@@ -972,7 +960,7 @@
                     </div>
                 `;
     
-                // Загружаем посты (функция сама разберется с токеном)
+                // Загружаем посты
                 const posts = await loadPostsWithRetry();
                 
                 // Очищаем контейнер
@@ -1093,12 +1081,6 @@
                     img.addEventListener('click', () => showImageModal(img.src));
                 });
     
-                // Обработчик для кнопки профиля
-                document.getElementById('profile-button').addEventListener('click', () => {
-                    showModal(profileModal);
-                    resetAuthForms();
-                });
-    
             } catch (error) {
                 console.error('Ошибка загрузки ленты:', error);
                 container.innerHTML = `
@@ -1126,8 +1108,7 @@
             }
         }
     
-        // Обработчики событий
-        closeProfile.addEventListener('click', () => hideModal(profileModal));
+        // ==================== ОБРАБОТЧИКИ СОБЫТИЙ ====================
     
         backFromLogin.addEventListener('click', resetAuthForms);
         backFromRegister.addEventListener('click', resetAuthForms);
@@ -1164,7 +1145,7 @@
                 await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
-                await renderPosts(); // Обновляем посты после регистрации
+                await renderPosts();
             } catch (error) {
                 showError(registerError, error.message || 'Ошибка соединения');
             }
@@ -1195,7 +1176,7 @@
                 await updateAuthUI();
                 resetAuthForms();
                 hideModal(profileModal);
-                await renderPosts(); // Обновляем посты после входа
+                await renderPosts();
             } catch (error) {
                 showError(loginError, error.message || 'Ошибка соединения');
             }
@@ -1207,7 +1188,7 @@
             currentUser = null;
             updateAuthUI();
             hideModal(profileModal);
-            renderPosts(); // Обновляем посты после выхода
+            renderPosts();
         });
     
         // Обработчик для кнопки нового поста
@@ -1220,18 +1201,19 @@
             window.location.href = '/new-post';
         });
     
-        // Инициализация при загрузке страницы
+        // Обработчик для закрытия модального окна изображения
+        closeImageModal.addEventListener('click', hideImageModal);
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) {
+                hideImageModal();
+            }
+        });
+    
+        // ==================== ИНИЦИАЛИЗАЦИЯ ====================
+    
         document.addEventListener('DOMContentLoaded', async () => {
             await updateAuthUI();
             await renderPosts();
-            
-            // Обработчик для закрытия модального окна изображения
-            closeImageModal.addEventListener('click', hideImageModal);
-            imageModal.addEventListener('click', (e) => {
-                if (e.target === imageModal) {
-                    hideImageModal();
-                }
-            });
         });
     </script>
 </body>
