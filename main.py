@@ -196,7 +196,20 @@ async def register(user: UserCreate, db=Depends(get_db)):
         db.commit()
         return {**new_user, "profile": {"bio": "", "avatar": "/default-avatar.jpg"}}
 
-
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    for error in errors:
+        if error["type"] == "value_error.email":
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Некорректный формат email"},
+            )
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Ошибка валидации данных"},
+    )
+    
 @app.put("/users/{username}", response_model=User)
 async def update_user_profile(
     username: str,
