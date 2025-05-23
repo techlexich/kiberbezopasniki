@@ -93,6 +93,8 @@ class Post(BaseModel):
     altitude: float
     likes_count: int
     photo_url: str
+    camera_model: Optional[str] = None
+    camera_settings: Optional[dict] = None
 
 
 
@@ -391,6 +393,10 @@ async def create_post(
     description: str = Form(default=""),
     altitude: str = Form(...),
     latitude: str = Form(...),
+    camera_model: str = Form(...),  # Добавляем обязательное поле
+    exposure: str = Form(default=""),  # Пример настройки камеры
+    aperture: str = Form(default=""),  # Пример настройки камеры
+    iso: str = Form(default=""),      # Пример настройки камеры
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -398,10 +404,15 @@ async def create_post(
         raise HTTPException(400, detail="Invalid file")
 
     try:
+        # Читаем файл для EXIF
+        file_content = await photo.read()
+        
+        # Извлекаем EXIF данные
+        exif_data = extract_exif_data(file_content)
+        
         # Генерация имени файла и загрузка в S3
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"{uuid.uuid4()}.{file_ext}"
-        file_content = await photo.read()
         
         # Формируем URL для загрузки
         url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -439,6 +450,16 @@ async def create_post(
 
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
+        # Формируем настройки камеры
+        camera_settings = {
+            "model": camera_model,
+            "exposure": exposure or exif_data.get("exposure_time", ""),
+            "aperture": aperture or exif_data.get("f_number", ""),
+            "iso": iso or exif_data.get("iso", ""),
+            "focal_length": exif_data.get("focal_length", ""),
+            "lens": exif_data.get("lens_model", "")
+        }
+
         # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
@@ -453,6 +474,7 @@ async def create_post(
                     tags,
                     altitude,
                     latitude,
+                    camera_model,
                     camera_settings
                 ) VALUES (
                     %s,  -- photo_url
@@ -465,12 +487,13 @@ async def create_post(
                     %s,  -- tags
                     %s,  -- altitude
                     %s,  -- latitude
+                    %s,  -- camera_model
                     %s   -- camera_settings
                 )
                 RETURNING id, created_at
             """, (
                 photo_url,
-                datetime.now().strftime('%H:%M'),
+                exif_data.get("datetime", datetime.now().strftime('%H:%M')),
                 description,
                 current_user["id"],
                 0,  # likes_count
@@ -478,12 +501,21 @@ async def create_post(
                 "",  # tags
                 altitude,
                 latitude,
-                "{}"  # camera_settings
+                camera_model,
+                json.dumps(camera_settings)  # сохраняем как JSON
             ))
             new_post = cur.fetchone()
             db.commit()
 
-        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
+        return {
+            "status": "success",
+            "url": photo_url,
+            "post_id": new_post["id"],
+            "camera_info": {
+                "model": camera_model,
+                "settings": camera_settings
+            }
+        }
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
