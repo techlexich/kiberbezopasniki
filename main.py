@@ -27,7 +27,7 @@ import base64
 from botocore.exceptions import ClientError
 from slugify import slugify
 
-# Настройки
+# Настройкиi
 load_dotenv()
 
 # Конфигурация с fallback значениями
