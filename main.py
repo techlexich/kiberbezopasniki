@@ -150,9 +150,57 @@ def get_db():
         conn.close()
 
 # Вспомогательные функции
+def extract_exif_data(image_bytes: bytes) -> dict:
+    """
+    Извлекает EXIF-данные из изображения.
+    Возвращает словарь с метаданными.
+    """
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        if not hasattr(image, '_getexif') or image._getexif() is None:
+            return {}
+        
+        exif_data = {}
+        for tag_id, value in image._getexif().items():
+            tag_name = TAGS.get(tag_id, tag_id)
+            
+            # Обрабатываем GPS-данные отдельно
+            if tag_name == "GPSInfo":
+                gps_data = {}
+                for gps_tag_id in value:
+                    gps_tag_name = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                    gps_data[gps_tag_name] = value[gps_tag_id]
+                exif_data[tag_name] = gps_data
+            else:
+                exif_data[tag_name] = value
+        
+        # Извлекаем только нужные нам данные
+        useful_exif = {
+            "camera_make": exif_data.get("Make", ""),
+            "camera_model": exif_data.get("Model", ""),
+            "software": exif_data.get("Software", ""),
+            "datetime": exif_data.get("DateTimeOriginal", ""),
+            "exposure_time": exif_data.get("ExposureTime", ""),
+            "f_number": exif_data.get("FNumber", ""),
+            "iso": exif_data.get("ISOSpeedRatings", ""),
+            "focal_length": exif_data.get("FocalLength", ""),
+            "lens_make": exif_data.get("LensMake", ""),
+            "lens_model": exif_data.get("LensModel", ""),
+            "gps_info": exif_data.get("GPSInfo", {})
+        }
+        
+        return useful_exif
+    
+    except Exception as e:
+        logger.error(f"EXIF extraction error: {str(e)}")
+        return {}
+
+
 def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode({**data, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+
 
 async def get_user(db, username: str):
     with db.cursor() as cur:
