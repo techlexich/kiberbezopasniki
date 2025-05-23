@@ -26,6 +26,9 @@ import hashlib
 import base64
 from botocore.exceptions import ClientError
 from slugify import slugify
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
+import io
 
 # Настройкиi
 load_dotenv()
