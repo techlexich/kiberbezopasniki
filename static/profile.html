@@ -814,6 +814,40 @@
             }
         });
 
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Сначала загружаем данные из localStorage
+            const savedProfile = localStorage.getItem('currentProfile');
+            if (savedProfile) {
+                const profile = JSON.parse(savedProfile);
+                document.getElementById('profileName').textContent = profile.username;
+                document.getElementById('profileBio').textContent = profile.bio;
+                
+                const avatar = document.getElementById('profileAvatar');
+                avatar.textContent = profile.username[0].toUpperCase();
+                if (profile.avatar) {
+                    avatar.style.backgroundImage = `url(${profile.avatar})`;
+                }
+            }
+
+            // Затем загружаем свежие данные с сервера
+            await loadProfile();
+            
+            // Проверяем наличие поста в URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const postId = urlParams.get('post');
+            if (postId) {
+                try {
+                    const response = await fetch(`/posts/${postId}`);
+                    if (response.ok) {
+                        const post = await response.json();
+                        openPostModal(post);
+                    }
+                } catch (error) {
+                    console.error('Error loading post:', error);
+                }
+            }
+        });
         // Обработка формы редактирования
         document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -823,17 +857,18 @@
             
             try {
                 const token = localStorage.getItem('access_token');
+                if (!token) throw new Error('Требуется авторизация');
+
                 const formData = new FormData();
                 formData.append('bio', bio);
                 
-                // Если выбрана новая аватарка (файл)
                 const avatarFile = document.getElementById('avatarFile')?.files[0];
                 if (avatarFile) {
                     formData.append('avatar', avatarFile);
                 } else if (avatarUrl) {
                     formData.append('avatar_url', avatarUrl);
                 }
-                
+
                 const response = await fetch(`/users/${username}`, {
                     method: 'PUT',
                     headers: {
@@ -841,12 +876,12 @@
                     },
                     body: formData
                 });
-                
+
                 if (!response.ok) {
-                    const error = await response.json();
+                    const error = await response.json().catch(() => ({}));
                     throw new Error(error.detail || 'Ошибка при обновлении профиля');
                 }
-                
+
                 const updatedUser = await response.json();
                 renderProfile(updatedUser);
                 document.getElementById('editModal').classList.remove('active');
@@ -858,40 +893,75 @@
         });
         // Загрузка профиля
         async function loadProfile() {
+            // Показываем данные из localStorage сразу (для мгновенного отображения)
+            const savedProfile = localStorage.getItem('currentProfile');
+            if (savedProfile) {
+                renderProfile(JSON.parse(savedProfile));
+            }
+
             if (!username) {
                 showError("Не удалось определить пользователя");
                 return;
             }
 
             try {
-                const user = await fetch(`/users/${username}`).then(checkResponse);
+                const response = await fetch(`/users/${username}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                
+                const user = await response.json();
+                
+                // Проверяем структуру ответа
+                if (!user.username) {
+                    throw new Error('Invalid user data structure');
+                }
+                
                 renderProfile(user);
-                // Сохраняем данные пользователя
-                localStorage.setItem('currentProfile', JSON.stringify(user));
                 await checkAuth();
                 await loadUserPosts();
             } catch (error) {
                 console.error("Profile load error:", error);
-                showError("Ошибка загрузки профиля");
+                
+                // Если есть сохраненные данные - используем их
+                if (savedProfile) {
+                    renderProfile(JSON.parse(savedProfile));
+                } else {
+                    showError("Ошибка загрузки профиля");
+                }
             }
         }
 
         function renderProfile(user) {
-            if (!user) return;
-            
-            document.getElementById('profileName').textContent = user.username || 'Username';
-            document.getElementById('profileBio').textContent = user.profile?.bio || "Нет описания";
-            
-            const avatar = document.getElementById('profileAvatar');
-            avatar.textContent = user.username ? user.username[0].toUpperCase() : 'U';
-            if (user.profile?.avatar) {
-                avatar.style.backgroundImage = `url(${user.profile.avatar})`;
-                avatar.style.backgroundSize = 'cover';
-            } else {
-                avatar.style.backgroundImage = '';
+            if (!user) {
+                console.error('No user data provided');
+                return;
             }
-        }
+            
+            // Убедимся, что структура данных правильная
+            const profileData = {
+                username: user.username || user.profile?.username || 'Username',
+                bio: user.profile?.bio || user.bio || "Нет описания",
+                avatar: user.profile?.avatar || user.avatar_url || ''
+            };
 
+            // Обновляем DOM
+            document.getElementById('profileName').textContent = profileData.username;
+            document.getElementById('profileBio').textContent = profileData.bio;
+            
+            const avatarElement = document.getElementById('profileAvatar');
+            avatarElement.textContent = profileData.username[0].toUpperCase();
+            
+            if (profileData.avatar) {
+                avatarElement.style.backgroundImage = `url(${profileData.avatar})`;
+                avatarElement.style.backgroundSize = 'cover';
+            } else {
+                avatarElement.style.backgroundImage = '';
+            }
+            
+            // Сохраняем текущие данные
+            localStorage.setItem('currentProfile', JSON.stringify(profileData));
+        }
         function logout() {
             localStorage.removeItem('access_token');
             localStorage.removeItem('currentProfile');
