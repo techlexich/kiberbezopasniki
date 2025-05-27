@@ -866,6 +866,8 @@
             try {
                 const user = await fetch(`/users/${username}`).then(checkResponse);
                 renderProfile(user);
+                // Сохраняем данные пользователя
+                localStorage.setItem('currentProfile', JSON.stringify(user));
                 await checkAuth();
                 await loadUserPosts();
             } catch (error) {
@@ -875,15 +877,25 @@
         }
 
         function renderProfile(user) {
-            document.getElementById('profileName').textContent = user.username;
+            if (!user) return;
+            
+            document.getElementById('profileName').textContent = user.username || 'Username';
             document.getElementById('profileBio').textContent = user.profile?.bio || "Нет описания";
             
             const avatar = document.getElementById('profileAvatar');
-            avatar.textContent = user.username[0].toUpperCase();
+            avatar.textContent = user.username ? user.username[0].toUpperCase() : 'U';
             if (user.profile?.avatar) {
                 avatar.style.backgroundImage = `url(${user.profile.avatar})`;
                 avatar.style.backgroundSize = 'cover';
+            } else {
+                avatar.style.backgroundImage = '';
             }
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('currentProfile');
+            window.location.reload();
         }
 
         async function checkAuth() {
@@ -1287,6 +1299,13 @@
 
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
+            // Пытаемся загрузить данные из localStorage
+            const savedProfile = localStorage.getItem('currentProfile');
+            if (savedProfile) {
+                const user = JSON.parse(savedProfile);
+                renderProfile(user);
+            }
+
             loadProfile();
             
             // Проверяем наличие поста в URL
