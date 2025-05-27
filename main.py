@@ -145,7 +145,8 @@ def get_db():
         password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
         host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
         port="5432",
-        cursor_factory=RealDictCursor
+        cursor_factory=RealDictCursor,
+        sslmode="require"  
     )
     try:
         yield conn
