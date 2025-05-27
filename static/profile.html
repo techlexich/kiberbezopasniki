@@ -711,13 +711,18 @@
                     <label for="editBio">Описание профиля</label>
                     <textarea id="editBio" maxlength="500"></textarea>
                 </div>
+                
                 <div class="form-group">
-                    <label for="editAvatar">Ссылка на аватар</label>
+                    <label>Аватар</label>
+                    <input type="file" id="avatarFile" accept="image/*">
+                    <small>Или укажите URL:</small>
                     <input type="text" id="editAvatar" placeholder="https://example.com/avatar.jpg">
                 </div>
+                
                 <div class="avatar-preview" id="avatarPreview">
                     <div class="avatar-preview-text" id="avatarPreviewText">U</div>
                 </div>
+                
                 <button type="submit" class="save-btn">Сохранить изменения</button>
             </form>
         </div>
@@ -798,7 +803,59 @@
             }
             return response.json();
         }
+        // Открытие модального окна редактирования
+        document.getElementById('editProfileBtn').addEventListener('click', () => {
+            document.getElementById('editModal').classList.add('active');
+            document.getElementById('editBio').value = document.getElementById('profileBio').textContent;
+            
+            const currentAvatar = document.getElementById('profileAvatar').style.backgroundImage;
+            if (currentAvatar) {
+                document.getElementById('editAvatar').value = currentAvatar.replace('url("', '').replace('")', '');
+            }
+        });
 
+        // Обработка формы редактирования
+        document.getElementById('editProfileForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const bio = document.getElementById('editBio').value;
+            const avatarUrl = document.getElementById('editAvatar').value;
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                const formData = new FormData();
+                formData.append('bio', bio);
+                
+                // Если выбрана новая аватарка (файл)
+                const avatarFile = document.getElementById('avatarFile')?.files[0];
+                if (avatarFile) {
+                    formData.append('avatar', avatarFile);
+                } else if (avatarUrl) {
+                    formData.append('avatar_url', avatarUrl);
+                }
+                
+                const response = await fetch(`/users/${username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка при обновлении профиля');
+                }
+                
+                const updatedUser = await response.json();
+                renderProfile(updatedUser);
+                document.getElementById('editModal').classList.remove('active');
+                alert('Профиль успешно обновлен!');
+            } catch (error) {
+                console.error('Profile update error:', error);
+                alert('Ошибка при обновлении профиля: ' + error.message);
+            }
+        });
         // Загрузка профиля
         async function loadProfile() {
             if (!username) {

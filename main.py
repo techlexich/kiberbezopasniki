@@ -269,22 +269,46 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.put("/users/{username}", response_model=User)
 async def update_user_profile(
     username: str,
-    profile: UserProfile,
+    avatar: Optional[UploadFile] = File(None),
+    bio: str = Form(default=""),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Проверяем, что пользователь обновляет свой профиль
     if current_user["username"] != username:
         raise HTTPException(403, "You can update only your own profile")
     
+    avatar_url = current_user["avatar"]  # сохраняем текущий URL
+    
+    # Если загружен новый аватар
+    if avatar:
+        try:
+            # Генерируем имя файла
+            file_ext = avatar.filename.split('.')[-1].lower()
+            file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
+            
+            # Загружаем в S3
+            s3.upload_fileobj(
+                avatar.file,
+                BEGET_S3_BUCKET_NAME,
+                file_name,
+                ExtraArgs={
+                    'ACL': 'public-read',
+                    'ContentType': avatar.content_type
+                }
+            )
+            
+            avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        except Exception as e:
+            logger.error(f"Avatar upload error: {str(e)}")
+            raise HTTPException(500, "Failed to upload avatar")
+
     with db.cursor() as cur:
-        # Обновляем профиль в базе данных
         cur.execute("""
             UPDATE users 
             SET bio = %s, avatar_url = %s
             WHERE username = %s
             RETURNING id, username, email, bio, avatar_url
-        """, (profile.bio, profile.avatar, username))
+        """, (bio, avatar_url, username))
         
         updated_user = cur.fetchone()
         db.commit()
@@ -396,10 +420,10 @@ async def create_post(
     description: str = Form(default=""),
     altitude: str = Form(...),
     latitude: str = Form(...),
-    camera_model: str = Form(...),  # Добавляем обязательное поле
-    exposure: str = Form(default=""),  # Пример настройки камеры
-    aperture: str = Form(default=""),  # Пример настройки камеры
-    iso: str = Form(default=""),      # Пример настройки камеры
+    camera_model: str = Form(...),
+    exposure: str = Form(default=""),
+    aperture: str = Form(default=""),
+    iso: str = Form(default=""),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -413,44 +437,21 @@ async def create_post(
         # Извлекаем EXIF данные
         exif_data = extract_exif_data(file_content)
         
-        # Генерация имени файла и загрузка в S3
+        # Генерация имени файла
         file_ext = photo.filename.split('.')[-1].lower()
-        file_name = f"{uuid.uuid4()}.{file_ext}"
+        file_name = f"posts/{uuid.uuid4()}.{file_ext}"
         
-        # Формируем URL для загрузки
-        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
-        # Подготовка заголовков
-        now = datetime.utcnow()
-        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
-        
-        headers = {
-            'Content-Type': photo.content_type,
-            'x-amz-date': timestamp,
-            'x-amz-acl': 'public-read',
-            'Content-Length': str(len(file_content))
-        }
-        
-        # Создаем подпись запроса
-        auth = AWS4Auth(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            'ru-1',
-            's3'
+        # Загружаем в S3
+        s3.upload_fileobj(
+            io.BytesIO(file_content),
+            BEGET_S3_BUCKET_NAME,
+            file_name,
+            ExtraArgs={
+                'ACL': 'public-read',
+                'ContentType': photo.content_type
+            }
         )
         
-        # Отправляем запрос
-        response = requests.put(
-            url,
-            data=file_content,
-            headers=headers,
-            auth=auth
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
-            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
-
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
         # Формируем настройки камеры
@@ -468,44 +469,27 @@ async def create_post(
             cur.execute("""
                 INSERT INTO posts (
                     photo_url,
-                    shooting_time,
                     description,
                     user_id,
                     created_at,
                     likes_count,
                     comments_count,
-                    tags,
                     altitude,
                     latitude,
                     camera_model,
                     camera_settings
                 ) VALUES (
-                    %s,  -- photo_url
-                    %s,  -- shooting_time
-                    %s,  -- description
-                    %s,  -- user_id
-                    NOW(),  -- created_at
-                    %s,  -- likes_count
-                    %s,  -- comments_count
-                    %s,  -- tags
-                    %s,  -- altitude
-                    %s,  -- latitude
-                    %s,  -- camera_model
-                    %s   -- camera_settings
+                    %s, %s, %s, NOW(), 0, 0, %s, %s, %s, %s
                 )
                 RETURNING id, created_at
             """, (
                 photo_url,
-                exif_data.get("datetime", datetime.now().strftime('%H:%M')),
                 description,
                 current_user["id"],
-                0,  # likes_count
-                0,  # comments_count
-                "",  # tags
                 altitude,
                 latitude,
                 camera_model,
-                json.dumps(camera_settings)  # сохраняем как JSON
+                json.dumps(camera_settings)
             ))
             new_post = cur.fetchone()
             db.commit()
@@ -514,10 +498,7 @@ async def create_post(
             "status": "success",
             "url": photo_url,
             "post_id": new_post["id"],
-            "camera_info": {
-                "model": camera_model,
-                "settings": camera_settings
-            }
+            "camera_info": camera_settings
         }
 
     except Exception as e:
