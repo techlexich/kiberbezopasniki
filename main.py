@@ -134,10 +134,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # Подключение к БД
 def get_db():
     conn = psycopg2.connect(
-        dbname="auth_db_17at",
+        dbname="auth_db_17at_90uu",
         user="auth_db_17at_user",
-        password="eGFSjcl2O29bWJBCAcRdh4MIzjNFojNZ",
-        host="dpg-d05lfk2li9vc738u4vb0-a.oregon-postgres.render.com",
+        password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
+        host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
         port="5432",
         cursor_factory=RealDictCursor
     )
