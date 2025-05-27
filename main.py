@@ -265,7 +265,7 @@ async def update_user_profile(
     if current_user["username"] != username:
         raise HTTPException(403, "You can update only your own profile")
     
-    avatar_url = current_user["avatar_url"]
+    avatar_url = current_user["avatar"]
 
     if avatar:
         try:
@@ -276,25 +276,23 @@ async def update_user_profile(
             file_ext = avatar.filename.split('.')[-1].lower()
             file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
             
-            # Загружаем в S3 с явным указанием ContentLength
+            # Загружаем в S3
             s3.put_object(
                 Bucket=BEGET_S3_BUCKET_NAME,
                 Key=file_name,
                 Body=file_content,
                 ContentType=avatar.content_type,
-                ACL='public-read',
-                ContentLength=len(file_content)  # <- Здесь была пропущена запятая
+                ACL='public-read'
             )
             
             avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
             
-            # Возвращаем указатель файла в начало (на всякий случай)
+            # Возвращаем указатель файла в начало
             await avatar.seek(0)
         except Exception as e:
             logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
             raise HTTPException(500, "Failed to upload avatar")
 
-    # Остальной код без изменений
     with db.cursor() as cur:
         cur.execute("""
             UPDATE users 
