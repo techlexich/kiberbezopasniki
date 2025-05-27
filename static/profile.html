@@ -574,6 +574,23 @@
             color: var(--text);
         }
 
+        .camera-info {
+            font-size: 14px;
+            color: var(--text-light);
+            border-top: 1px solid var(--border);
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+
+        .camera-info div {
+            margin-bottom: 5px;
+        }
+
+        .camera-info strong {
+            color: var(--text);
+            margin-right: 5px;
+        }
+
         .post-view-container .post {
             border: none;
             box-shadow: none;
@@ -722,29 +739,42 @@
                     <input type="file" id="post-photo" accept="image/*" required>
                     <img id="preview-image" class="preview-image" alt="Предпросмотр">
                 </div>
+                
+                <div class="form-group">
+                    <label for="camera-model">Модель камеры/телефона</label>
+                    <input type="text" id="camera-model" required placeholder="Например: iPhone 13 Pro или Canon EOS 5D Mark IV">
+                </div>
+                
+                <div class="form-group">
+                    <label for="exposure">Выдержка</label>
+                    <input type="text" id="exposure" placeholder="Например: 1/250">
+                </div>
+                
+                <div class="form-group">
+                    <label for="aperture">Диафрагма</label>
+                    <input type="text" id="aperture" placeholder="Например: f/2.8">
+                </div>
+                
+                <div class="form-group">
+                    <label for="iso">ISO</label>
+                    <input type="text" id="iso" placeholder="Например: 100">
+                </div>
+                
                 <div class="form-group">
                     <label for="location-input">Местоположение</label>
                     <div id="post-map" style="width: 100%; height: 300px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border);"></div>
                     <input type="hidden" id="latitude" name="latitude">
                     <input type="hidden" id="longitude" name="longitude">
-                    <small style="display: block; margin-top: 8px; color: var(--text-light);">Кликните на карте, чтобы выбрать местоположение</small>
                 </div>
+                
                 <div class="form-group">
                     <textarea id="post-description" placeholder="Добавьте описание..." rows="4"></textarea>
                 </div>
+                
                 <button type="submit" class="save-btn" id="submit-post-btn">
                     <i class="fas fa-share"></i> Опубликовать
                 </button>
             </form>
-        </div>
-    </div>
-    <!-- Модальное окно просмотра поста -->
-    <div class="post-view-modal" id="postViewModal">
-        <div class="post-view-content">
-            <button class="close-post-view" id="closePostView">&times;</button>
-            <div class="post-view-container" id="postViewContainer">
-                <!-- Контент поста будет загружен сюда -->
-            </div>
         </div>
     </div>
     <script>
@@ -754,12 +784,12 @@
             const match = path.match(/\/profile\/([^\/]+)/);
             return match ? match[1] : null;
         }
-    
+
         const username = getUsernameFromPath();
         let currentUser = null;
         let postMap = null;
         let postMarker = null;
-    
+
         // Проверка ответа сервера
         async function checkResponse(response) {
             if (!response.ok) {
@@ -768,14 +798,14 @@
             }
             return response.json();
         }
-    
+
         // Загрузка профиля
         async function loadProfile() {
             if (!username) {
                 showError("Не удалось определить пользователя");
                 return;
             }
-    
+
             try {
                 const user = await fetch(`/users/${username}`).then(checkResponse);
                 renderProfile(user);
@@ -786,7 +816,7 @@
                 showError("Ошибка загрузки профиля");
             }
         }
-    
+
         function renderProfile(user) {
             document.getElementById('profileName').textContent = user.username;
             document.getElementById('profileBio').textContent = user.profile?.bio || "Нет описания";
@@ -798,19 +828,19 @@
                 avatar.style.backgroundSize = 'cover';
             }
         }
-    
+
         async function checkAuth() {
             const token = localStorage.getItem('access_token');
             if (!token) {
                 hideAuthElements();
                 return;
             }
-    
+
             try {
                 currentUser = await fetch('/users/me', {
                     headers: {'Authorization': `Bearer ${token}`}
                 }).then(checkResponse);
-    
+
                 const isCurrentUser = currentUser.username === username;
                 document.getElementById('editProfileBtn').style.display = isCurrentUser ? 'block' : 'none';
                 document.getElementById('newPostBtn').style.display = isCurrentUser ? 'flex' : 'none';
@@ -821,12 +851,12 @@
                 hideAuthElements();
             }
         }
-    
+
         function hideAuthElements() {
             document.getElementById('editProfileBtn').style.display = 'none';
             document.getElementById('newPostBtn').style.display = 'none';
         }
-    
+
         // Загрузка постов
         async function loadUserPosts() {
             try {
@@ -837,7 +867,7 @@
                 showPostsError();
             }
         }
-    
+
         function renderPosts(posts) {
             const container = document.getElementById('posts-container');
             
@@ -846,16 +876,16 @@
                 document.getElementById('postsCount').textContent = '0';
                 return;
             }
-    
+
             document.getElementById('postsCount').textContent = posts.length;
             container.innerHTML = '';
-    
+
             posts.forEach(post => {
                 const postElement = createPostElement(post);
                 container.appendChild(postElement);
             });
         }
-    
+
         function createPostElement(post) {
             const postElement = document.createElement('div');
             postElement.className = 'post';
@@ -863,7 +893,25 @@
             
             const isCurrentUserPost = currentUser?.username === post.username;
             const postDate = new Date(post.created_at).toLocaleString();
-    
+
+            // Формируем информацию о камере
+            let cameraInfo = '';
+            if (post.camera_model || post.camera_settings) {
+                const settings = typeof post.camera_settings === 'string' 
+                    ? JSON.parse(post.camera_settings) 
+                    : post.camera_settings || {};
+                
+                cameraInfo = `
+                <div class="camera-info">
+                    <div><i class="fas fa-camera"></i> ${post.camera_model || 'Не указано'}</div>
+                    ${settings.exposure ? `<div><strong>Выдержка:</strong> ${settings.exposure}</div>` : ''}
+                    ${settings.aperture ? `<div><strong>Диафрагма:</strong> ${settings.aperture}</div>` : ''}
+                    ${settings.iso ? `<div><strong>ISO:</strong> ${settings.iso}</div>` : ''}
+                    ${settings.focal_length ? `<div><strong>Фокусное:</strong> ${settings.focal_length}</div>` : ''}
+                </div>
+                `;
+            }
+
             postElement.innerHTML = `
                 <div class="post-header">
                     <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
@@ -878,6 +926,7 @@
                 </div>
                 ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
                 <img src="${post.photo_url}" class="post-image" alt="Фото">
+                ${cameraInfo}
                 <div class="post-actions">
                     <button class="action-button like-button">
                         <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
@@ -887,29 +936,29 @@
                     </button>
                 </div>
             `;
-    
+
             // Обработчики событий
             postElement.addEventListener('click', (e) => {
                 if (!e.target.closest('.delete-post-btn, .action-button')) {
                     openPostModal(post);
                 }
             });
-    
+
             if (isCurrentUserPost) {
                 postElement.querySelector('.delete-post-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
                     deletePost(post.id);
                 });
             }
-    
+
             postElement.querySelector('.like-button').addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleLike(post.id, e.currentTarget);
             });
-    
+
             return postElement;
         }
-    
+
         // Модальное окно просмотра поста
         function openPostModal(post) {
             const modal = document.getElementById('postViewModal');
@@ -917,6 +966,28 @@
             
             const postDate = new Date(post.created_at).toLocaleString();
             const isCurrentUserPost = currentUser?.username === post.username;
+            
+            // Формируем информацию о камере для модального окна
+            let cameraInfo = '';
+            if (post.camera_model || post.camera_settings) {
+                const settings = typeof post.camera_settings === 'string' 
+                    ? JSON.parse(post.camera_settings) 
+                    : post.camera_settings || {};
+                
+                cameraInfo = `
+                <div class="camera-info">
+                    <div style="font-size: 16px; margin-bottom: 10px;">
+                        <i class="fas fa-camera"></i> <strong>Информация о съемке</strong>
+                    </div>
+                    <div><strong>Камера:</strong> ${post.camera_model || 'Не указано'}</div>
+                    ${settings.exposure ? `<div><strong>Выдержка:</strong> ${settings.exposure}</div>` : ''}
+                    ${settings.aperture ? `<div><strong>Диафрагма:</strong> ${settings.aperture}</div>` : ''}
+                    ${settings.iso ? `<div><strong>ISO:</strong> ${settings.iso}</div>` : ''}
+                    ${settings.focal_length ? `<div><strong>Фокусное расстояние:</strong> ${settings.focal_length}</div>` : ''}
+                    ${settings.lens ? `<div><strong>Объектив:</strong> ${settings.lens}</div>` : ''}
+                </div>
+                `;
+            }
             
             container.innerHTML = `
                 <div class="post">
@@ -933,6 +1004,7 @@
                     </div>
                     ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
                     <img src="${post.photo_url}" class="post-image" alt="Фото">
+                    ${cameraInfo}
                     <div class="post-actions">
                         <button class="action-button like-button">
                             <i class="far fa-heart"></i> <span>${post.likes_count || 0}</span>
@@ -960,13 +1032,13 @@
             modal.classList.add('active');
             updateUrl(post.id);
         }
-    
+
         function closePostModal() {
             const modal = document.getElementById('postViewModal');
             modal.classList.remove('active');
             updateUrl();
         }
-    
+
         // Управление URL
         function updateUrl(postId = null) {
             if (postId) {
@@ -975,7 +1047,7 @@
                 history.pushState(null, '', window.location.pathname);
             }
         }
-    
+
         // Обработка лайков
         async function handleLike(postId, likeButton) {
             if (!currentUser) {
@@ -1014,7 +1086,7 @@
                 alert('Ошибка при обновлении лайка');
             }
         }
-    
+
         // Удаление поста
         async function deletePost(postId) {
             if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
@@ -1022,19 +1094,19 @@
             try {
                 const token = localStorage.getItem('access_token');
                 if (!token) throw new Error('Требуется авторизация');
-    
+
                 const response = await fetch(`/posts/${postId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
-    
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || 'Ошибка при удалении поста');
                 }
-    
+
                 await loadUserPosts();
                 alert('Пост успешно удален!');
             } catch (error) {
@@ -1042,7 +1114,7 @@
                 alert('Ошибка при удалении поста: ' + error.message);
             }
         }
-    
+
         // Инициализация карты
         function initPostMap() {
             const center = [56.835184, 60.609573];
@@ -1065,24 +1137,97 @@
                 document.getElementById('longitude').value = lng;
             });
         }
-    
-        // Обработчики событий
+
+        // Обработчик создания нового поста
+        document.getElementById('create-post-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const photoInput = document.getElementById('post-photo');
+            const description = document.getElementById('post-description').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const cameraModel = document.getElementById('camera-model').value;
+            const exposure = document.getElementById('exposure').value;
+            const aperture = document.getElementById('aperture').value;
+            const iso = document.getElementById('iso').value;
+            
+            if (!photoInput.files[0]) {
+                alert('Пожалуйста, выберите фото');
+                return;
+            }
+            
+            if (!cameraModel) {
+                alert('Пожалуйста, укажите модель камеры/телефона');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('photo', photoInput.files[0]);
+            formData.append('description', description);
+            formData.append('latitude', latitude);
+            formData.append('altitude', longitude); // Используем longitude как altitude
+            formData.append('camera_model', cameraModel);
+            formData.append('exposure', exposure);
+            formData.append('aperture', aperture);
+            formData.append('iso', iso);
+            
+            try {
+                const token = localStorage.getItem('access_token');
+                const response = await fetch('/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка при создании поста');
+                }
+                
+                const result = await response.json();
+                alert('Пост успешно создан!');
+                closePostModal();
+                await loadUserPosts();
+            } catch (error) {
+                console.error('Post creation error:', error);
+                alert('Ошибка при создании поста: ' + error.message);
+            }
+        });
+
+        // Просмотр выбранного изображения перед загрузкой
+        document.getElementById('post-photo').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const preview = document.getElementById('preview-image');
+                preview.src = event.target.result;
+                preview.style.display = 'block';
+                document.getElementById('file-upload-label').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Обработчики событий модальных окон
         document.getElementById('closePostView').addEventListener('click', closePostModal);
         document.getElementById('postViewModal').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closePostModal();
         });
-    
-        window.addEventListener('popstate', (e) => {
-            if (e.state?.postId) {
-                fetch(`/posts/${e.state.postId}`)
-                    .then(checkResponse)
-                    .then(post => openPostModal(post))
-                    .catch(console.error);
-            } else {
-                closePostModal();
-            }
+
+        // Обработчик кнопки нового поста
+        document.getElementById('newPostBtn').addEventListener('click', () => {
+            document.getElementById('post-modal').classList.add('active');
+            if (!postMap) initPostMap();
         });
-    
+
+        // Закрытие модального окна создания поста
+        document.getElementById('closePostModal').addEventListener('click', () => {
+            document.getElementById('post-modal').classList.remove('active');
+        });
+
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
             loadProfile();
@@ -1097,6 +1242,17 @@
                     .catch(console.error);
             }
         });
+
+        // Вспомогательные функции
+        function showError(message) {
+            const container = document.getElementById('posts-container');
+            container.innerHTML = `<p class="error">${message}</p>`;
+        }
+
+        function showPostsError() {
+            const container = document.getElementById('posts-container');
+            container.innerHTML = '<p class="error">Ошибка загрузки публикаций</p>';
+        }
     </script>
 </body>
 </html>
