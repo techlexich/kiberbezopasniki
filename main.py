@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File, Form, RequestValidationError
+from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File, Form
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
