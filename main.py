@@ -68,23 +68,9 @@ s3 = boto3.client(
     region_name='ru-1',
     config=boto3.session.Config(
         signature_version='s3v4',
-        s3={'addressing_style': 'path'},
-        # Добавляем параметр для автоматического вычисления хешей
-        payload_signing_enabled=False
+        s3={'addressing_style': 'path'}
     )
 )
-
-app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 # Модели
 
