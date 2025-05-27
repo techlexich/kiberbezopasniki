@@ -853,26 +853,22 @@
             e.preventDefault();
             
             const bio = document.getElementById('editBio').value;
-            const avatarUrl = document.getElementById('editAvatar').value;
+            const avatarFile = document.getElementById('avatarFile').files[0];
             
             try {
                 const token = localStorage.getItem('access_token');
-                if (!token) throw new Error('Требуется авторизация');
-
                 const formData = new FormData();
                 formData.append('bio', bio);
                 
-                const avatarFile = document.getElementById('avatarFile')?.files[0];
                 if (avatarFile) {
                     formData.append('avatar', avatarFile);
-                } else if (avatarUrl) {
-                    formData.append('avatar_url', avatarUrl);
                 }
 
                 const response = await fetch(`/users/${username}`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`
+                        // Не устанавливайте Content-Type вручную для FormData!
                     },
                     body: formData
                 });
@@ -891,6 +887,7 @@
                 alert('Ошибка при обновлении профиля: ' + error.message);
             }
         });
+
         // Загрузка профиля
         async function loadProfile() {
             // Показываем данные из localStorage сразу (для мгновенного отображения)

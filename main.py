@@ -68,7 +68,9 @@ s3 = boto3.client(
     region_name='ru-1',
     config=boto3.session.Config(
         signature_version='s3v4',
-        s3={'addressing_style': 'path'}
+        s3={'addressing_style': 'path'},
+        # Добавляем параметр для автоматического вычисления хешей
+        payload_signing_enabled=False
     )
 )
 
@@ -277,29 +279,32 @@ async def update_user_profile(
     if current_user["username"] != username:
         raise HTTPException(403, "You can update only your own profile")
     
-    avatar_url = current_user["avatar"]  # сохраняем текущий URL
-    
-    # Если загружен новый аватар
+    avatar_url = current_user["avatar_url"]
+
     if avatar:
         try:
+            # Читаем содержимое файла
+            file_content = await avatar.read()
+            
             # Генерируем имя файла
             file_ext = avatar.filename.split('.')[-1].lower()
             file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
             
-            # Загружаем в S3
-            s3.upload_fileobj(
-                avatar.file,
-                BEGET_S3_BUCKET_NAME,
-                file_name,
-                ExtraArgs={
-                    'ACL': 'public-read',
-                    'ContentType': avatar.content_type
-                }
-            )
+            # Загружаем в S3 с явным указанием ContentLength
+            s3.put_object(
+                Bucket=BEGET_S3_BUCKET_NAME,
+                Key=file_name,
+                Body=file_content,
+                ContentType=avatar.content_type,
+                ACL='public-read',
+                ContentLength=len(file_content)
             
             avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+            
+            # Возвращаем указатель файла в начало (на всякий случай)
+            await avatar.seek(0)
         except Exception as e:
-            logger.error(f"Avatar upload error: {str(e)}")
+            logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
             raise HTTPException(500, "Failed to upload avatar")
 
     with db.cursor() as cur:
@@ -764,6 +769,25 @@ async def get_single_post_page(request: Request, post_id: int, db=Depends(get_db
         "request": request,
         "post": post
     })
+
+@app.get("/check-s3-upload")
+async def check_s3_upload():
+    try:
+        test_key = f"test/{uuid.uuid4()}.txt"
+        test_content = b"test content"
+        
+        s3.put_object(
+            Bucket=BEGET_S3_BUCKET_NAME,
+            Key=test_key,
+            Body=test_content,
+            ContentType='text/plain',
+            ACL='public-read',
+            ContentLength=len(test_content)
+        
+        return {"status": "success", "message": "Test file uploaded successfully"}
+    except Exception as e:
+        logger.error(f"S3 upload test failed: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail=f"S3 upload test failed: {str(e)}")
 
 @app.get("/check-s3-connection")
 async def check_s3_connection():
