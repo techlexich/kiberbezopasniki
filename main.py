@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, status, Request, UploadFile, File, Form, RequestValidationError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,7 @@ from slugify import slugify
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 import io
+
 
 # Настройкиi
 load_dotenv()
