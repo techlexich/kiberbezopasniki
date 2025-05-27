@@ -136,7 +136,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Подключение к БД
+# Подключение к БД (new)
 def get_db():
     conn = psycopg2.connect(
         dbname="auth_db_17at_90uu",
