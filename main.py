@@ -297,7 +297,8 @@ async def update_user_profile(
                 Body=file_content,
                 ContentType=avatar.content_type,
                 ACL='public-read',
-                ContentLength=len(file_content)
+                ContentLength=len(file_content)  # <- Здесь была пропущена запятая
+            )
             
             avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
             
@@ -307,6 +308,7 @@ async def update_user_profile(
             logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
             raise HTTPException(500, "Failed to upload avatar")
 
+    # Остальной код без изменений
     with db.cursor() as cur:
         cur.execute("""
             UPDATE users 
@@ -330,8 +332,6 @@ async def update_user_profile(
                 "avatar": updated_user["avatar_url"]
             }
         }
-        
-        
         
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_db)):
@@ -769,25 +769,6 @@ async def get_single_post_page(request: Request, post_id: int, db=Depends(get_db
         "request": request,
         "post": post
     })
-
-@app.get("/check-s3-upload")
-async def check_s3_upload():
-    try:
-        test_key = f"test/{uuid.uuid4()}.txt"
-        test_content = b"test content"
-        
-        s3.put_object(
-            Bucket=BEGET_S3_BUCKET_NAME,
-            Key=test_key,
-            Body=test_content,
-            ContentType='text/plain',
-            ACL='public-read',
-            ContentLength=len(test_content)
-        
-        return {"status": "success", "message": "Test file uploaded successfully"}
-    except Exception as e:
-        logger.error(f"S3 upload test failed: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"S3 upload test failed: {str(e)}")
 
 @app.get("/check-s3-connection")
 async def check_s3_connection():
