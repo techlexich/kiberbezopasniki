@@ -265,11 +265,14 @@ async def update_user_profile(
             file_ext = avatar.filename.split('.')[-1].lower()
             file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
             
-            # Важно: сначала сохраняем файл локально, затем загружаем
-            with open(f"tmp_{file_name}", "wb") as f:
+            # Создаем временную директорию, если ее нет
+            os.makedirs('tmp_avatars', exist_ok=True)
+            tmp_path = f"tmp_avatars/{file_name.split('/')[-1]}"
+            
+            with open(tmp_path, "wb") as f:
                 f.write(file_content)
             
-            with open(f"tmp_{file_name}", "rb") as f:
+            with open(tmp_path, "rb") as f:
                 s3.upload_fileobj(
                     f,
                     BEGET_S3_BUCKET_NAME,
@@ -280,7 +283,7 @@ async def update_user_profile(
                     }
                 )
             
-            os.remove(f"tmp_{file_name}")
+            os.remove(tmp_path)
             avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
             await avatar.seek(0)
         except Exception as e:
@@ -440,10 +443,14 @@ async def create_post(
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"posts/{uuid.uuid4()}.{file_ext}"
 
-        with open(f"tmp_{file_name}", "wb") as f:
+        # Создаем временную директорию, если ее нет
+        os.makedirs('tmp_posts', exist_ok=True)
+        tmp_path = f"tmp_posts/{file_name.split('/')[-1]}"
+
+        with open(tmp_path, "wb") as f:
             f.write(file_content)
 
-        with open(f"tmp_{file_name}", "rb") as f:
+        with open(tmp_path, "rb") as f:
             s3.upload_fileobj(
                 f,
                 BEGET_S3_BUCKET_NAME,
@@ -454,7 +461,7 @@ async def create_post(
                 }
             )
 
-        os.remove(f"tmp_{file_name}")
+        os.remove(tmp_path)
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         await photo.seek(0)
 
