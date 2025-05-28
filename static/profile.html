@@ -301,6 +301,24 @@
             color: white;
         }
 
+        .profile-bio {
+            color: var(--text-light);
+            margin-bottom: 16px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            max-width: 100%;
+            overflow: hidden;
+        }
+
+        /* Для модального окна редактирования */
+        #editBio {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            max-width: 100%;
+        }
+
         /* Модальное окно создания поста */
         #post-modal {
             display: none;
@@ -706,7 +724,7 @@
                 <h3 class="modal-title">Редактировать профиль</h3>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
-            <form id="editProfileForm">
+            <form id="editProfileForm" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="editBio">Описание профиля</label>
                     <textarea id="editBio" maxlength="500"></textarea>
@@ -714,9 +732,7 @@
                 
                 <div class="form-group">
                     <label>Аватар</label>
-                    <input type="file" id="avatarFile" accept="image/*">
-                    <small>Или укажите URL:</small>
-                    <input type="text" id="editAvatar" placeholder="https://example.com/avatar.jpg">
+                    <input type="file" id="avatarFile" name="avatar" accept="image/*">
                 </div>
                 
                 <div class="avatar-preview" id="avatarPreview">
@@ -783,6 +799,16 @@
         </div>
     </div>
     <script>
+
+        document.getElementById('newPostBtn').addEventListener('click', () => {
+            if (!currentUser) {
+                alert('Для создания поста необходимо войти в систему');
+                return;
+            }
+            document.getElementById('post-modal').classList.add('active');
+            if (!postMap) initPostMap();
+        });
+        
         // Получаем username из URL
         function getUsernameFromPath() {
             const path = window.location.pathname;
@@ -868,7 +894,6 @@
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`
-                        // Не устанавливайте Content-Type вручную для FormData!
                     },
                     body: formData
                 });
@@ -1297,11 +1322,16 @@
                 return;
             }
             
+            if (!latitude || !longitude) {
+                alert('Пожалуйста, укажите местоположение на карте');
+                return;
+            }
+            
             const formData = new FormData();
             formData.append('photo', photoInput.files[0]);
             formData.append('description', description);
             formData.append('latitude', latitude);
-            formData.append('altitude', longitude); // Используем longitude как altitude
+            formData.append('altitude', longitude);
             formData.append('camera_model', cameraModel);
             formData.append('exposure', exposure);
             formData.append('aperture', aperture);
@@ -1324,8 +1354,14 @@
                 
                 const result = await response.json();
                 alert('Пост успешно создан!');
-                closePostModal();
+                document.getElementById('post-modal').classList.remove('active');
                 await loadUserPosts();
+                
+                // Сброс формы
+                document.getElementById('create-post-form').reset();
+                document.getElementById('preview-image').style.display = 'none';
+                document.getElementById('file-upload-label').style.display = 'block';
+                if (postMarker) postMap.removeLayer(postMarker);
             } catch (error) {
                 console.error('Post creation error:', error);
                 alert('Ошибка при создании поста: ' + error.message);
