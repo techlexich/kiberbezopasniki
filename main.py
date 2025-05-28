@@ -71,9 +71,40 @@ s3 = boto3.client(
         s3={'addressing_style': 'path'}
     )
 )
+
+# Проверка доступности S3
+if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
+    logger.error("S3 credentials not configured")
+    raise HTTPException(500, "S3 storage not configured")
+
+# Проверка типа файла
+ALLOWED_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
+if file.content_type not in ALLOWED_TYPES:
+    raise HTTPException(400, "Unsupported file type")
+
 # Модели
 
-
+async def upload_to_s3(file: UploadFile, folder: str) -> str:
+    try:
+        file_content = await file.read()
+        file_ext = file.filename.split('.')[-1].lower()
+        file_name = f"{folder}/{uuid.uuid4()}.{file_ext}"
+        
+        # Используем put_object вместо upload_fileobj
+        s3.put_object(
+            Bucket=BEGET_S3_BUCKET_NAME,
+            Key=file_name,
+            Body=file_content,
+            ContentType=file.content_type,
+            ACL='public-read'
+        )
+        
+        return f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, f"Failed to upload file: {str(e)}")
+    finally:
+        await file.seek(0)
 
 # Модель ответа API
 class Post(BaseModel):
@@ -261,33 +292,9 @@ async def update_user_profile(
 
     if avatar:
         try:
-            file_content = await avatar.read()
-            file_ext = avatar.filename.split('.')[-1].lower()
-            file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
-            
-            # Создаем временную директорию, если ее нет
-            os.makedirs('tmp_avatars', exist_ok=True)
-            tmp_path = f"tmp_avatars/{file_name.split('/')[-1]}"
-            
-            with open(tmp_path, "wb") as f:
-                f.write(file_content)
-            
-            with open(tmp_path, "rb") as f:
-                s3.upload_fileobj(
-                    f,
-                    BEGET_S3_BUCKET_NAME,
-                    file_name,
-                    ExtraArgs={
-                        'ACL': 'public-read',
-                        'ContentType': avatar.content_type
-                    }
-                )
-            
-            os.remove(tmp_path)
-            avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-            await avatar.seek(0)
+            avatar_url = await upload_to_s3(avatar, "avatars")
         except Exception as e:
-            logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
+            logger.error(f"Avatar upload error: {str(e)}")
             raise HTTPException(500, "Failed to upload avatar")
 
     with db.cursor() as cur:
@@ -297,7 +304,6 @@ async def update_user_profile(
             WHERE username = %s
             RETURNING id, username, email, bio, avatar_url
         """, (bio, avatar_url, username))
-        
         updated_user = cur.fetchone()
         db.commit()
         
@@ -417,53 +423,13 @@ async def create_post(
         raise HTTPException(400, detail="Invalid file")
 
     try:
-        # Читаем файл для EXIF
-        file_content = await photo.read()
-        
         # Извлекаем EXIF данные
-        exif_data = extract_exif_data(file_content)
-        
-        # Если EXIF данные есть, используем их для заполнения полей
-        if exif_data:
-            if not camera_model and exif_data.get('camera_model'):
-                camera_model = f"{exif_data.get('camera_make', '')} {exif_data.get('camera_model', '')}".strip()
-            if not exposure and exif_data.get('exposure_time'):
-                exposure = str(exif_data['exposure_time'])
-            if not aperture and exif_data.get('f_number'):
-                aperture = f"f/{exif_data['f_number']}"
-            if not iso and exif_data.get('iso'):
-                iso = str(exif_data['iso'])
-        
-        # Генерация имени файла
-        file_ext = photo.filename.split('.')[-1].lower()
-        file_name = f"posts/{uuid.uuid4()}.{file_ext}"
-        
-        # Загружаем в S3
         file_content = await photo.read()
-        file_ext = photo.filename.split('.')[-1].lower()
-        file_name = f"posts/{uuid.uuid4()}.{file_ext}"
-
-        # Создаем временную директорию, если ее нет
-        os.makedirs('tmp_posts', exist_ok=True)
-        tmp_path = f"tmp_posts/{file_name.split('/')[-1]}"
-
-        with open(tmp_path, "wb") as f:
-            f.write(file_content)
-
-        with open(tmp_path, "rb") as f:
-            s3.upload_fileobj(
-                f,
-                BEGET_S3_BUCKET_NAME,
-                file_name,
-                ExtraArgs={
-                    'ACL': 'public-read',
-                    'ContentType': photo.content_type
-                }
-            )
-
-        os.remove(tmp_path)
-        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        exif_data = extract_exif_data(file_content)
         await photo.seek(0)
+
+        # Загружаем фото
+        photo_url = await upload_to_s3(photo, "posts")
 
         # Формируем настройки камеры
         camera_settings = {
@@ -479,28 +445,21 @@ async def create_post(
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
-                    photo_url,
-                    description,
-                    user_id,
-                    created_at,
-                    likes_count,
-                    comments_count,
-                    altitude,
-                    latitude,
-                    camera_model,
-                    camera_settings
+                    photo_url, description, user_id, created_at,
+                    likes_count, comments_count, altitude, latitude,
+                    camera_model, camera_settings
                 ) VALUES (
                     %s, %s, %s, NOW(), 0, 0, %s, %s, %s, %s
                 )
                 RETURNING id, created_at
             """, (
-                photo_url,
-                description,
+                photo_url, 
+                description, 
                 current_user["id"],
-                altitude,
-                latitude,
+                altitude, 
+                latitude, 
                 camera_model,
-                json.dumps(camera_settings)
+                json.dumps(camera_settings),
             ))
             new_post = cur.fetchone()
             db.commit()
@@ -513,8 +472,8 @@ async def create_post(
         }
 
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="File upload failed")
+        logger.error(f"Post creation error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail=f"Failed to create post: {str(e)}")
 
 @app.get("/profile/{username}")
 async def profile_page(username: str, db=Depends(get_db)):
@@ -791,6 +750,28 @@ class NotFoundMiddleware(BaseHTTPMiddleware):
         if response.status_code == 404:
             return FileResponse("static/404.html")
         return response
+
+@app.get("/check-s3")
+async def check_s3():
+    try:
+        # Пробуем просто получить список бакетов
+        response = s3.list_buckets()
+        return {
+            "status": "success",
+            "buckets": [b['Name'] for b in response['Buckets']],
+            "bucket_exists": BEGET_S3_BUCKET_NAME in [b['Name'] for b in response['Buckets']]
+        }
+    except Exception as e:
+        logger.error(f"S3 connection error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "details": {
+                "endpoint": BEGET_S3_ENDPOINT,
+                "bucket": BEGET_S3_BUCKET_NAME,
+                "region": "ru-1"
+            }
+        }
 
 app.add_middleware(NotFoundMiddleware)
 
