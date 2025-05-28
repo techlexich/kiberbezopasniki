@@ -277,13 +277,20 @@ async def update_user_profile(
             file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
             
             # Загружаем в S3
-            s3.put_object(
-                Bucket=BEGET_S3_BUCKET_NAME,
-                Key=file_name,
-                Body=file_content,
-                ContentType=avatar.content_type,
-                ACL='public-read'
-            )
+            try:
+                file_content = await avatar.read()
+                s3.put_object(
+                    Bucket=BEGET_S3_BUCKET_NAME,
+                    Key=file_name,
+                    Body=file_content,
+                    ContentType=avatar.content_type,
+                    ACL='public-read'
+                )
+                await avatar.seek(0)  # Возвращаем указатель файла в начало
+            except Exception as e:
+                logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
+                raise HTTPException(500, "Failed to upload avatar")
+
             
             avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
             
@@ -426,20 +433,35 @@ async def create_post(
         # Извлекаем EXIF данные
         exif_data = extract_exif_data(file_content)
         
+        # Если EXIF данные есть, используем их для заполнения полей
+        if exif_data:
+            if not camera_model and exif_data.get('camera_model'):
+                camera_model = f"{exif_data.get('camera_make', '')} {exif_data.get('camera_model', '')}".strip()
+            if not exposure and exif_data.get('exposure_time'):
+                exposure = str(exif_data['exposure_time'])
+            if not aperture and exif_data.get('f_number'):
+                aperture = f"f/{exif_data['f_number']}"
+            if not iso and exif_data.get('iso'):
+                iso = str(exif_data['iso'])
+        
         # Генерация имени файла
         file_ext = photo.filename.split('.')[-1].lower()
         file_name = f"posts/{uuid.uuid4()}.{file_ext}"
         
         # Загружаем в S3
-        s3.upload_fileobj(
-            io.BytesIO(file_content),
-            BEGET_S3_BUCKET_NAME,
-            file_name,
-            ExtraArgs={
-                'ACL': 'public-read',
-                'ContentType': photo.content_type
-            }
-        )
+        try:
+            file_content = await photo.read()
+            s3.put_object(
+                Bucket=BEGET_S3_BUCKET_NAME,
+                Key=file_name,
+                Body=file_content,
+                ContentType=photo.content_type,
+                ACL='public-read'
+            )
+            await photo.seek(0)  # Возвращаем указатель файла в начало
+        except Exception as e:
+            logger.error(f"Upload error: {str(e)}", exc_info=True)
+            raise HTTPException(500, detail="File upload failed")
         
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
