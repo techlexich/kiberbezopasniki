@@ -71,7 +71,6 @@ s3 = boto3.client(
         s3={'addressing_style': 'path'}
     )
 )
-
 # Модели
 
 
@@ -144,47 +143,40 @@ def get_db():
 
 # Вспомогательные функции
 def extract_exif_data(image_bytes: bytes) -> dict:
-    """
-    Извлекает EXIF-данные из изображения.
-    Возвращает словарь с метаданными.
-    """
     try:
         image = Image.open(io.BytesIO(image_bytes))
         
         if not hasattr(image, '_getexif') or image._getexif() is None:
             return {}
         
-        exif_data = {}
-        for tag_id, value in image._getexif().items():
-            tag_name = TAGS.get(tag_id, tag_id)
-            
-            # Обрабатываем GPS-данные отдельно
-            if tag_name == "GPSInfo":
-                gps_data = {}
-                for gps_tag_id in value:
-                    gps_tag_name = GPSTAGS.get(gps_tag_id, gps_tag_id)
-                    gps_data[gps_tag_name] = value[gps_tag_id]
-                exif_data[tag_name] = gps_data
-            else:
-                exif_data[tag_name] = value
-        
-        # Извлекаем только нужные нам данные
-        useful_exif = {
-            "camera_make": exif_data.get("Make", ""),
-            "camera_model": exif_data.get("Model", ""),
-            "software": exif_data.get("Software", ""),
-            "datetime": exif_data.get("DateTimeOriginal", ""),
-            "exposure_time": exif_data.get("ExposureTime", ""),
-            "f_number": exif_data.get("FNumber", ""),
-            "iso": exif_data.get("ISOSpeedRatings", ""),
-            "focal_length": exif_data.get("FocalLength", ""),
-            "lens_make": exif_data.get("LensMake", ""),
-            "lens_model": exif_data.get("LensModel", ""),
-            "gps_info": exif_data.get("GPSInfo", {})
+        exif_data = {
+            TAGS.get(tag, tag): value
+            for tag, value in image._getexif().items()
         }
         
-        return useful_exif
-    
+        # Обработка GPS данных
+        if 'GPSInfo' in exif_data:
+            gps_info = {
+                GPSTAGS.get(tag, tag): value
+                for tag, value in exif_data['GPSInfo'].items()
+            }
+            exif_data['GPSInfo'] = gps_info
+
+        # Форматирование полезных данных
+        useful_data = {
+            'camera_make': exif_data.get('Make', ''),
+            'camera_model': exif_data.get('Model', ''),
+            'exposure_time': str(exif_data.get('ExposureTime', '')),
+            'f_number': f"f/{exif_data.get('FNumber', '')}" if exif_data.get('FNumber') else '',
+            'iso': str(exif_data.get('ISOSpeedRatings', '')),
+            'focal_length': str(exif_data.get('FocalLength', '')),
+            'lens_model': exif_data.get('LensModel', ''),
+            'date_time': exif_data.get('DateTimeOriginal', ''),
+            'gps_info': exif_data.get('GPSInfo', {})
+        }
+        
+        return {k: v for k, v in useful_data.items() if v}
+        
     except Exception as e:
         logger.error(f"EXIF extraction error: {str(e)}")
         return {}
@@ -269,32 +261,27 @@ async def update_user_profile(
 
     if avatar:
         try:
-            # Читаем содержимое файла
             file_content = await avatar.read()
-            
-            # Генерируем имя файла
             file_ext = avatar.filename.split('.')[-1].lower()
             file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
             
-            # Загружаем в S3
-            try:
-                file_content = await avatar.read()
-                s3.put_object(
-                    Bucket=BEGET_S3_BUCKET_NAME,
-                    Key=file_name,
-                    Body=file_content,
-                    ContentType=avatar.content_type,
-                    ACL='public-read'
+            # Важно: сначала сохраняем файл локально, затем загружаем
+            with open(f"tmp_{file_name}", "wb") as f:
+                f.write(file_content)
+            
+            with open(f"tmp_{file_name}", "rb") as f:
+                s3.upload_fileobj(
+                    f,
+                    BEGET_S3_BUCKET_NAME,
+                    file_name,
+                    ExtraArgs={
+                        'ACL': 'public-read',
+                        'ContentType': avatar.content_type
+                    }
                 )
-                await avatar.seek(0)  # Возвращаем указатель файла в начало
-            except Exception as e:
-                logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
-                raise HTTPException(500, "Failed to upload avatar")
-
             
+            os.remove(f"tmp_{file_name}")
             avatar_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-            
-            # Возвращаем указатель файла в начало
             await avatar.seek(0)
         except Exception as e:
             logger.error(f"Avatar upload error: {str(e)}", exc_info=True)
@@ -449,21 +436,27 @@ async def create_post(
         file_name = f"posts/{uuid.uuid4()}.{file_ext}"
         
         # Загружаем в S3
-        try:
-            file_content = await photo.read()
-            s3.put_object(
-                Bucket=BEGET_S3_BUCKET_NAME,
-                Key=file_name,
-                Body=file_content,
-                ContentType=photo.content_type,
-                ACL='public-read'
+        file_content = await photo.read()
+        file_ext = photo.filename.split('.')[-1].lower()
+        file_name = f"posts/{uuid.uuid4()}.{file_ext}"
+
+        with open(f"tmp_{file_name}", "wb") as f:
+            f.write(file_content)
+
+        with open(f"tmp_{file_name}", "rb") as f:
+            s3.upload_fileobj(
+                f,
+                BEGET_S3_BUCKET_NAME,
+                file_name,
+                ExtraArgs={
+                    'ACL': 'public-read',
+                    'ContentType': photo.content_type
+                }
             )
-            await photo.seek(0)  # Возвращаем указатель файла в начало
-        except Exception as e:
-            logger.error(f"Upload error: {str(e)}", exc_info=True)
-            raise HTTPException(500, detail="File upload failed")
-        
+
+        os.remove(f"tmp_{file_name}")
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        await photo.seek(0)
 
         # Формируем настройки камеры
         camera_settings = {
