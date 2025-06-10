@@ -77,10 +77,7 @@ if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_
     logger.error("S3 credentials not configured")
     raise HTTPException(500, "S3 storage not configured")
 
-# Проверка типа файла
-ALLOWED_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
-if file.content_type not in ALLOWED_TYPES:
-    raise HTTPException(400, "Unsupported file type")
+
 
 # Модели
 
@@ -291,6 +288,9 @@ async def update_user_profile(
     avatar_url = current_user["avatar"]
 
     if avatar:
+        
+        if avatar.content_type not in ALLOWED_TYPES:
+            raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
         try:
             avatar_url = await upload_to_s3(avatar, "avatars")
         except Exception as e:
@@ -421,7 +421,10 @@ async def create_post(
 ):
     if not photo.filename or not photo.content_type:
         raise HTTPException(400, detail="Invalid file")
-
+    
+    if photo.content_type not in ALLOWED_TYPES:
+        raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
+    
     try:
         # Извлекаем EXIF данные
         file_content = await photo.read()
