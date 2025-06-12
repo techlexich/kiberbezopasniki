@@ -1056,7 +1056,7 @@
 
         async function fetchWeatherTips() {
             try {
-                const response = await fetch('http://localhost:8000/weather-message');
+                const response = await fetch(`${API_URL}/weather-message`);
                 if (!response.ok) throw new Error('Ошибка загрузки погоды');
                 return await response.json();
             } catch (error) {
