@@ -59,7 +59,7 @@ app.add_middleware(
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 CITY = "Ekaterinburg"
 
-PHOTO_TIPS: Dict[str, Dict[str, List[str]]] = {
+PHOTO_TIPS: dict[str, dict[str, List[str]]] = {
     "clear": {
         "day": [
             "Яркое солнце 🌞 - используйте бленду объектива и поляризационный фильтр для насыщенных цветов. ISO 100, f/8-f/11.",
