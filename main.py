@@ -30,6 +30,7 @@ from slugify import slugify
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 import io
+import random
 
 
 # Настройкиi
