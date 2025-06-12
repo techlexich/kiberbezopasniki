@@ -56,7 +56,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-WEATHER_API_KEY = "4c9c5126cac8583846104eb7825d1ae4"
+WEATHER_API_KEY ="4c9c5126cac8583846104eb7825d1ae4"
 CITY = "Ekaterinburg"
 
 PHOTO_TIPS: dict[str, dict[str, list[str]]] = {
@@ -257,8 +257,7 @@ def get_db():
         password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
         host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
         port="5432",
-        cursor_factory=RealDictCursor,
-        sslmode="require"  
+        cursor_factory=RealDictCursor
     )
     try:
         yield conn
