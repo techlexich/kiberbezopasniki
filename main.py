@@ -316,7 +316,7 @@ async def get_user(db, username: str):
         cur.execute("""
             SELECT id, username, email, password_hash, 
                    COALESCE(bio, '') as bio,
-                   COALESCE(av  atar_url, '/default-avatar.jpg') as avatar
+                   COALESCE(avatar_url, '/default-avatar.jpg') as avatar
             FROM users WHERE username = %s
         """, (username,))
         return cur.fetchone()
