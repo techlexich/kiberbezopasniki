@@ -389,6 +389,46 @@
         .profile-redirect-btn:hover {
             background-color: var(--primary-light);
         }
+        .weather-widget {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 280px;
+            max-width: calc(100% - 40px);
+        }
+
+        .weather-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .weather-content {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .weather-tip {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-style: italic;
+        }
+
+        .refresh-weather {
+            background: none;
+            border: none;
+            color: #4361ee;
+            cursor: pointer;
+            font-size: 12px;
+        }
     </style>
 </head>
 
@@ -568,6 +608,18 @@
                 <div id="register-error" class="auth-error"></div>
                 <button id="register-button">Зарегистрироваться</button>
             </div>
+        </div>
+    </div>
+    <div id="weather-widget" class="weather-widget">
+        <div class="weather-header">
+            <h4>Погода для съёмки</h4>
+            <button class="refresh-weather" id="refresh-weather">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+        <div class="weather-content">
+            <div id="weather-info">Загрузка данных о погоде...</div>
+            <div class="weather-tip" id="weather-tip"></div>
         </div>
     </div>
 
@@ -1001,7 +1053,37 @@
                     `);
             });
         }
-        // Добавьте эти функции в ваш фронтенд-код
+
+        async function fetchWeatherTips() {
+            try {
+                const response = await fetch('http://localhost:8000/weather-message');
+                if (!response.ok) throw new Error('Ошибка загрузки погоды');
+                return await response.json();
+            } catch (error) {
+                console.error('Ошибка:', error);
+                return null;
+            }
+        }
+
+        async function updateWeatherWidget() {
+            const weatherInfo = document.getElementById('weather-info');
+            const weatherTip = document.getElementById('weather-tip');
+
+            weatherInfo.textContent = 'Загружаем советы...';
+            weatherTip.textContent = '';
+
+            const data = await fetchWeatherTips();
+            if (!data) {
+                weatherInfo.textContent = 'Не удалось загрузить данные о погоде';
+                return;
+            }
+
+            weatherInfo.textContent = `Сейчас: ${data.weather_data.condition}, ${Math.round(data.weather_data.temp)}°C`;
+            weatherTip.textContent = data.message;
+        }
+
+        // Инициализация виджета погоды
+        document.getElementById('refresh-weather').addEventListener('click', updateWeatherWidget);
 
         // Функция для загрузки постов
         async function loadPosts() {
