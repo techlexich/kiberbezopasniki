@@ -56,7 +56,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+WEATHER_API_KEY = "4c9c5126cac8583846104eb7825d1ae4"
 CITY = "Ekaterinburg"
 
 PHOTO_TIPS: dict[str, dict[str, list[str]]] = {
