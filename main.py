@@ -655,17 +655,30 @@ async def create_post(
         file_content = await photo.read()
         exif_data = extract_exif_data(file_content)
         
-        # Создаем новый UploadFile из прочитанного содержимого
-        from fastapi import UploadFile as NewUploadFile
-        from io import BytesIO
-        new_photo = NewUploadFile(
+        # Создаем новый BytesIO объект из прочитанного содержимого
+        file_obj = io.BytesIO(file_content)
+        
+        # Создаем временный файл в памяти для загрузки в S3
+        class FakeUploadFile:
+            def __init__(self, file, filename, content_type):
+                self.file = file
+                self.filename = filename
+                self.content_type = content_type
+            
+            async def read(self):
+                return self.file.read()
+            
+            def seek(self, pos):
+                return self.file.seek(pos)
+        
+        temp_upload = FakeUploadFile(
+            file=file_obj,
             filename=photo.filename,
-            file=BytesIO(file_content),
             content_type=photo.content_type
         )
         
         # Затем загружаем фото в S3
-        photo_url = await upload_to_s3(new_photo, "posts")
+        photo_url = await upload_to_s3(temp_upload, "posts")
 
         # Формируем настройки камеры
         camera_settings = {
