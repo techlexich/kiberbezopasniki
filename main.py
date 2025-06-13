@@ -215,6 +215,9 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             config=s3_config
         )
         
+        # Перематываем файл перед загрузкой
+        file_obj.seek(0)
+        
         # Загружаем файл
         s3_client.upload_fileobj(
             file_obj,
@@ -237,9 +240,6 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
-    finally:
-        # Не пытаемся делать seek, так как файл уже прочитан полностью
-        pass
 
 
 # Модель ответа API
@@ -651,13 +651,21 @@ async def create_post(
         raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
     
     try:
-        # Сначала загружаем фото в S3
-        photo_url = await upload_to_s3(photo, "posts")
-        
-        # Затем читаем файл для EXIF данных (если нужно)
-        await photo.seek(0)  # Перематываем файл
+        # Сначала читаем файл для EXIF данных
         file_content = await photo.read()
         exif_data = extract_exif_data(file_content)
+        
+        # Создаем новый UploadFile из прочитанного содержимого
+        from fastapi import UploadFile as NewUploadFile
+        from io import BytesIO
+        new_photo = NewUploadFile(
+            filename=photo.filename,
+            file=BytesIO(file_content),
+            content_type=photo.content_type
+        )
+        
+        # Затем загружаем фото в S3
+        photo_url = await upload_to_s3(new_photo, "posts")
 
         # Формируем настройки камеры
         camera_settings = {
