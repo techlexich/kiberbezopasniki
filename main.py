@@ -188,6 +188,7 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
     try:
         logger.info(f"Initializing S3 client with endpoint: {BEGET_S3_ENDPOINT}")
         
+        # Создаем клиент с правильной конфигурацией
         s3_client = boto3.client(
             's3',
             endpoint_url=BEGET_S3_ENDPOINT,
@@ -196,7 +197,9 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
             region_name='ru-1',
             config=Config(
                 signature_version='s3v4',
-                s3={'addressing_style': 'path'}
+                s3={'addressing_style': 'path'},
+                # Добавляем параметры для обработки SHA256
+                payload_signing_enabled=False
             )
         )
         logger.info("S3 client initialized successfully")
@@ -221,13 +224,17 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
         logger.info(f"Attempting to upload to {BEGET_S3_BUCKET_NAME}/{file_name}")
         
         try:
-            s3_client.put_object(
-                Bucket=BEGET_S3_BUCKET_NAME,
-                Key=file_name,
-                Body=file_content,
-                ContentType=content_type,
-                ACL='public-read'
-            )
+            # Используем upload_fileobj вместо put_object
+            with io.BytesIO(file_content) as file_obj:
+                s3_client.upload_fileobj(
+                    file_obj,
+                    BEGET_S3_BUCKET_NAME,
+                    file_name,
+                    ExtraArgs={
+                        'ContentType': content_type,
+                        'ACL': 'public-read'
+                    }
+                )
             logger.info("File uploaded successfully")
         except Exception as upload_error:
             logger.error(f"Upload failed: {str(upload_error)}")
@@ -752,12 +759,6 @@ async def create_post(
         raise
     except Exception as e:
         logger.error(f"Post creation failed: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"Failed to create post: {str(e)}")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Post creation error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail=f"Failed to create post: {str(e)}")
 
 @app.get("/profile/{username}")
