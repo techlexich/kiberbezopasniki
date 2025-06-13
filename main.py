@@ -206,7 +206,7 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
             Body=contents,
-            ContentType=file.content_type,
+            ContentType=file.content_type or 'application/octet-stream',
             ACL='public-read'
         )
         
@@ -649,13 +649,15 @@ async def create_post(
         # Извлекаем EXIF данные
         exif_data = extract_exif_data(file_content)
         
-        # Создаем новый файловый объект для загрузки
-        new_file = io.BytesIO(file_content)
-        new_file.name = photo.filename
-        new_file.content_type = photo.content_type
+        # Создаем временный файл для загрузки
+        temp_file = io.BytesIO(file_content)
+        temp_file.name = photo.filename
+        
+        # Создаем новый UploadFile объект
+        new_upload_file = UploadFile(file=temp_file, filename=photo.filename)
         
         # Загружаем фото в S3
-        photo_url = await upload_to_s3(UploadFile(file=new_file, filename=photo.filename, content_type=photo.content_type), "posts")
+        photo_url = await upload_to_s3(new_upload_file, "posts")
 
         # Формируем настройки камеры
         camera_settings = {
