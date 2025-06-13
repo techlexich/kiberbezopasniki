@@ -170,105 +170,22 @@ if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_
     raise HTTPException(500, "S3 storage not configured")
 
 
+s3 = boto3.client(
+    's3',
+    endpoint_url=BEGET_S3_ENDPOINT,
+    aws_access_key_id=BEGET_S3_ACCESS_KEY,
+    aws_secret_access_key=BEGET_S3_SECRET_KEY,
+    region_name='ru-1',
+    config=boto3.session.Config(
+        signature_version='s3v4',
+        s3={'addressing_style': 'path'}
+    )
+)
+
+
+
 
 # Модели
-
-async def upload_to_s3(file_content: bytes, filename: str, content_type: str, folder: str) -> str:
-    """
-    Uploads file content to S3 storage with detailed logging
-    """
-    logger.info(f"Starting S3 upload for file: {filename} (size: {len(file_content)} bytes)")
-    
-    # Validate S3 configuration
-    if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
-        error_msg = "S3 configuration is incomplete"
-        logger.error(error_msg)
-        raise HTTPException(500, detail=error_msg)
-
-    try:
-        logger.info(f"Initializing S3 client with endpoint: {BEGET_S3_ENDPOINT}")
-        
-        # Создаем клиент с минимальной конфигурацией
-        s3_client = boto3.client(
-            's3',
-            endpoint_url=BEGET_S3_ENDPOINT,
-            aws_access_key_id=BEGET_S3_ACCESS_KEY,
-            aws_secret_access_key=BEGET_S3_SECRET_KEY,
-            region_name='ru-1',
-            config=Config(
-                signature_version='s3',
-                s3={'addressing_style': 'path'}
-            )
-        )
-        logger.info("S3 client initialized successfully")
-
-        # Check bucket access
-        try:
-            logger.info(f"Checking access to bucket: {BEGET_S3_BUCKET_NAME}")
-            s3_client.head_bucket(Bucket=BEGET_S3_BUCKET_NAME)
-            logger.info("Bucket access confirmed")
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            error_msg = f"Bucket access error: {error_code}"
-            logger.error(error_msg)
-            raise HTTPException(500, detail=error_msg)
-
-        # Generate file key
-        file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
-        file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
-        logger.info(f"Generated file key: {file_name}")
-
-        # Upload file using multipart upload for better reliability
-        try:
-            logger.info(f"Attempting to upload to {BEGET_S3_BUCKET_NAME}/{file_name}")
-            
-            # Вариант 1: Используем upload_fileobj с BytesIO
-            with io.BytesIO(file_content) as file_obj:
-                s3_client.upload_fileobj(
-                    Fileobj=file_obj,
-                    Bucket=BEGET_S3_BUCKET_NAME,
-                    Key=file_name,
-                    ExtraArgs={
-                        'ContentType': content_type,
-                        'ACL': 'public-read',
-                        'Metadata': {
-                            'original-filename': filename
-                        }
-                    }
-                )
-            
-            logger.info("File uploaded successfully using upload_fileobj")
-        except Exception as upload_error:
-            logger.error(f"Upload with upload_fileobj failed: {str(upload_error)}")
-            
-            # Fallback вариант: используем put_object с явным указанием ContentLength
-            try:
-                logger.info("Trying fallback upload method with put_object")
-                s3_client.put_object(
-                    Bucket=BEGET_S3_BUCKET_NAME,
-                    Key=file_name,
-                    Body=file_content,
-                    ContentType=content_type,
-                    ContentLength=len(file_content),
-                    ACL='public-read',
-                    Metadata={
-                        'original-filename': filename
-                    }
-                )
-                logger.info("File uploaded successfully using put_object")
-            except Exception as fallback_error:
-                logger.error(f"Fallback upload also failed: {str(fallback_error)}")
-                raise
-
-        # Construct URL
-        file_url = f"{BEGET_S3_ENDPOINT.rstrip('/')}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        logger.info(f"File available at: {file_url}")
-        
-        return file_url
-        
-    except Exception as e:
-        logger.error(f"S3 upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"S3 upload failed: {str(e)}")
 
 # Модель ответа API
 class Post(BaseModel):
@@ -682,104 +599,103 @@ async def create_post(
     description: str = Form(default=""),
     altitude: str = Form(...),
     latitude: str = Form(...),
-    camera_model: str = Form(...),
-    exposure: str = Form(default=""),
-    aperture: str = Form(default=""),
-    iso: str = Form(default=""),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    logger.info(f"Creating new post for user: {current_user['username']}")
-    
-    # Validate file
     if not photo.filename or not photo.content_type:
-        error_msg = "Invalid file upload"
-        logger.error(error_msg)
-        raise HTTPException(400, detail=error_msg)
-    
-    if photo.content_type not in ALLOWED_TYPES:
-        error_msg = f"Unsupported file type: {photo.content_type}"
-        logger.error(error_msg)
-        raise HTTPException(400, detail=error_msg)
+        raise HTTPException(400, detail="Invalid file")
 
     try:
-        # Read file content
-        logger.info("Reading file content")
+        # Генерация имени файла и загрузка в S3
+        file_ext = photo.filename.split('.')[-1].lower()
+        file_name = f"{uuid.uuid4()}.{file_ext}"
         file_content = await photo.read()
-        if not file_content:
-            error_msg = "Empty file content"
-            logger.error(error_msg)
-            raise HTTPException(400, detail=error_msg)
         
-        logger.info(f"File size: {len(file_content)} bytes")
-
-        # Extract EXIF data
-        logger.info("Extracting EXIF data")
-        exif_data = extract_exif_data(file_content)
-        logger.info(f"EXIF data: {exif_data}")
-
-        # Upload to S3
-        logger.info("Starting S3 upload process")
-        try:
-            photo_url = await upload_to_s3(
-                file_content=file_content,
-                filename=photo.filename,
-                content_type=photo.content_type,
-                folder="posts"
-            )
-            logger.info(f"File uploaded to: {photo_url}")
-        except Exception as upload_error:
-            logger.error(f"S3 upload failed: {str(upload_error)}")
-            raise
-
-        # Prepare camera settings
-        camera_settings = {
-            "model": camera_model,
-            "exposure": exposure or exif_data.get("exposure_time", ""),
-            "aperture": aperture or exif_data.get("f_number", ""),
-            "iso": iso or exif_data.get("iso", ""),
-            "focal_length": exif_data.get("focal_length", ""),
-            "lens": exif_data.get("lens_model", "")
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        
+        # Подготовка заголовков
+        now = datetime.utcnow()
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+        
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(file_content))
         }
-        logger.info(f"Camera settings: {camera_settings}")
+        
+        # Создаем подпись запроса
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3'
+        )
+        
+        # Отправляем запрос
+        response = requests.put(
+            url,
+            data=file_content,
+            headers=headers,
+            auth=auth
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
 
-        # Save to database
-        logger.info("Saving post to database")
+        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+
+        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
-                    photo_url, description, user_id, created_at,
-                    likes_count, comments_count, altitude, latitude,
-                    camera_model, camera_settings
+                    photo_url,
+                    shooting_time,
+                    description,
+                    user_id,
+                    created_at,
+                    likes_count,
+                    comments_count,
+                    tags,
+                    altitude,
+                    latitude,
+                    camera_settings
                 ) VALUES (
-                    %s, %s, %s, NOW(), 0, 0, %s, %s, %s, %s
+                    %s,  -- photo_url
+                    %s,  -- shooting_time
+                    %s,  -- description
+                    %s,  -- user_id
+                    NOW(),  -- created_at
+                    %s,  -- likes_count
+                    %s,  -- comments_count
+                    %s,  -- tags
+                    %s,  -- altitude
+                    %s,  -- latitude
+                    %s   -- camera_settings
                 )
                 RETURNING id, created_at
             """, (
-                photo_url, 
-                description, 
+                photo_url,
+                datetime.now().strftime('%H:%M'),
+                description,
                 current_user["id"],
-                altitude, 
-                latitude, 
-                camera_model,
-                json.dumps(camera_settings),
+                0,  # likes_count
+                0,  # comments_count
+                "",  # tags
+                altitude,
+                latitude,
+                "{}"  # camera_settings
             ))
             new_post = cur.fetchone()
             db.commit()
-            logger.info(f"Post created with ID: {new_post['id']}")
 
-        return {
-            "status": "success",
-            "post_id": new_post["id"],
-            "photo_url": photo_url,
-            "camera_settings": camera_settings
-        }
+        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
 
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Post creation failed: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"Failed to create post: {str(e)}")
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="File upload failed")
 
 @app.get("/profile/{username}")
 async def profile_page(username: str, db=Depends(get_db)):
