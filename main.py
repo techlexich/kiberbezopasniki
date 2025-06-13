@@ -189,22 +189,16 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         raise HTTPException(500, detail="S3 configuration is incomplete")
 
     try:
-        # Читаем содержимое файла
-        file_content = await file.read()
-        
         # Генерируем уникальное имя файла
         file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
-        
-        # Создаем временный файл в памяти
-        file_obj = io.BytesIO(file_content)
-        
+
         # Конфигурация для Beget S3
         s3_config = Config(
             signature_version='s3v4',
             s3={'addressing_style': 'path'}
         )
-        
+
         # Инициализация клиента S3
         s3_client = boto3.client(
             's3',
@@ -214,10 +208,11 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             region_name='ru-1',
             config=s3_config
         )
-        
-        # Загружаем файл
+
+        # Загружаем файл напрямую из UploadFile
+        await file.seek(0)  # Перематываем на начало файла
         s3_client.upload_fileobj(
-            file_obj,
+            file.file,
             BEGET_S3_BUCKET_NAME,
             file_name,
             ExtraArgs={
@@ -225,11 +220,11 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
                 'ACL': 'public-read'
             }
         )
-        
+
         # Формируем URL
         endpoint = BEGET_S3_ENDPOINT.rstrip('/')
         return f"{endpoint}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
+
     except ClientError as e:
         error_msg = f"S3 upload error: {e.response['Error']['Message']}"
         logger.error(error_msg, exc_info=True)
@@ -239,8 +234,6 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
     finally:
         await file.seek(0)
-        if 'file_obj' in locals():
-            file_obj.close()
 
 
 # Модель ответа API
