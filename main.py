@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, field_validator, AnyUrl, Field
 from passlib.context import CryptContext
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from typing import Optional
 import psycopg2
@@ -31,6 +32,7 @@ from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 import io
 import random
+import json
 
 
 # Настройкиi
@@ -57,6 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 WEATHER_API_KEY ="4c9c5126cac8583846104eb7825d1ae4"
 CITY = "Ekaterinburg"
 
@@ -735,7 +738,7 @@ async def delete_post(
             if post["photo_url"].startswith(os.getenv("BEGET_S3_ENDPOINT")):
                 file_name = post["photo_url"].split('/')[-1]
                 s3.delete_object(
-                    Bucket=os.getenv("S3_BUCKET_NAME"),
+                    Bucket=os.getenv("BEGET_S3_BUCKET_NAME"),
                     Key=file_name
                 )
         except Exception as e:
