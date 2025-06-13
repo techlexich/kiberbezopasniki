@@ -754,12 +754,12 @@
             const match = path.match(/\/profile\/([^\/]+)/);
             return match ? match[1] : null;
         }
-    
+
         const username = getUsernameFromPath();
         let currentUser = null;
         let postMap = null;
         let postMarker = null;
-    
+
         // Проверка ответа сервера
         async function checkResponse(response) {
             if (!response.ok) {
@@ -768,14 +768,14 @@
             }
             return response.json();
         }
-    
+
         // Загрузка профиля
         async function loadProfile() {
             if (!username) {
                 showError("Не удалось определить пользователя");
                 return;
             }
-    
+
             try {
                 const user = await fetch(`/users/${username}`).then(checkResponse);
                 renderProfile(user);
@@ -786,7 +786,7 @@
                 showError("Ошибка загрузки профиля");
             }
         }
-    
+
         function renderProfile(user) {
             document.getElementById('profileName').textContent = user.username;
             document.getElementById('profileBio').textContent = user.profile?.bio || "Нет описания";
@@ -798,19 +798,19 @@
                 avatar.style.backgroundSize = 'cover';
             }
         }
-    
+
         async function checkAuth() {
             const token = localStorage.getItem('access_token');
             if (!token) {
                 hideAuthElements();
                 return;
             }
-    
+
             try {
                 currentUser = await fetch('/users/me', {
                     headers: {'Authorization': `Bearer ${token}`}
                 }).then(checkResponse);
-    
+
                 const isCurrentUser = currentUser.username === username;
                 document.getElementById('editProfileBtn').style.display = isCurrentUser ? 'block' : 'none';
                 document.getElementById('newPostBtn').style.display = isCurrentUser ? 'flex' : 'none';
@@ -821,12 +821,12 @@
                 hideAuthElements();
             }
         }
-    
+
         function hideAuthElements() {
             document.getElementById('editProfileBtn').style.display = 'none';
             document.getElementById('newPostBtn').style.display = 'none';
         }
-    
+
         // Загрузка постов
         async function loadUserPosts() {
             try {
@@ -837,7 +837,7 @@
                 showPostsError();
             }
         }
-    
+
         function renderPosts(posts) {
             const container = document.getElementById('posts-container');
             
@@ -846,16 +846,16 @@
                 document.getElementById('postsCount').textContent = '0';
                 return;
             }
-    
+
             document.getElementById('postsCount').textContent = posts.length;
             container.innerHTML = '';
-    
+
             posts.forEach(post => {
                 const postElement = createPostElement(post);
                 container.appendChild(postElement);
             });
         }
-    
+
         function createPostElement(post) {
             const postElement = document.createElement('div');
             postElement.className = 'post';
@@ -863,7 +863,7 @@
             
             const isCurrentUserPost = currentUser?.username === post.username;
             const postDate = new Date(post.created_at).toLocaleString();
-    
+
             postElement.innerHTML = `
                 <div class="post-header">
                     <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
@@ -887,29 +887,29 @@
                     </button>
                 </div>
             `;
-    
+
             // Обработчики событий
             postElement.addEventListener('click', (e) => {
                 if (!e.target.closest('.delete-post-btn, .action-button')) {
                     openPostModal(post);
                 }
             });
-    
+
             if (isCurrentUserPost) {
                 postElement.querySelector('.delete-post-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
                     deletePost(post.id);
                 });
             }
-    
+
             postElement.querySelector('.like-button').addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleLike(post.id, e.currentTarget);
             });
-    
+
             return postElement;
         }
-    
+
         // Модальное окно просмотра поста
         function openPostModal(post) {
             const modal = document.getElementById('postViewModal');
@@ -960,13 +960,13 @@
             modal.classList.add('active');
             updateUrl(post.id);
         }
-    
+
         function closePostModal() {
             const modal = document.getElementById('postViewModal');
             modal.classList.remove('active');
             updateUrl();
         }
-    
+
         // Управление URL
         function updateUrl(postId = null) {
             if (postId) {
@@ -975,7 +975,7 @@
                 history.pushState(null, '', window.location.pathname);
             }
         }
-    
+
         // Обработка лайков
         async function handleLike(postId, likeButton) {
             if (!currentUser) {
@@ -1014,7 +1014,7 @@
                 alert('Ошибка при обновлении лайка');
             }
         }
-    
+
         // Удаление поста
         async function deletePost(postId) {
             if (!confirm('Вы уверены, что хотите удалить этот пост?')) return;
@@ -1022,19 +1022,19 @@
             try {
                 const token = localStorage.getItem('access_token');
                 if (!token) throw new Error('Требуется авторизация');
-    
+
                 const response = await fetch(`/posts/${postId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
-    
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.detail || 'Ошибка при удалении поста');
                 }
-    
+
                 await loadUserPosts();
                 alert('Пост успешно удален!');
             } catch (error) {
@@ -1042,15 +1042,15 @@
                 alert('Ошибка при удалении поста: ' + error.message);
             }
         }
-    
-        // Инициализация карты
+
+        // Инициализация карты для создания поста
         function initPostMap() {
-            const center = [56.835184, 60.609573];
+            const center = [56.835184, 60.609573]; // Координаты по умолчанию (Екатеринбург)
             postMap = L.map('post-map', {
                 zoomControl: false,
                 preferCanvas: true,
                 attributionControl: false
-            }).setView(center, 10);
+            }).setView(center, 12);
             
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
@@ -1065,13 +1065,138 @@
                 document.getElementById('longitude').value = lng;
             });
         }
-    
+
+        // Обработка загрузки фото для нового поста
+        const fileInput = document.getElementById('post-photo');
+        const previewImage = document.getElementById('preview-image');
+        const fileUploadLabel = document.getElementById('file-upload-label');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.match('image.*')) {
+                alert('Пожалуйста, выберите изображение');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+                fileUploadLabel.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Управление модальным окном создания поста
+        const postModal = document.getElementById('post-modal');
+        const newPostBtn = document.getElementById('newPostBtn');
+        const closePostModalBtn = document.getElementById('closePostModal');
+
+        newPostBtn.addEventListener('click', function() {
+            if (!currentUser) {
+                alert('Для создания поста необходимо войти в систему');
+                return;
+            }
+            
+            postModal.classList.add('active');
+            if (!postMap) initPostMap();
+        });
+
+        closePostModalBtn.addEventListener('click', function() {
+            postModal.classList.remove('active');
+        });
+
+        postModal.addEventListener('click', function(e) {
+            if (e.target === postModal) {
+                postModal.classList.remove('active');
+            }
+        });
+
+        // Отправка формы создания поста
+        const createPostForm = document.getElementById('create-post-form');
+
+        createPostForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submit-post-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Публикация...';
+            
+            const file = fileInput.files[0];
+            const description = document.getElementById('post-description').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            
+            if (!file) {
+                alert('Пожалуйста, выберите фото');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-share"></i> Опубликовать';
+                return;
+            }
+            
+            if (!latitude || !longitude) {
+                alert('Пожалуйста, укажите местоположение на карте');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-share"></i> Опубликовать';
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('photo', file);
+                formData.append('description', description);
+                formData.append('altitude', longitude); // В вашем API используется altitude вместо longitude
+                formData.append('latitude', latitude);
+                
+                const token = localStorage.getItem('access_token');
+                if (!token) throw new Error('Требуется авторизация');
+                
+                const response = await fetch('/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => null);
+                    throw new Error(error?.detail || 'Ошибка при создании поста');
+                }
+                
+                const result = await response.json();
+                alert('Пост успешно создан!');
+                
+                // Сброс формы
+                createPostForm.reset();
+                previewImage.style.display = 'none';
+                previewImage.src = '';
+                fileUploadLabel.style.display = 'block';
+                if (postMarker) postMap.removeLayer(postMarker);
+                
+                // Закрытие модального окна
+                postModal.classList.remove('active');
+                
+                // Обновление списка постов
+                await loadUserPosts();
+                
+            } catch (error) {
+                console.error('Post creation error:', error);
+                alert('Ошибка при создании поста: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-share"></i> Опубликовать';
+            }
+        });
+
         // Обработчики событий
         document.getElementById('closePostView').addEventListener('click', closePostModal);
         document.getElementById('postViewModal').addEventListener('click', (e) => {
             if (e.target === e.currentTarget) closePostModal();
         });
-    
+
         window.addEventListener('popstate', (e) => {
             if (e.state?.postId) {
                 fetch(`/posts/${e.state.postId}`)
@@ -1082,7 +1207,7 @@
                 closePostModal();
             }
         });
-    
+
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
             loadProfile();
