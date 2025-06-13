@@ -193,14 +193,13 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
 
-        # Читаем содержимое файла полностью
+        # Читаем содержимое файла полностью в память
         contents = await file.read()
         
-        # Создаем временный файл в памяти
-        file_obj = io.BytesIO(contents)
-        file_obj.seek(0)  # Важно: перематываем в начало
+        # Создаем хеш содержимого для проверки целостности
+        content_md5 = base64.b64encode(hashlib.md5(contents).digest()).decode('utf-8')
 
-        # Конфигурация для Beget S3
+        # Создаем клиент S3 с правильной конфигурацией
         s3_client = boto3.client(
             's3',
             endpoint_url=BEGET_S3_ENDPOINT,
@@ -209,20 +208,25 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             region_name='ru-1',
             config=Config(
                 signature_version='s3v4',
-                s3={'addressing_style': 'path'}
+                s3={'addressing_style': 'path'},
+                retries={'max_attempts': 3, 'mode': 'standard'}
             )
         )
         
-        # Загружаем файл с явным указанием ContentLength
-        s3_client.put_object(
+        # Загружаем файл с явным указанием всех параметров
+        response = s3_client.put_object(
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
-            Body=file_obj,
+            Body=contents,  # Используем сырые данные, а не файловый объект
             ContentType=file.content_type,
             ACL='public-read',
+            ContentMD5=content_md5,
             ContentLength=len(contents)
-        )
         
+        # Проверяем успешность загрузки
+        if response.get('ResponseMetadata', {}).get('HTTPStatusCode') != 200:
+            raise Exception("Failed to upload file to S3")
+
         # Формируем URL
         endpoint = BEGET_S3_ENDPOINT.rstrip('/')
         return f"{endpoint}/{BEGET_S3_BUCKET_NAME}/{file_name}"
@@ -625,6 +629,7 @@ async def get_user_profile(username: str, request: Request, db=Depends(get_db)):
     }
 
 logger = logging.getLogger(__name__)
+
 @app.post("/posts")
 async def create_post(
     photo: UploadFile = File(...),
@@ -645,40 +650,14 @@ async def create_post(
         raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
     
     try:
-        # Сначала читаем файл для EXIF данных
+        # Читаем файл только один раз
         file_content = await photo.read()
+        
+        # Извлекаем EXIF данные
         exif_data = extract_exif_data(file_content)
         
-        # Создаем новый UploadFile из прочитанного содержимого
-        from io import BytesIO
-        file_obj = BytesIO(file_content)
-        
-        # Создаем временный UploadFile
-        class TempUploadFile:
-            def __init__(self, file_obj, filename, content_type):
-                self.file = file_obj
-                self.filename = filename
-                self.content_type = content_type
-            
-            async def read(self):
-                return self.file.read()
-            
-            async def seek(self, pos):
-                self.file.seek(pos)
-                return
-            
-            async def close(self):
-                self.file.close()
-                return
-        
-        temp_upload = TempUploadFile(
-            file_obj=file_obj,
-            filename=photo.filename,
-            content_type=photo.content_type
-        )
-        
-        # Затем загружаем фото в S3
-        photo_url = await upload_to_s3(temp_upload, "posts")
+        # Загружаем фото в S3 (передаем оригинальный UploadFile)
+        photo_url = await upload_to_s3(photo, "posts")
 
         # Формируем настройки камеры
         camera_settings = {
