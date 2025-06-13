@@ -197,9 +197,7 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
             region_name='ru-1',
             config=Config(
                 signature_version='s3v4',
-                s3={'addressing_style': 'path'},
-                # Добавляем параметры для обработки SHA256
-                payload_signing_enabled=False
+                s3={'addressing_style': 'path'}
             )
         )
         logger.info("S3 client initialized successfully")
@@ -224,17 +222,28 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
         logger.info(f"Attempting to upload to {BEGET_S3_BUCKET_NAME}/{file_name}")
         
         try:
-            # Используем upload_fileobj вместо put_object
-            with io.BytesIO(file_content) as file_obj:
-                s3_client.upload_fileobj(
-                    file_obj,
-                    BEGET_S3_BUCKET_NAME,
-                    file_name,
-                    ExtraArgs={
-                        'ContentType': content_type,
-                        'ACL': 'public-read'
-                    }
-                )
+            # Вариант 1: Используем put_object с явным указанием ContentLength
+            s3_client.put_object(
+                Bucket=BEGET_S3_BUCKET_NAME,
+                Key=file_name,
+                Body=file_content,
+                ContentType=content_type,
+                ContentLength=len(file_content),
+                ACL='public-read'
+            )
+            
+            # Или Вариант 2: Используем upload_fileobj
+            # with io.BytesIO(file_content) as file_obj:
+            #     s3_client.upload_fileobj(
+            #         file_obj,
+            #         BEGET_S3_BUCKET_NAME,
+            #         file_name,
+            #         ExtraArgs={
+            #             'ContentType': content_type,
+            #             'ACL': 'public-read'
+            #         }
+            #     )
+            
             logger.info("File uploaded successfully")
         except Exception as upload_error:
             logger.error(f"Upload failed: {str(upload_error)}")
