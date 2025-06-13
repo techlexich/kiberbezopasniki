@@ -188,7 +188,7 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
     try:
         logger.info(f"Initializing S3 client with endpoint: {BEGET_S3_ENDPOINT}")
         
-        # Создаем клиент с правильной конфигурацией
+        # Создаем клиент с минимальной конфигурацией
         s3_client = boto3.client(
             's3',
             endpoint_url=BEGET_S3_ENDPOINT,
@@ -196,7 +196,7 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
             aws_secret_access_key=BEGET_S3_SECRET_KEY,
             region_name='ru-1',
             config=Config(
-                signature_version='s3v4',
+                signature_version='s3',
                 s3={'addressing_style': 'path'}
             )
         )
@@ -218,36 +218,47 @@ async def upload_to_s3(file_content: bytes, filename: str, content_type: str, fo
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
         logger.info(f"Generated file key: {file_name}")
 
-        # Upload file
-        logger.info(f"Attempting to upload to {BEGET_S3_BUCKET_NAME}/{file_name}")
-        
+        # Upload file using multipart upload for better reliability
         try:
-            # Вариант 1: Используем put_object с явным указанием ContentLength
-            s3_client.put_object(
-                Bucket=BEGET_S3_BUCKET_NAME,
-                Key=file_name,
-                Body=file_content,
-                ContentType=content_type,
-                ContentLength=len(file_content),
-                ACL='public-read'
-            )
+            logger.info(f"Attempting to upload to {BEGET_S3_BUCKET_NAME}/{file_name}")
             
-            # Или Вариант 2: Используем upload_fileobj
-            # with io.BytesIO(file_content) as file_obj:
-            #     s3_client.upload_fileobj(
-            #         file_obj,
-            #         BEGET_S3_BUCKET_NAME,
-            #         file_name,
-            #         ExtraArgs={
-            #             'ContentType': content_type,
-            #             'ACL': 'public-read'
-            #         }
-            #     )
+            # Вариант 1: Используем upload_fileobj с BytesIO
+            with io.BytesIO(file_content) as file_obj:
+                s3_client.upload_fileobj(
+                    Fileobj=file_obj,
+                    Bucket=BEGET_S3_BUCKET_NAME,
+                    Key=file_name,
+                    ExtraArgs={
+                        'ContentType': content_type,
+                        'ACL': 'public-read',
+                        'Metadata': {
+                            'original-filename': filename
+                        }
+                    }
+                )
             
-            logger.info("File uploaded successfully")
+            logger.info("File uploaded successfully using upload_fileobj")
         except Exception as upload_error:
-            logger.error(f"Upload failed: {str(upload_error)}")
-            raise
+            logger.error(f"Upload with upload_fileobj failed: {str(upload_error)}")
+            
+            # Fallback вариант: используем put_object с явным указанием ContentLength
+            try:
+                logger.info("Trying fallback upload method with put_object")
+                s3_client.put_object(
+                    Bucket=BEGET_S3_BUCKET_NAME,
+                    Key=file_name,
+                    Body=file_content,
+                    ContentType=content_type,
+                    ContentLength=len(file_content),
+                    ACL='public-read',
+                    Metadata={
+                        'original-filename': filename
+                    }
+                )
+                logger.info("File uploaded successfully using put_object")
+            except Exception as fallback_error:
+                logger.error(f"Fallback upload also failed: {str(fallback_error)}")
+                raise
 
         # Construct URL
         file_url = f"{BEGET_S3_ENDPOINT.rstrip('/')}/{BEGET_S3_BUCKET_NAME}/{file_name}"
