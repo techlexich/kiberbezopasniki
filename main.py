@@ -193,12 +193,18 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
 
+        # Читаем содержимое файла в память
+        file_content = await file.read()
+        
+        # Создаем временный файл в памяти
+        file_obj = io.BytesIO(file_content)
+        
         # Конфигурация для Beget S3
         s3_config = Config(
             signature_version='s3v4',
             s3={'addressing_style': 'path'}
         )
-
+        
         # Инициализация клиента S3
         s3_client = boto3.client(
             's3',
@@ -208,11 +214,10 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             region_name='ru-1',
             config=s3_config
         )
-
-        # Загружаем файл напрямую из UploadFile
-        await file.seek(0)  # Перематываем на начало файла
+        
+        # Загружаем файл
         s3_client.upload_fileobj(
-            file.file,
+            file_obj,
             BEGET_S3_BUCKET_NAME,
             file_name,
             ExtraArgs={
@@ -220,20 +225,21 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
                 'ACL': 'public-read'
             }
         )
-
+        
         # Формируем URL
         endpoint = BEGET_S3_ENDPOINT.rstrip('/')
         return f"{endpoint}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-
+        
     except ClientError as e:
-        error_msg = f"S3 upload error: {e.response['Error']['Message']}"
+        error_msg = f"S3 upload error: {e.response['Error']['Message'] if 'Error' in e.response else str(e)}"
         logger.error(error_msg, exc_info=True)
         raise HTTPException(500, detail=error_msg)
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
     finally:
-        await file.seek(0)
+        # Не пытаемся делать seek, так как файл уже прочитан полностью
+        pass
 
 
 # Модель ответа API
@@ -643,13 +649,13 @@ async def create_post(
         raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
     
     try:
-        # Извлекаем EXIF данные
+        # Сначала загружаем фото в S3
+        photo_url = await upload_to_s3(photo, "posts")
+        
+        # Затем читаем файл для EXIF данных (если нужно)
+        await photo.seek(0)  # Перематываем файл
         file_content = await photo.read()
         exif_data = extract_exif_data(file_content)
-        await photo.seek(0)
-
-        # Загружаем фото
-        photo_url = await upload_to_s3(photo, "posts")
 
         # Формируем настройки камеры
         camera_settings = {
