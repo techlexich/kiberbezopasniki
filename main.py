@@ -373,10 +373,47 @@ async def update_user_profile(
     avatar_url = current_user["avatar"]
 
     if avatar:
-        if avatar.content_type not in ALLOWED_TYPES:
-            raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
         try:
-            avatar_url = await upload_to_s3(avatar, "avatars")
+            # Генерируем уникальное имя файла
+            file_ext = avatar.filename.split('.')[-1].lower()
+            file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
+            
+            # Формируем URL для загрузки
+            url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+            
+            # Подготавливаем запрос к S3
+            file_content = await avatar.read()
+            now = datetime.utcnow()
+            timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+            
+            headers = {
+                'Content-Type': avatar.content_type,
+                'x-amz-date': timestamp,
+                'x-amz-acl': 'public-read',
+                'Content-Length': str(len(file_content))
+            }
+            
+            # Создаем подпись запроса
+            auth = AWS4Auth(
+                BEGET_S3_ACCESS_KEY,
+                BEGET_S3_SECRET_KEY,
+                'ru-1',
+                's3'
+            )
+            
+            # Отправляем файл напрямую в S3
+            response = requests.put(
+                url,
+                data=file_content,
+                headers=headers,
+                auth=auth
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(500, "Failed to upload avatar to S3")
+            
+            avatar_url = url
+            
         except Exception as e:
             logger.error(f"Avatar upload error: {str(e)}")
             raise HTTPException(500, "Failed to upload avatar")
