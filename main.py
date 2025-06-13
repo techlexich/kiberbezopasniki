@@ -292,22 +292,28 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Подключение к БД (new)
 def get_db():
-    conn = psycopg2.connect(
-        dbname="auth_db_17at_90uu",
-        user="auth_db_17at_user",
-        password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
-        host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
-        port="5432",
-        sslmode="require",
-        cursor_factory=RealDictCursor   
-    )
-    try:
-        yield conn
-    finally:
-        conn.close()
+    # Создаем SSL-контекст с теми же параметрами, что и в psql
+    ssl_context = ssl.create_default_context()
+    ssl_context.protocol = ssl.PROTOCOL_TLSv1_3
+    ssl_context.set_ciphers('TLS_AES_128_GCM_SHA256')
 
+    try:
+        conn = psycopg2.connect(
+            dbname="auth_db_17at_90uu",
+            user="auth_db_17at_user",
+            password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
+            host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
+            port="5432",
+            sslmode="require",
+            sslcontext=ssl_context,  # Явно передаем SSL-контекст
+            connect_timeout=10,
+            cursor_factory=RealDictCursor
+        )
+        return conn
+    except Exception as e:
+        print(f"Ошибка подключения: {e}")
+        raise
 # Вспомогательные функции
 def extract_exif_data(image_bytes: bytes) -> dict:
     try:
