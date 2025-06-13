@@ -173,22 +173,19 @@ if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_
 
 # Модели
 
-async def upload_to_s3(file: UploadFile, folder: str) -> str:
+async def upload_to_s3(file_content: bytes, filename: str, content_type: str, folder: str) -> str:
     """
-    Uploads a file to S3 storage with proper bucket handling
+    Uploads file content to S3 storage
     """
     if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
         raise HTTPException(500, detail="S3 configuration is incomplete")
 
     try:
-        # Генерируем уникальное имя файла
-        file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+        # Generate unique filename
+        file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
         
-        # Читаем содержимое файла
-        contents = await file.read()
-        
-        # Создаем клиент S3
+        # Create S3 client
         s3_client = boto3.client(
             's3',
             endpoint_url=BEGET_S3_ENDPOINT,
@@ -201,21 +198,24 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             )
         )
         
-        # Загружаем файл
+        # Upload file content directly
         s3_client.put_object(
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
-            Body=contents,
-            ContentType=file.content_type or 'application/octet-stream',
+            Body=file_content,
+            ContentType=content_type or 'application/octet-stream',
             ACL='public-read'
         )
         
-        # Формируем публичный URL
+        # Return public URL
         return f"{BEGET_S3_ENDPOINT.rstrip('/')}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
+    except ClientError as e:
+        logger.error(f"S3 client error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail=f"S3 upload failed: {e.response['Error']['Message']}")
     except Exception as e:
         logger.error(f"S3 upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"S3 upload failed: {str(e)}")
+        raise HTTPException(500, detail="File upload failed")
 
 # Модель ответа API
 class Post(BaseModel):
@@ -643,23 +643,21 @@ async def create_post(
         raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
     
     try:
-        # Читаем файл только один раз
+        # Read file content once
         file_content = await photo.read()
         
-        # Извлекаем EXIF данные
+        # Extract EXIF data
         exif_data = extract_exif_data(file_content)
         
-        # Создаем временный файл для загрузки
-        temp_file = io.BytesIO(file_content)
-        temp_file.name = photo.filename
-        
-        # Создаем новый UploadFile объект
-        new_upload_file = UploadFile(file=temp_file, filename=photo.filename)
-        
-        # Загружаем фото в S3
-        photo_url = await upload_to_s3(new_upload_file, "posts")
+        # Upload to S3 directly with file content
+        photo_url = await upload_to_s3(
+            file_content=file_content,
+            filename=photo.filename,
+            content_type=photo.content_type,
+            folder="posts"
+        )
 
-        # Формируем настройки камеры
+        # Prepare camera settings
         camera_settings = {
             "model": camera_model,
             "exposure": exposure or exif_data.get("exposure_time", ""),
@@ -669,7 +667,7 @@ async def create_post(
             "lens": exif_data.get("lens_model", "")
         }
 
-        # Сохраняем в базу данных
+        # Save to database
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
@@ -699,6 +697,8 @@ async def create_post(
             "camera_info": camera_settings
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Post creation error: {str(e)}", exc_info=True)
         raise HTTPException(500, detail=f"Failed to create post: {str(e)}")
