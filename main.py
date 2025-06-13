@@ -1019,9 +1019,7 @@ async def check_s3():
                 "region": "ru-1"
             }
         }
-
-
-app.add_middleware(NotFoundMiddleware)
+    
 
 #исключение ошибок
 @app.exception_handler(500)
