@@ -202,7 +202,7 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         raise HTTPException(500, detail=error_msg)
 
     try:
-        # Чтение содержимого файла в память
+        # Чтение содержимого файла
         file_content = await file.read()
         
         # Генерация имени файла
@@ -210,36 +210,18 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
         file_name = f"{folder}/{uuid.uuid4()}{'.' + file_ext if file_ext else ''}"
         
-        # Создаем временный файл для загрузки
-        temp_file = io.BytesIO(file_content)
-        
-        # Инициализация S3 клиента с правильной конфигурацией для Beget
-        s3 = boto3.client(
-            's3',
-            endpoint_url=BEGET_S3_ENDPOINT,
-            aws_access_key_id=BEGET_S3_ACCESS_KEY,
-            aws_secret_access_key=BEGET_S3_SECRET_KEY,
-            region_name='ru-1',
-            config=Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'}
-            )
-        )
-        
-        # Загрузка с использованием upload_fileobj для потоковой передачи
-        extra_args = {
-            'ContentType': file.content_type,
-            'ACL': 'public-read',
-            'Metadata': {
+        # Используем ГЛОБАЛЬНЫЙ клиент s3, уже настроенный для Beget
+        # Загрузка с явным указанием Content-Length
+        s3.put_object(
+            Bucket=BEGET_S3_BUCKET_NAME,
+            Key=file_name,
+            Body=file_content,
+            ContentType=file.content_type,
+            ContentLength=len(file_content),
+            ACL='public-read',
+            Metadata={
                 'original-filename': filename
             }
-        }
-        
-        s3.upload_fileobj(
-            temp_file,
-            BEGET_S3_BUCKET_NAME,
-            file_name,
-            ExtraArgs=extra_args
         )
         
         # Формирование URL
@@ -255,8 +237,6 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
     finally:
         await file.seek(0)
-        if 'temp_file' in locals():
-            temp_file.close()
 
 
 # Модель ответа API
