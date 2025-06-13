@@ -23,6 +23,7 @@ import uuid
 import shutil
 import requests
 from requests_aws4auth import AWS4Auth
+from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 import hashlib
 import base64
@@ -160,17 +161,6 @@ CAMERA_SETTINGS_TIPS = {
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-s3 = boto3.client(
-    's3',
-    endpoint_url=BEGET_S3_ENDPOINT,
-    aws_access_key_id=BEGET_S3_ACCESS_KEY,
-    aws_secret_access_key=BEGET_S3_SECRET_KEY,
-    region_name='ru-1',
-    config=boto3.session.Config(
-        signature_version='s3v4',
-        s3={'addressing_style': 'path'}
-    )
-)
 
 # Проверка доступности S3
 if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
