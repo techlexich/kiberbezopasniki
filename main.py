@@ -34,6 +34,8 @@ import io
 import random
 import json
 from botocore.config import Config
+import hmac
+from urllib.parse import urlparse
 
 
 # Настройкиi
@@ -173,7 +175,7 @@ if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_
 
 async def upload_to_s3(file: UploadFile, folder: str) -> str:
     """
-    Uploads a file to S3 storage using direct HTTP requests (avoiding boto3 issues)
+    Uploads a file to S3 storage using direct HTTP requests with proper signature
     """
     if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
         raise HTTPException(500, detail="S3 configuration is incomplete")
@@ -186,29 +188,62 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         # Читаем содержимое файла
         contents = await file.read()
         
-        # Формируем URL для загрузки
-        upload_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        # Формируем URL для загрузки (без bucket в URL)
+        upload_url = f"{BEGET_S3_ENDPOINT.rstrip('/')}/{file_name}"
         
-        # Создаем заголовки
+        # Даты для подписи
+        date = datetime.utcnow().strftime('%Y%m%d')
+        datetime_str = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+        
+        # Создаем подпись
+        def sign(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+
+        # 1. Создаем ключ подписи
+        k_date = sign(('AWS4' + BEGET_S3_SECRET_KEY).encode('utf-8'), date)
+        k_region = sign(k_date, 'ru-1')
+        k_service = sign(k_region, 's3')
+        k_signing = sign(k_service, 'aws4_request')
+        
+        # 2. Создаем строку для подписи
+        canonical_headers = f"host:{urlparse(BEGET_S3_ENDPOINT).netloc}\nx-amz-acl:public-read\nx-amz-content-sha256:{hashlib.sha256(contents).hexdigest()}\nx-amz-date:{datetime_str}\n"
+        signed_headers = "host;x-amz-acl;x-amz-content-sha256;x-amz-date"
+        
+        canonical_request = f"PUT\n/{file_name}\n\n{canonical_headers}\n{signed_headers}\n{hashlib.sha256(contents).hexdigest()}"
+        
+        # 3. Создаем строку для подписи
+        credential_scope = f"{date}/ru-1/s3/aws4_request"
+        string_to_sign = f"AWS4-HMAC-SHA256\n{datetime_str}\n{credential_scope}\n{hashlib.sha256(canonical_request.encode('utf-8')).hexdigest()}"
+        
+        # 4. Вычисляем подпись
+        signature = hmac.new(k_signing, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
+        
+        # 5. Формируем заголовок авторизации
+        authorization_header = (
+            f"AWS4-HMAC-SHA256 Credential={BEGET_S3_ACCESS_KEY}/{credential_scope}, "
+            f"SignedHeaders={signed_headers}, Signature={signature}"
+        )
+        
+        # Отправляем запрос
         headers = {
-            'Content-Type': file.content_type,
+            'Host': urlparse(BEGET_S3_ENDPOINT).netloc,
             'x-amz-acl': 'public-read',
+            'x-amz-content-sha256': hashlib.sha256(contents).hexdigest(),
+            'x-amz-date': datetime_str,
+            'Authorization': authorization_header,
+            'Content-Type': file.content_type,
             'Content-Length': str(len(contents))
         }
         
-        # Отправляем PUT запрос напрямую
         response = requests.put(
             upload_url,
             data=contents,
-            headers=headers,
-            auth=HTTPBasicAuth(BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY)
+            headers=headers
         )
         
-        # Проверяем ответ
         if response.status_code != 200:
             raise Exception(f"S3 upload failed with status {response.status_code}: {response.text}")
         
-        # Возвращаем публичный URL
         return f"{BEGET_S3_ENDPOINT.rstrip('/')}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
     except Exception as e:
