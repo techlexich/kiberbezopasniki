@@ -173,7 +173,7 @@ if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_
 
 async def upload_to_s3(file: UploadFile, folder: str) -> str:
     """
-    Uploads a file to S3 storage and returns its public URL.
+    Uploads a file to S3 storage using direct HTTP requests (avoiding boto3 issues)
     """
     if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
         raise HTTPException(500, detail="S3 configuration is incomplete")
@@ -182,53 +182,38 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         # Генерируем уникальное имя файла
         file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
-
-        # Читаем содержимое файла полностью в память
+        
+        # Читаем содержимое файла
         contents = await file.read()
         
-        # Создаем хеш содержимого для проверки целостности
-        content_md5 = base64.b64encode(hashlib.md5(contents).digest()).decode('utf-8')
-
-        # Создаем клиент S3 с правильной конфигурацией
-        s3_client = boto3.client(
-            's3',
-            endpoint_url=BEGET_S3_ENDPOINT,
-            aws_access_key_id=BEGET_S3_ACCESS_KEY,
-            aws_secret_access_key=BEGET_S3_SECRET_KEY,
-            region_name='ru-1',
-            config=Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'},
-                retries={'max_attempts': 3, 'mode': 'standard'}
-            )
+        # Формируем URL для загрузки
+        upload_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        
+        # Создаем заголовки
+        headers = {
+            'Content-Type': file.content_type,
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(contents))
+        }
+        
+        # Отправляем PUT запрос напрямую
+        response = requests.put(
+            upload_url,
+            data=contents,
+            headers=headers,
+            auth=HTTPBasicAuth(BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY)
         )
         
-        # Загружаем файл с явным указанием всех параметров
-        response = s3_client.put_object(
-            Bucket=BEGET_S3_BUCKET_NAME,
-            Key=file_name,
-            Body=contents,  # Используем сырые данные, а не файловый объект
-            ContentType=file.content_type,
-            ACL='public-read',
-            ContentMD5=content_md5,
-            ContentLength=len(contents)
-        )
+        # Проверяем ответ
+        if response.status_code != 200:
+            raise Exception(f"S3 upload failed with status {response.status_code}: {response.text}")
         
-        # Проверяем успешность загрузки
-        if response.get('ResponseMetadata', {}).get('HTTPStatusCode') != 200:
-            raise Exception("Failed to upload file to S3")
-
-        # Формируем URL
-        endpoint = BEGET_S3_ENDPOINT.rstrip('/')
-        return f"{endpoint}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        # Возвращаем публичный URL
+        return f"{BEGET_S3_ENDPOINT.rstrip('/')}/{BEGET_S3_BUCKET_NAME}/{file_name}"
         
-    except ClientError as e:
-        error_msg = f"S3 upload error: {e.response['Error']['Message'] if 'Error' in e.response else str(e)}"
-        logger.error(error_msg, exc_info=True)
-        raise HTTPException(500, detail=error_msg)
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
+        logger.error(f"S3 upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail=f"S3 upload failed: {str(e)}")
 
 
 # Модель ответа API
@@ -647,7 +632,10 @@ async def create_post(
         # Извлекаем EXIF данные
         exif_data = extract_exif_data(file_content)
         
-        # Загружаем фото в S3 (передаем оригинальный UploadFile)
+        # Восстанавливаем файловый объект для загрузки
+        photo.file = io.BytesIO(file_content)
+        
+        # Загружаем фото в S3
         photo_url = await upload_to_s3(photo, "posts")
 
         # Формируем настройки камеры
