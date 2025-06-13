@@ -182,26 +182,74 @@ if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_
 # Модели
 
 async def upload_to_s3(file: UploadFile, folder: str) -> str:
-    try:
-        file_content = await file.read()
-        file_ext = file.filename.split('.')[-1].lower()
-        file_name = f"{folder}/{uuid.uuid4()}.{file_ext}"
+    """
+    Uploads a file to S3 storage and returns its public URL.
+    
+    Args:
+        file: UploadFile object from FastAPI
+        folder: Target folder in S3 bucket
         
-        # Используем put_object вместо upload_fileobj
+    Returns:
+        Public URL of the uploaded file
+        
+    Raises:
+        HTTPException: If upload fails
+    """
+    try:
+        # Initialize S3 client with explicit configuration
+        s3 = boto3.client(
+            's3',
+            endpoint_url=BEGET_S3_ENDPOINT,
+            aws_access_key_id=BEGET_S3_ACCESS_KEY,
+            aws_secret_access_key=BEGET_S3_SECRET_KEY,
+            region_name=BEGET_S3_REGION,
+            config=Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'virtual'}
+            )
+        )
+        
+        # Read file content once
+        file_content = await file.read()
+        
+        # Generate unique filename with original extension
+        file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+        file_name = f"{folder}/{uuid.uuid4()}{'.' + file_ext if file_ext else ''}"
+        
+        # Calculate content length
+        content_length = len(file_content)
+        
+        # Upload to S3 with additional safety checks
         s3.put_object(
             Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
             Body=file_content,
             ContentType=file.content_type,
-            ACL='public-read'
+            ContentLength=content_length,
+            ACL='public-read',
+            # Important for checksum verification
+            Metadata={
+                'Content-Length': str(content_length),
+                'Original-Filename': file.filename
+            }
         )
         
-        return f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        # Construct public URL
+        if BEGET_S3_ENDPOINT.startswith('http'):
+            return f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        else:
+            return f"https://{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+            
+    except ClientError as e:
+        error_msg = f"S3 upload error: {e.response['Error']['Message']}"
+        logger.error(error_msg, exc_info=True)
+        raise HTTPException(500, detail=error_msg)
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, f"Failed to upload file: {str(e)}")
+        logger.error(f"Unexpected upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
     finally:
         await file.seek(0)
+        
 
 # Модель ответа API
 class Post(BaseModel):
