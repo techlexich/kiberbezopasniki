@@ -193,41 +193,34 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
         file_name = f"{folder}/{uuid.uuid4()}.{file_ext}" if file_ext else f"{folder}/{uuid.uuid4()}"
 
-        # Читаем содержимое файла в память
-        file_content = await file.read()
+        # Читаем содержимое файла полностью
+        contents = await file.read()
         
         # Создаем временный файл в памяти
-        file_obj = io.BytesIO(file_content)
-        
+        file_obj = io.BytesIO(contents)
+        file_obj.seek(0)  # Важно: перематываем в начало
+
         # Конфигурация для Beget S3
-        s3_config = Config(
-            signature_version='s3v4',
-            s3={'addressing_style': 'path'}
-        )
-        
-        # Инициализация клиента S3
         s3_client = boto3.client(
             's3',
             endpoint_url=BEGET_S3_ENDPOINT,
             aws_access_key_id=BEGET_S3_ACCESS_KEY,
             aws_secret_access_key=BEGET_S3_SECRET_KEY,
             region_name='ru-1',
-            config=s3_config
+            config=Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'}
+            )
         )
         
-        # Перематываем файл перед загрузкой
-        file_obj.seek(0)
-        
-        # Загружаем файл
-        s3_client.upload_fileobj(
-            file_obj,
-            BEGET_S3_BUCKET_NAME,
-            file_name,
-            ExtraArgs={
-                'ContentType': file.content_type,
-                'ACL': 'public-read'
-            }
-        )
+        # Загружаем файл с явным указанием ContentLength
+        s3_client.put_object(
+            Bucket=BEGET_S3_BUCKET_NAME,
+            Key=file_name,
+            Body=file_obj,
+            ContentType=file.content_type,
+            ACL='public-read',
+            ContentLength=len(contents)
         
         # Формируем URL
         endpoint = BEGET_S3_ENDPOINT.rstrip('/')
@@ -655,24 +648,30 @@ async def create_post(
         file_content = await photo.read()
         exif_data = extract_exif_data(file_content)
         
-        # Создаем новый BytesIO объект из прочитанного содержимого
-        file_obj = io.BytesIO(file_content)
+        # Создаем новый UploadFile из прочитанного содержимого
+        from io import BytesIO
+        file_obj = BytesIO(file_content)
         
-        # Создаем временный файл в памяти для загрузки в S3
-        class FakeUploadFile:
-            def __init__(self, file, filename, content_type):
-                self.file = file
+        # Создаем временный UploadFile
+        class TempUploadFile:
+            def __init__(self, file_obj, filename, content_type):
+                self.file = file_obj
                 self.filename = filename
                 self.content_type = content_type
             
             async def read(self):
                 return self.file.read()
             
-            def seek(self, pos):
-                return self.file.seek(pos)
+            async def seek(self, pos):
+                self.file.seek(pos)
+                return
+            
+            async def close(self):
+                self.file.close()
+                return
         
-        temp_upload = FakeUploadFile(
-            file=file_obj,
+        temp_upload = TempUploadFile(
+            file_obj=file_obj,
             filename=photo.filename,
             content_type=photo.content_type
         )
