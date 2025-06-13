@@ -195,52 +195,54 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
     Raises:
         HTTPException: If upload fails or configuration is missing
     """
-    # Configuration check
-    s3_config = {
-        'endpoint': os.getenv('BEGET_S3_ENDPOINT'),
-        'bucket': os.getenv('BEGET_S3_BUCKET_NAME'),
-        'access_key': os.getenv('BEGET_S3_ACCESS_KEY'),
-        'secret_key': os.getenv('BEGET_S3_SECRET_KEY'),
-        'region': os.getenv('BEGET_S3_REGION', 'ru-1')  # Default for Beget
-    }
-    
-    missing = [k for k, v in s3_config.items() if not v and k != 'region']
-    if missing:
-        error_msg = f"Missing S3 configuration: {', '.join(missing)}"
+    # Проверка конфигурации S3
+    if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
+        error_msg = "S3 configuration is incomplete"
         logger.error(error_msg)
         raise HTTPException(500, detail=error_msg)
 
     try:
-        # Initialize S3 client with simplified config
+        # Инициализация S3 клиента
         s3 = boto3.client(
             's3',
-            endpoint_url=s3_config['endpoint'],
-            aws_access_key_id=s3_config['access_key'],
-            aws_secret_access_key=s3_config['secret_key'],
-            region_name=s3_config['region'],
-            config=Config(signature_version='s3v4')
+            endpoint_url=BEGET_S3_ENDPOINT,
+            aws_access_key_id=BEGET_S3_ACCESS_KEY,
+            aws_secret_access_key=BEGET_S3_SECRET_KEY,
+            region_name='ru-1',
+            config=Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'}
+            )
         )
         
-        # Read file content
+        # Чтение содержимого файла
         file_content = await file.read()
         
-        # Generate filename
+        # Генерация имени файла
         filename = file.filename or 'file'
         file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
         file_name = f"{folder}/{uuid.uuid4()}{'.' + file_ext if file_ext else ''}"
         
-        # Upload to S3
+        # Вычисление SHA256 хеша (для отладки)
+        content_sha256 = hashlib.sha256(file_content).hexdigest()
+        logger.debug(f"File SHA256: {content_sha256}")
+        
+        # Загрузка в S3
         s3.put_object(
-            Bucket=s3_config['bucket'],
+            Bucket=BEGET_S3_BUCKET_NAME,
             Key=file_name,
             Body=file_content,
             ContentType=file.content_type,
-            ACL='public-read'
+            ACL='public-read',
+            Metadata={
+                'sha256': content_sha256,
+                'original-filename': filename
+            }
         )
         
-        # Construct URL
-        endpoint = s3_config['endpoint'].rstrip('/')
-        return f"{endpoint}/{s3_config['bucket']}/{file_name}"
+        # Формирование URL
+        endpoint = BEGET_S3_ENDPOINT.rstrip('/')
+        return f"{endpoint}/{BEGET_S3_BUCKET_NAME}/{file_name}"
             
     except ClientError as e:
         error_msg = f"S3 upload error: {e.response['Error']['Message']}"
