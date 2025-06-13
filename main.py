@@ -971,6 +971,14 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 async def not_found_handler(request: Request, exc: Exception):
     return FileResponse("static/404.html", status_code=404)
 
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
