@@ -193,52 +193,56 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         Public URL of the uploaded file
         
     Raises:
-        HTTPException: If upload fails
+        HTTPException: If upload fails or configuration is missing
     """
+    # Проверка наличия всех необходимых переменных окружения
+    required_vars = {
+        'BEGET_S3_ENDPOINT': os.getenv('BEGET_S3_ENDPOINT'),
+        'BEGET_S3_BUCKET_NAME': os.getenv('BEGET_S3_BUCKET_NAME'),
+        'BEGET_S3_ACCESS_KEY': os.getenv('BEGET_S3_ACCESS_KEY'),
+        'BEGET_S3_SECRET_KEY': os.getenv('BEGET_S3_SECRET_KEY'),
+        'BEGET_S3_REGION': os.getenv('BEGET_S3_REGION', 'ru-1')  # Значение по умолчанию
+    }
+    
+    missing_vars = [name for name, value in required_vars.items() if not value]
+    if missing_vars:
+        error_msg = f"Missing S3 configuration: {', '.join(missing_vars)}"
+        logger.error(error_msg)
+        raise HTTPException(500, detail=error_msg)
+
     try:
-        # Initialize S3 client with explicit configuration
+        # Initialize S3 client
         s3 = boto3.client(
             's3',
-            endpoint_url=BEGET_S3_ENDPOINT,
-            aws_access_key_id=BEGET_S3_ACCESS_KEY,
-            aws_secret_access_key=BEGET_S3_SECRET_KEY,
-            region_name=BEGET_S3_REGION,
+            endpoint_url=required_vars['BEGET_S3_ENDPOINT'],
+            aws_access_key_id=required_vars['BEGET_S3_ACCESS_KEY'],
+            aws_secret_access_key=required_vars['BEGET_S3_SECRET_KEY'],
+            region_name=required_vars['BEGET_S3_REGION'],
             config=Config(
                 signature_version='s3v4',
                 s3={'addressing_style': 'virtual'}
             )
         )
         
-        # Read file content once
+        # Read file content
         file_content = await file.read()
         
-        # Generate unique filename with original extension
+        # Generate filename
         file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
         file_name = f"{folder}/{uuid.uuid4()}{'.' + file_ext if file_ext else ''}"
         
-        # Calculate content length
-        content_length = len(file_content)
-        
-        # Upload to S3 with additional safety checks
+        # Upload to S3
         s3.put_object(
-            Bucket=BEGET_S3_BUCKET_NAME,
+            Bucket=required_vars['BEGET_S3_BUCKET_NAME'],
             Key=file_name,
             Body=file_content,
             ContentType=file.content_type,
-            ContentLength=content_length,
-            ACL='public-read',
-            # Important for checksum verification
-            Metadata={
-                'Content-Length': str(content_length),
-                'Original-Filename': file.filename
-            }
+            ACL='public-read'
         )
         
-        # Construct public URL
-        if BEGET_S3_ENDPOINT.startswith('http'):
-            return f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        else:
-            return f"https://{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        # Construct URL
+        endpoint = required_vars['BEGET_S3_ENDPOINT'].rstrip('/')
+        return f"{endpoint}/{required_vars['BEGET_S3_BUCKET_NAME']}/{file_name}"
             
     except ClientError as e:
         error_msg = f"S3 upload error: {e.response['Error']['Message']}"
@@ -249,7 +253,7 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         raise HTTPException(500, detail=f"Failed to upload file: {str(e)}")
     finally:
         await file.seek(0)
-        
+
 
 # Модель ответа API
 class Post(BaseModel):
