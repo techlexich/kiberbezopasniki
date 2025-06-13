@@ -282,21 +282,35 @@
             background-color: var(--primary-light);
         }
         
-        .avatar-preview {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            margin: 0 auto 16px;
-            background-color: #f1f3f5;
+        #uploadAvatarBtn {
+            background-color: var(--primary-light);
+            margin-bottom: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
-            border: 2px solid var(--border);
+            gap: 8px;
+        }
+
+        #uploadAvatarBtn:hover {
+            background-color: var(--primary);
+        }
+
+        .avatar-preview {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px dashed var(--border);
+        }
+
+        .avatar-preview:hover {
+            transform: scale(1.05);
+            border-color: var(--primary);
         }
         
         .avatar-preview-text {
-            font-size: 24px;
+            font-size: 36px;
             font-weight: 600;
             color: white;
         }
@@ -694,13 +708,13 @@
                     <label for="editBio">Описание профиля</label>
                     <textarea id="editBio" maxlength="500"></textarea>
                 </div>
-                <div class="form-group">
-                    <label for="editAvatar">Ссылка на аватар</label>
-                    <input type="text" id="editAvatar" placeholder="https://example.com/avatar.jpg">
-                </div>
                 <div class="avatar-preview" id="avatarPreview">
                     <div class="avatar-preview-text" id="avatarPreviewText">U</div>
                 </div>
+                <input type="file" id="avatarUpload" accept="image/*" style="display: none;">
+                <button type="button" class="save-btn" id="uploadAvatarBtn" style="margin-bottom: 16px;">
+                    <i class="fas fa-upload"></i> Загрузить аватар
+                </button>
                 <button type="submit" class="save-btn">Сохранить изменения</button>
             </form>
         </div>
@@ -1202,12 +1216,9 @@
         const closeModalBtn = document.getElementById('closeModal');
         const editProfileForm = document.getElementById('editProfileForm');
         const editBio = document.getElementById('editBio');
-        const editAvatar = document.getElementById('editAvatar');
         const avatarPreview = document.getElementById('avatarPreview');
         const avatarPreviewText = document.getElementById('avatarPreviewText');
         const avatarUpload = document.createElement('input');
-        
-        // Настройка загрузки аватарки
         avatarUpload.type = 'file';
         avatarUpload.accept = 'image/*';
         avatarUpload.style.display = 'none';
@@ -1216,7 +1227,6 @@
         // Открытие модального окна редактирования
         editProfileBtn.addEventListener('click', function() {
             editBio.value = currentUser.profile?.bio || '';
-            editAvatar.value = currentUser.profile?.avatar || '';
             avatarPreviewText.textContent = currentUser.username[0].toUpperCase();
             
             if (currentUser.profile?.avatar) {
@@ -1256,46 +1266,13 @@
                 return;
             }
             
-            try {
-                const formData = new FormData();
-                formData.append('avatar', file);
-                formData.append('bio', editBio.value);
-                
-                const token = localStorage.getItem('access_token');
-                if (!token) throw new Error('Требуется авторизация');
-                
-                const response = await fetch(`/users/${currentUser.username}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json().catch(() => null);
-                    throw new Error(error?.detail || 'Ошибка при загрузке аватара');
-                }
-                
-                const result = await response.json();
-                
-                // Обновляем превью
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    avatarPreview.style.backgroundImage = `url(${e.target.result})`;
-                    avatarPreview.style.backgroundSize = 'cover';
-                    avatarPreviewText.textContent = '';
-                };
-                reader.readAsDataURL(file);
-                
-                // Обновляем текущего пользователя
-                currentUser.profile = result.profile;
-                renderProfile(currentUser);
-                
-            } catch (error) {
-                console.error('Avatar upload error:', error);
-                alert('Ошибка при загрузке аватара: ' + error.message);
-            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                avatarPreview.style.backgroundImage = `url(${e.target.result})`;
+                avatarPreview.style.backgroundSize = 'cover';
+                avatarPreviewText.textContent = '';
+            };
+            reader.readAsDataURL(file);
         });
 
         // Сохранение изменений профиля
@@ -1397,8 +1374,8 @@
             }
             
             .avatar-preview {
-                width: 80px;
-                height: 80px;
+                width: 120px;
+                height: 120px;
                 border-radius: 50%;
                 margin: 0 auto 16px;
                 background-color: #f1f3f5;
@@ -1413,10 +1390,11 @@
             
             .avatar-preview:hover {
                 transform: scale(1.05);
+                border-color: var(--primary);
             }
             
             .avatar-preview-text {
-                font-size: 24px;
+                font-size: 36px;
                 font-weight: 600;
                 color: white;
             }

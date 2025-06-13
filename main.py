@@ -373,7 +373,6 @@ async def update_user_profile(
     avatar_url = current_user["avatar"]
 
     if avatar:
-        
         if avatar.content_type not in ALLOWED_TYPES:
             raise HTTPException(400, "Unsupported file type. Only JPEG, PNG and WebP are allowed")
         try:
