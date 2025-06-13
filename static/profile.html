@@ -796,6 +796,7 @@
             if (user.profile?.avatar) {
                 avatar.style.backgroundImage = `url(${user.profile.avatar})`;
                 avatar.style.backgroundSize = 'cover';
+                avatar.textContent = '';
             }
         }
 
@@ -866,7 +867,9 @@
 
             postElement.innerHTML = `
                 <div class="post-header">
-                    <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
+                    <div class="post-avatar" style="${post.user_avatar ? `background-image: url(${post.user_avatar}); background-size: cover;` : ''}">
+                        ${post.user_avatar ? '' : post.username[0].toUpperCase()}
+                    </div>
                     <div class="post-user-info">
                         <div class="post-username">${post.username}</div>
                         <div class="post-time">${postDate}</div>
@@ -921,7 +924,9 @@
             container.innerHTML = `
                 <div class="post">
                     <div class="post-header">
-                        <div class="post-avatar">${post.user_avatar ? '' : post.username[0].toUpperCase()}</div>
+                        <div class="post-avatar" style="${post.user_avatar ? `background-image: url(${post.user_avatar}); background-size: cover;` : ''}">
+                            ${post.user_avatar ? '' : post.username[0].toUpperCase()}
+                        </div>
                         <div class="post-user-info">
                             <div class="post-username">${post.username}</div>
                             <div class="post-time">${postDate}</div>
@@ -1191,6 +1196,149 @@
             }
         });
 
+        // Редактирование профиля
+        const editModal = document.getElementById('editModal');
+        const editProfileBtn = document.getElementById('editProfileBtn');
+        const closeModalBtn = document.getElementById('closeModal');
+        const editProfileForm = document.getElementById('editProfileForm');
+        const editBio = document.getElementById('editBio');
+        const editAvatar = document.getElementById('editAvatar');
+        const avatarPreview = document.getElementById('avatarPreview');
+        const avatarPreviewText = document.getElementById('avatarPreviewText');
+        const avatarUpload = document.createElement('input');
+        
+        // Настройка загрузки аватарки
+        avatarUpload.type = 'file';
+        avatarUpload.accept = 'image/*';
+        avatarUpload.style.display = 'none';
+        document.body.appendChild(avatarUpload);
+
+        // Открытие модального окна редактирования
+        editProfileBtn.addEventListener('click', function() {
+            editBio.value = currentUser.profile?.bio || '';
+            editAvatar.value = currentUser.profile?.avatar || '';
+            avatarPreviewText.textContent = currentUser.username[0].toUpperCase();
+            
+            if (currentUser.profile?.avatar) {
+                avatarPreview.style.backgroundImage = `url(${currentUser.profile.avatar})`;
+                avatarPreview.style.backgroundSize = 'cover';
+                avatarPreviewText.textContent = '';
+            } else {
+                avatarPreview.style.backgroundImage = '';
+            }
+            
+            editModal.classList.add('active');
+        });
+
+        // Закрытие модального окна
+        closeModalBtn.addEventListener('click', function() {
+            editModal.classList.remove('active');
+        });
+
+        editModal.addEventListener('click', function(e) {
+            if (e.target === editModal) {
+                editModal.classList.remove('active');
+            }
+        });
+
+        // Обработка клика на превью аватарки для загрузки
+        avatarPreview.addEventListener('click', function() {
+            avatarUpload.click();
+        });
+
+        // Загрузка нового аватара
+        avatarUpload.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.match('image.*')) {
+                alert('Пожалуйста, выберите изображение');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('avatar', file);
+                formData.append('bio', editBio.value);
+                
+                const token = localStorage.getItem('access_token');
+                if (!token) throw new Error('Требуется авторизация');
+                
+                const response = await fetch(`/users/${currentUser.username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => null);
+                    throw new Error(error?.detail || 'Ошибка при загрузке аватара');
+                }
+                
+                const result = await response.json();
+                
+                // Обновляем превью
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    avatarPreview.style.backgroundImage = `url(${e.target.result})`;
+                    avatarPreview.style.backgroundSize = 'cover';
+                    avatarPreviewText.textContent = '';
+                };
+                reader.readAsDataURL(file);
+                
+                // Обновляем текущего пользователя
+                currentUser.profile = result.profile;
+                renderProfile(currentUser);
+                
+            } catch (error) {
+                console.error('Avatar upload error:', error);
+                alert('Ошибка при загрузке аватара: ' + error.message);
+            }
+        });
+
+        // Сохранение изменений профиля
+        editProfileForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            try {
+                const formData = new FormData();
+                formData.append('bio', editBio.value);
+                
+                // Если выбрана новая аватарка, добавляем ее
+                if (avatarUpload.files[0]) {
+                    formData.append('avatar', avatarUpload.files[0]);
+                }
+                
+                const token = localStorage.getItem('access_token');
+                if (!token) throw new Error('Требуется авторизация');
+                
+                const response = await fetch(`/users/${currentUser.username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => null);
+                    throw new Error(error?.detail || 'Ошибка при сохранении профиля');
+                }
+                
+                const result = await response.json();
+                currentUser.profile = result.profile;
+                renderProfile(currentUser);
+                editModal.classList.remove('active');
+                alert('Профиль успешно обновлен!');
+                
+            } catch (error) {
+                console.error('Profile update error:', error);
+                alert('Ошибка при обновлении профиля: ' + error.message);
+            }
+        });
+
         // Обработчики событий
         document.getElementById('closePostView').addEventListener('click', closePostModal);
         document.getElementById('postViewModal').addEventListener('click', (e) => {
@@ -1222,6 +1370,58 @@
                     .catch(console.error);
             }
         });
+
+        // Добавляем стили для корректного отображения
+        const style = document.createElement('style');
+        style.textContent = `
+            .profile-bio {
+                color: var(--text-light);
+                margin-bottom: 16px;
+                word-break: break-word;
+                overflow-wrap: break-word;
+                max-width: 100%;
+            }
+            
+            .post-avatar {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                margin-right: 12px;
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: 500;
+                flex-shrink: 0;
+            }
+            
+            .avatar-preview {
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                margin: 0 auto 16px;
+                background-color: #f1f3f5;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                border: 2px solid var(--border);
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .avatar-preview:hover {
+                transform: scale(1.05);
+            }
+            
+            .avatar-preview-text {
+                font-size: 24px;
+                font-weight: 600;
+                color: white;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
