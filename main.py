@@ -188,9 +188,6 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
         # Читаем содержимое файла
         contents = await file.read()
         
-        # Формируем URL для загрузки с указанием бакета
-        upload_url = f"{BEGET_S3_ENDPOINT.rstrip('/')}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
         # Создаем клиент S3
         s3_client = boto3.client(
             's3',
@@ -203,15 +200,6 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
                 s3={'addressing_style': 'path'}
             )
         )
-        
-        # Проверяем существование бакета
-        try:
-            s3_client.head_bucket(Bucket=BEGET_S3_BUCKET_NAME)
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == '404':
-                raise Exception(f"Bucket {BEGET_S3_BUCKET_NAME} does not exist")
-            raise
         
         # Загружаем файл
         s3_client.put_object(
@@ -661,11 +649,13 @@ async def create_post(
         # Извлекаем EXIF данные
         exif_data = extract_exif_data(file_content)
         
-        # Восстанавливаем файловый объект для загрузки
-        photo.file = io.BytesIO(file_content)
+        # Создаем новый файловый объект для загрузки
+        new_file = io.BytesIO(file_content)
+        new_file.name = photo.filename
+        new_file.content_type = photo.content_type
         
         # Загружаем фото в S3
-        photo_url = await upload_to_s3(photo, "posts")
+        photo_url = await upload_to_s3(UploadFile(file=new_file, filename=photo.filename, content_type=photo.content_type), "posts")
 
         # Формируем настройки камеры
         camera_settings = {
