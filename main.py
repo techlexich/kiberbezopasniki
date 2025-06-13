@@ -222,6 +222,7 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             ACL='public-read',
             ContentMD5=content_md5,
             ContentLength=len(contents)
+        )
         
         # Проверяем успешность загрузки
         if response.get('ResponseMetadata', {}).get('HTTPStatusCode') != 200:
