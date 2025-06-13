@@ -221,6 +221,7 @@ async def upload_to_s3(file: UploadFile, folder: str) -> str:
             ContentType=file.content_type,
             ACL='public-read',
             ContentLength=len(contents)
+        )
         
         # Формируем URL
         endpoint = BEGET_S3_ENDPOINT.rstrip('/')
