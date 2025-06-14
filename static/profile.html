@@ -806,12 +806,9 @@
             document.getElementById('profileBio').textContent = user.profile?.bio || "Нет описания";
             
             const avatar = document.getElementById('profileAvatar');
-            avatar.textContent = user.username[0].toUpperCase();
-            if (user.profile?.avatar) {
-                avatar.style.backgroundImage = `url(${user.profile.avatar})`;
-                avatar.style.backgroundSize = 'cover';
-                avatar.textContent = '';
-            }
+            avatar.textContent = '';
+            avatar.style.backgroundImage = `url(${user.profile?.avatar || '/static/default_avatar.jpg'})`;
+            avatar.style.backgroundSize = 'cover';
         }
 
         async function checkAuth() {
@@ -881,8 +878,7 @@
 
             postElement.innerHTML = `
                 <div class="post-header">
-                    <div class="post-avatar" style="${post.user_avatar ? `background-image: url(${post.user_avatar}); background-size: cover;` : ''}">
-                        ${post.user_avatar ? '' : post.username[0].toUpperCase()}
+                    <div class="post-avatar" style="${post.user_avatar ? `background-image: url(${post.user_avatar});` : `background-image: url('/static/default_avatar.jpg');`} background-size: cover;">
                     </div>
                     <div class="post-user-info">
                         <div class="post-username">${post.username}</div>
@@ -938,8 +934,7 @@
             container.innerHTML = `
                 <div class="post">
                     <div class="post-header">
-                        <div class="post-avatar" style="${post.user_avatar ? `background-image: url(${post.user_avatar}); background-size: cover;` : ''}">
-                            ${post.user_avatar ? '' : post.username[0].toUpperCase()}
+                        <div class="post-avatar" style="${post.user_avatar ? `background-image: url(${post.user_avatar});` : `background-image: url('/static/default_avatar.jpg');`} background-size: cover;">
                         </div>
                         <div class="post-user-info">
                             <div class="post-username">${post.username}</div>
@@ -1166,7 +1161,7 @@
                 const formData = new FormData();
                 formData.append('photo', file);
                 formData.append('description', description);
-                formData.append('altitude', longitude); // В вашем API используется altitude вместо longitude
+                formData.append('altitude', longitude);
                 formData.append('latitude', latitude);
                 
                 const token = localStorage.getItem('access_token');
@@ -1218,24 +1213,18 @@
         const editBio = document.getElementById('editBio');
         const avatarPreview = document.getElementById('avatarPreview');
         const avatarPreviewText = document.getElementById('avatarPreviewText');
-        const avatarUpload = document.createElement('input');
-        avatarUpload.type = 'file';
-        avatarUpload.accept = 'image/*';
-        avatarUpload.style.display = 'none';
-        document.body.appendChild(avatarUpload);
+        const avatarUpload = document.getElementById('avatarUpload');
+        const uploadAvatarBtn = document.getElementById('uploadAvatarBtn');
 
         // Открытие модального окна редактирования
         editProfileBtn.addEventListener('click', function() {
             editBio.value = currentUser.profile?.bio || '';
-            avatarPreviewText.textContent = currentUser.username[0].toUpperCase();
+            avatarPreviewText.textContent = '';
             
-            if (currentUser.profile?.avatar) {
-                avatarPreview.style.backgroundImage = `url(${currentUser.profile.avatar})`;
-                avatarPreview.style.backgroundSize = 'cover';
-                avatarPreviewText.textContent = '';
-            } else {
-                avatarPreview.style.backgroundImage = '';
-            }
+            // Устанавливаем текущий аватар или дефолтный
+            const avatarUrl = currentUser.profile?.avatar || '/static/default_avatar.jpg';
+            avatarPreview.style.backgroundImage = `url(${avatarUrl})`;
+            avatarPreview.style.backgroundSize = 'cover';
             
             editModal.classList.add('active');
         });
@@ -1251,13 +1240,13 @@
             }
         });
 
-        // Обработка клика на превью аватарки для загрузки
-        avatarPreview.addEventListener('click', function() {
+        // Обработка клика на кнопку загрузки аватара
+        uploadAvatarBtn.addEventListener('click', () => {
             avatarUpload.click();
         });
 
         // Загрузка нового аватара
-        avatarUpload.addEventListener('change', async function(e) {
+        avatarUpload.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
             
@@ -1283,7 +1272,7 @@
                 const formData = new FormData();
                 formData.append('bio', editBio.value);
                 
-                // Если выбрана новая аватарка, добавляем ее
+                // Добавляем файл аватара, если он был выбран
                 if (avatarUpload.files[0]) {
                     formData.append('avatar', avatarUpload.files[0]);
                 }
@@ -1364,7 +1353,7 @@
                 height: 40px;
                 border-radius: 50%;
                 margin-right: 12px;
-                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                background: url('/static/default_avatar.jpg') center/cover no-repeat;
                 display: flex;
                 align-items: center;
                 justify-content: center;
