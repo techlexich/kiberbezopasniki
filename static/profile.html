@@ -631,6 +631,53 @@
             cursor: pointer;
             margin-bottom: 14px;
         }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .tag-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            background: var(--bg);
+            border-radius: 20px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+        
+        .tag-checkbox:hover {
+            border-color: var(--primary);
+        }
+        
+        .tag-checkbox input {
+            display: none;
+        }
+        
+        .tag-checkbox input:checked + span {
+            color: var(--primary);
+            font-weight: 500;
+        }
+        
+        .post-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        
+        .post-tag {
+            background: var(--primary-light);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -742,6 +789,23 @@
                     <input type="hidden" id="latitude" name="latitude">
                     <input type="hidden" id="longitude" name="longitude">
                     <small style="display: block; margin-top: 8px; color: var(--text-light);">Кликните на карте, чтобы выбрать местоположение</small>
+                </div>
+                <div class="form-group">
+                    <label>Теги</label>
+                    <div class="tags-container">
+                        <label class="tag-checkbox">
+                            <input type="checkbox" name="tags" value="Архитектура"> Архитектура
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" name="tags" value="История"> История
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" name="tags" value="Памятники"> Памятники
+                        </label>
+                        <label class="tag-checkbox">
+                            <input type="checkbox" name="tags" value="Культура"> Культура
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
                     <textarea id="post-description" placeholder="Добавьте описание..." rows="4"></textarea>
@@ -901,6 +965,22 @@
                 </div>
             `;
 
+            if (post.tags) {
+                const tagsContainer = document.createElement('div');
+                tagsContainer.className = 'post-tags';
+                
+                post.tags.split(',').forEach(tag => {
+                    if (tag.trim()) {
+                        const tagElement = document.createElement('span');
+                        tagElement.className = 'post-tag';
+                        tagElement.textContent = tag.trim();
+                        tagsContainer.appendChild(tagElement);
+                    }
+                });
+                
+                postElement.appendChild(tagsContainer);
+            }
+g
             // Обработчики событий
             postElement.addEventListener('click', (e) => {
                 if (!e.target.closest('.delete-post-btn, .action-button')) {
@@ -1133,6 +1213,11 @@
 
         createPostForm.addEventListener('submit', async function(e) {
             e.preventDefault();
+
+            const tagCheckboxes = document.querySelectorAll('input[name="tags"]:checked');
+            const tags = Array.from(tagCheckboxes).map(cb => cb.value).join(',');
+            
+            formData.append('tags', tags);
             
             const submitBtn = document.getElementById('submit-post-btn');
             submitBtn.disabled = true;

@@ -570,7 +570,7 @@ def get_points(limit: int = 10):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT id, latitude, altitude, 
-                       likes_count, photo_url
+                       likes_count, photo_url, tags
                 FROM posts 
                 ORDER BY likes_count DESC 
                 LIMIT %s
@@ -635,6 +635,7 @@ async def create_post(
     description: str = Form(default=""),
     altitude: str = Form(...),
     latitude: str = Form(...),
+    tags: str = Form(default=""),
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
@@ -719,7 +720,7 @@ async def create_post(
                 current_user["id"],
                 0,  # likes_count
                 0,  # comments_count
-                "",  # tags
+                tags,  # tags
                 altitude,
                 latitude,
                 "{}"  # camera_settings
