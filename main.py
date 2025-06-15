@@ -554,9 +554,8 @@ async def read_me(request: Request, user=Depends(get_current_user)):
 
 
 @app.get("/points", response_model=list[Post])
-def get_points(limit: int = 10):
+def get_points(limit: int = 10, tags: Optional[str] = None):
     try:
-        # Создаем новое подключение вместо использования генератора
         conn = psycopg2.connect(
             dbname="auth_db_17at_90uu",
             user="auth_db_17at_user",
@@ -568,19 +567,28 @@ def get_points(limit: int = 10):
         )
         
         with conn.cursor() as cursor:
-            cursor.execute("""
+            query = """
                 SELECT id, latitude, altitude, 
                        likes_count, photo_url, tags
                 FROM posts 
-                ORDER BY likes_count DESC 
-                LIMIT %s
-            """, (limit,))
+            """
             
+            params = []
+            
+            # Добавляем фильтрацию по тегам если они указаны
+            if tags:
+                tag_list = [tag.strip() for tag in tags.split(',')]
+                query += "WHERE tags && %s "
+                params.append(tag_list)
+            
+            query += "ORDER BY likes_count DESC LIMIT %s"
+            params.append(limit)
+            
+            cursor.execute(query, params)
             posts = cursor.fetchall()
         
         conn.close()
         
-        # Преобразуем координаты в float
         for post in posts:
             post["latitude"] = float(post["latitude"])
             post["altitude"] = float(post["altitude"])
