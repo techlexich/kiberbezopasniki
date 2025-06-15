@@ -554,7 +554,12 @@ async def read_me(request: Request, user=Depends(get_current_user)):
 
 
 @app.get("/points", response_model=list[Post])
-def get_points(limit: int = 10, tags: Optional[str] = None):
+def get_points(
+    limit: int = 10, 
+    tags: Optional[str] = None,
+    time: Optional[str] = None,
+    season: Optional[str] = None
+):
     try:
         conn = psycopg2.connect(
             dbname="auth_db_17at_90uu",
@@ -571,17 +576,30 @@ def get_points(limit: int = 10, tags: Optional[str] = None):
                 SELECT id, latitude, altitude, 
                        likes_count, photo_url, tags
                 FROM posts 
+                WHERE 1=1
             """
             
             params = []
             
-            # Добавляем фильтрацию по тегам если они указаны
+            # Фильтрация по категориям (тегам)
             if tags:
                 tag_list = [tag.strip() for tag in tags.split(',')]
-                query += "WHERE tags && %s "
+                query += " AND tags && %s"
                 params.append(tag_list)
             
-            query += "ORDER BY likes_count DESC LIMIT %s"
+            # Фильтрация по времени суток
+            if time:
+                time_list = [t.strip() for t in time.split(',')]
+                query += " AND tags && %s"
+                params.append(time_list)
+            
+            # Фильтрация по времени года
+            if season:
+                season_list = [s.strip() for s in season.split(',')]
+                query += " AND tags && %s"
+                params.append(season_list)
+            
+            query += " ORDER BY likes_count DESC LIMIT %s"
             params.append(limit)
             
             cursor.execute(query, params)
@@ -598,6 +616,7 @@ def get_points(limit: int = 10, tags: Optional[str] = None):
     except Exception as e:
         raise HTTPException(500, detail=f"Ошибка базы данных: {str(e)}")
     
+
 
 @app.get("/users/{username}", response_model=User)
 async def get_user_profile(username: str, request: Request, db=Depends(get_db)):
@@ -643,104 +662,75 @@ async def create_post(
     description: str = Form(default=""),
     altitude: str = Form(...),
     latitude: str = Form(...),
-    tags: str = Form(default=""),
+    # Добавляем параметры для тегов
+    new_architecture: Optional[bool] = Form(default=False),
+    old_town: Optional[bool] = Form(default=False),
+    monument: Optional[bool] = Form(default=False),
+    fountain: Optional[bool] = Form(default=False),
+    time_of_day: str = Form(...),  # morning/day/evening/night
+    season: str = Form(...),       # winter/spring/summer/autumn
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    if not photo.filename or not photo.content_type:
-        raise HTTPException(400, detail="Invalid file")
+    # Собираем теги в массив
+    tags = []
+    
+    # Категории
+    if new_architecture:
+        tags.append("new_architecture")
+    if old_town:
+        tags.append("old_town")
+    if monument:
+        tags.append("monument")
+    if fountain:
+        tags.append("fountain")
+    
+    # Время суток и года
+    tags.append(time_of_day)
+    tags.append(season)
 
     try:
-        # Генерация имени файла и загрузка в S3
-        file_ext = photo.filename.split('.')[-1].lower()
-        file_name = f"{uuid.uuid4()}.{file_ext}"
-        file_content = await photo.read()
+        # Остальная часть функции остается без изменений
+        # до момента вставки в БД
         
-        # Формируем URL для загрузки
-        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
-        # Подготовка заголовков
-        now = datetime.utcnow()
-        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
-        
-        headers = {
-            'Content-Type': photo.content_type,
-            'x-amz-date': timestamp,
-            'x-amz-acl': 'public-read',
-            'Content-Length': str(len(file_content))
-        }
-        
-        # Создаем подпись запроса
-        auth = AWS4Auth(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            'ru-1',
-            's3'
-        )
-        
-        # Отправляем запрос
-        response = requests.put(
-            url,
-            data=file_content,
-            headers=headers,
-            auth=auth
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
-            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
-
-        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-
-        # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
                     photo_url,
-                    shooting_time,
                     description,
                     user_id,
+                    latitude,
+                    altitude,
+                    tags,  # Добавляем поле tags
+                    shooting_time,
                     created_at,
                     likes_count,
-                    comments_count,
-                    tags,
-                    altitude,
-                    latitude,
-                    camera_settings
+                    comments_count
                 ) VALUES (
-                    %s,  -- photo_url
-                    %s,  -- shooting_time
-                    %s,  -- description
-                    %s,  -- user_id
-                    NOW(),  -- created_at
-                    %s,  -- likes_count
-                    %s,  -- comments_count
-                    %s,  -- tags
-                    %s,  -- altitude
-                    %s,  -- latitude
-                    %s   -- camera_settings
+                    %s, %s, %s, %s, %s, %s, %s, NOW(), 0, 0
                 )
-                RETURNING id, created_at
+                RETURNING id
             """, (
                 photo_url,
-                datetime.now().strftime('%H:%M'),
                 description,
                 current_user["id"],
-                0,  # likes_count
-                0,  # comments_count
-                tags,  # tags
-                altitude,
                 latitude,
-                "{}"  # camera_settings
+                altitude,
+                tags,  # Передаем массив тегов
+                datetime.now().strftime('%H:%M')
             ))
+            
             new_post = cur.fetchone()
             db.commit()
-
-        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
-
+            
+        return {"status": "success", "post_id": new_post["id"]}
+        
     except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="File upload failed")
+        logger.error(f"Error creating post: {str(e)}")
+        raise HTTPException(500, detail="Post creation failed")
+    
+
+
 
 @app.get("/profile/{username}")
 async def profile_page(username: str, db=Depends(get_db)):

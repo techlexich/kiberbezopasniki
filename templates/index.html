@@ -523,7 +523,7 @@
             </div>
         </div>
         
-        <button class="auth-option primary" style="margin-top: 12px;">
+        <button class="auth-option primary" style="margin-top: 12px;" id="apply-filters">
             Применить фильтры
         </button>
     </div>
@@ -1026,32 +1026,56 @@
 
         // Добавление маркеров на карту
         async function renderTopPosts() {
-            const posts = await loadTopPosts(10);
-            posts.forEach(post => {
-                const lat = parseFloat(post.latitude);
-                const lng = parseFloat(post.altitude);
+            // Получаем выбранные фильтры
+            const selectedTags = Array.from(document.querySelectorAll('input[name="tag"]:checked'))
+                .map(el => el.value);
             
-                if (isNaN(lat) || isNaN(lng)) {
-                    console.error("Некорректные координаты:", post.latitude, post.altitude);
-                    return;
-                }
+            const selectedTimes = Array.from(document.querySelectorAll('input[name="time"]:checked'))
+                .map(el => el.value);
             
-                L.marker([lat, lng]).addTo(map).bindPopup(`...`);
-            });
-            if (posts.length === 0) {
-                console.log("Нет данных для отображения");
-                return;
+            const selectedSeasons = Array.from(document.querySelectorAll('input[name="season"]:checked'))
+                .map(el => el.value);
+
+            // Формируем параметры запроса
+            const params = new URLSearchParams();
+            params.append('limit', '50');
+            
+            if (selectedTags.length) params.append('tags', selectedTags.join(','));
+            if (selectedTimes.length) params.append('time', selectedTimes.join(','));
+            if (selectedSeasons.length) params.append('season', selectedSeasons.join(','));
+
+            try {
+                const response = await fetch(`${API_URL}/points?${params.toString()}`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                
+                const posts = await response.json();
+                
+                // Очищаем старые маркеры
+                map.eachLayer(layer => {
+                    if (layer instanceof L.Marker) {
+                        map.removeLayer(layer);
+                    }
+                });
+                
+                // Добавляем новые маркеры
+                posts.forEach(post => {
+                    L.marker([post.latitude, post.altitude])
+                        .addTo(map)
+                        .bindPopup(`
+                            <div style="max-width: 200px">
+                                <img src="${post.photo_url}" style="max-width: 100%; height: auto;" />
+                                <div style="margin-top: 5px;">
+                                    ❤️ ${post.likes_count} likes
+                                    ${post.tags ? `<div>Tags: ${post.tags.join(', ')}</div>` : ''}
+                                </div>
+                            </div>
+                        `);
+                });
+                
+            } catch (error) {
+                console.error("Ошибка:", error);
+                alert("Не удалось загрузить данные. Попробуйте позже.");
             }
-            
-            posts.forEach(post => {
-                L.marker([post.latitude, post.altitude])
-                    .addTo(map)
-                    .bindPopup(`
-                        <h3>${post.title}</h3>
-                        <img src="${post.photo_url}" width="200" />
-                        <p>❤️ ${post.likes_count} likes</p>
-                    `);
-            });
         }
 
         async function fetchWeatherTips() {
