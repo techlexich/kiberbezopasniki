@@ -1408,7 +1408,17 @@
             const description = document.getElementById('post-description').value;
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
-            const tags = document.getElementById('post-tags').value;
+            
+            // Получаем выбранные теги
+            const selectedCategories = Array.from(document.querySelectorAll('.category-tags .tag-button.selected'))
+                .map(btn => btn.dataset.tag);
+            const selectedTime = document.querySelector('.time-tags .tag-button.selected')?.dataset.tag || '';
+            const selectedSeason = document.querySelector('.season-tags .tag-button.selected')?.dataset.tag || '';
+            
+            const allTags = [...selectedCategories];
+            if (selectedTime) allTags.push(selectedTime);
+            if (selectedSeason) allTags.push(selectedSeason);
+            const tags = allTags.join(',');
             
             if (!file) {
                 alert('Пожалуйста, выберите фото');
@@ -1449,26 +1459,33 @@
                 }
                 
                 const result = await response.json();
-                alert('Пост успешно создан!');
+                console.log('Post created:', result);
                 
-                // Сброс формы
+                // Полный сброс формы
                 createPostForm.reset();
+                fileInput.value = ''; // Очищаем поле файла
                 previewImage.style.display = 'none';
                 previewImage.src = '';
                 fileUploadLabel.style.display = 'block';
-                if (postMarker) postMap.removeLayer(postMarker);
+                
+                // Сброс карты
+                if (postMarker) {
+                    postMap.removeLayer(postMarker);
+                    postMarker = null;
+                }
                 
                 // Сброс тегов
                 document.querySelectorAll('.tag-button.selected').forEach(btn => {
                     btn.classList.remove('selected');
                 });
-                document.getElementById('post-tags').value = '';
                 
                 // Закрытие модального окна
                 postModal.classList.remove('active');
                 
                 // Обновление списка постов
                 await loadUserPosts();
+                
+                alert('Пост успешно создан!');
                 
             } catch (error) {
                 console.error('Post creation error:', error);
