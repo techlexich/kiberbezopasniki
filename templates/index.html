@@ -522,7 +522,8 @@
                 </div>
             </div>
         </div>
-        <button class="auth-option primary" style="margin-top: 12px;" id="apply-filters">
+        
+        <button class="auth-option primary" style="margin-top: 12px;">
             Применить фильтры
         </button>
     </div>
@@ -645,12 +646,6 @@
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
         let isApiAvailable = false;
-        let markers = [];
-        let currentFilters = {
-            time: [],
-            season: [],
-            tags: []
-        };
 
         // Проверка доступности API
         async function checkApiAvailability() {
@@ -674,104 +669,6 @@
             }
         }
 
-        // Функция для обновления фильтров
-        function updateFilters() {
-            currentFilters = {
-                time: [],
-                season: [],
-                tags: []
-            };
-
-            // Получаем выбранные фильтры времени
-            document.querySelectorAll('input[name="time"]:checked').forEach(checkbox => {
-                currentFilters.time.push(checkbox.value);
-            });
-
-            // Получаем выбранные фильтры сезона
-            document.querySelectorAll('input[name="season"]:checked').forEach(checkbox => {
-                currentFilters.season.push(checkbox.value);
-            });
-
-            // Получаем выбранные фильтры тегов
-            document.querySelectorAll('input[name="tag"]:checked').forEach(checkbox => {
-                currentFilters.tags.push(checkbox.value);
-            });
-        }
-
-        // Функция для фильтрации постов
-        function filterPosts(posts) {
-            if (currentFilters.tags.length === 0 && 
-                currentFilters.time.length === 0 && 
-                currentFilters.season.length === 0) {
-                return posts;
-            }
-
-            return posts.filter(post => {
-                // Проверяем фильтры тегов
-                if (currentFilters.tags.length > 0) {
-                    const postTags = post.tags ? post.tags.split(',') : [];
-                    const hasTag = currentFilters.tags.some(tag => postTags.includes(tag));
-                    if (!hasTag) return false;
-                }
-                
-                return true;
-            });
-        }
-
-        // Функция для обновления маркеров на карте
-        async function updateMapMarkers() {
-            // Удаляем старые маркеры
-            markers.forEach(marker => map.removeLayer(marker));
-            markers = [];
-
-            // Загружаем посты
-            const posts = await loadTopPosts(50);
-            
-            // Фильтруем посты
-            const filteredPosts = filterPosts(posts);
-            
-            // Добавляем новые маркеры
-            filteredPosts.forEach(post => {
-                const lat = parseFloat(post.latitude);
-                const lng = parseFloat(post.altitude);
-            
-                if (isNaN(lat) || isNaN(lng)) {
-                    console.error("Некорректные координаты:", post.latitude, post.altitude);
-                    return;
-                }
-            
-                const marker = L.marker([lat, lng])
-                    .addTo(map)
-                    .bindPopup(`
-                        <h3>${post.title || 'Без названия'}</h3>
-                        <img src="${post.photo_url}" width="200" />
-                        <p>❤️ ${post.likes_count} likes</p>
-                        <p>Теги: ${post.tags || 'нет'}</p>
-                    `);
-                    
-                markers.push(marker);
-            });
-        }
-
-        // Загрузка топовых постов с учетом фильтров
-        async function loadTopPosts(limit = 10) {
-            try {
-                const params = new URLSearchParams();
-                params.append('limit', limit);
-                
-                if (currentFilters.tags.length > 0) {
-                    params.append('tags', currentFilters.tags.join(','));
-                }
-                
-                const response = await fetch(`${API_URL}/points?${params.toString()}`);
-                if (!response.ok) throw new Error("Ошибка загрузки данных");
-                return await response.json();
-            } catch (error) {
-                console.error("Ошибка:", error);
-                return [];
-            }
-        }
-
         // Элементы интерфейса
         const filtersButton = document.getElementById('filters-button');
         const profileButton = document.getElementById('profile-button');
@@ -779,7 +676,29 @@
         const profileModal = document.getElementById('profile-modal');
         const closeFilters = document.getElementById('close-filters');
         const closeProfile = document.getElementById('close-profile');
-        const applyFiltersBtn = document.getElementById('apply-filters');
+
+        // Элементы авторизации
+        const loginOption = document.getElementById('login-option');
+        const registerOption = document.getElementById('register-option');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const backFromLogin = document.getElementById('back-from-login');
+        const backFromRegister = document.getElementById('back-from-register');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        const logoutButton = document.getElementById('logout-btn');
+
+        // Поля ввода
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const registerEmail = document.getElementById('register-email');
+        const registerLogin = document.getElementById('register-login');
+        const registerPassword = document.getElementById('register-password');
+        const registerPasswordRepeat = document.getElementById('register-password-repeat');
+
+        // Сообщения об ошибках
+        const loginError = document.getElementById('login-error');
+        const registerError = document.getElementById('register-error');
 
         // Функции для работы с модальными окнами
         function showModal(modal) {
@@ -792,6 +711,138 @@
             setTimeout(() => modal.style.display = 'none', 200);
         }
 
+        function resetAuthForms() {
+            if (currentUser) {
+                document.getElementById('guest-view').style.display = 'none';
+                document.getElementById('authenticated-view').style.display = 'block';
+            } else {
+                document.getElementById('guest-view').style.display = 'flex';
+                document.getElementById('authenticated-view').style.display = 'none';
+            }
+            
+            document.getElementById('login-form').classList.remove('active');
+            document.getElementById('register-form').classList.remove('active');
+            loginEmail.value = '';
+            loginPassword.value = '';
+            registerEmail.value = '';
+            registerLogin.value = '';
+            registerPassword.value = '';
+            registerPasswordRepeat.value = '';
+            loginError.style.display = 'none';
+            registerError.style.display = 'none';
+        }
+
+        // Обработчик открытия профиля
+        profileButton.addEventListener('click', () => {
+            showModal(profileModal);
+            hideModal(filtersModal);
+            resetAuthForms();
+        });
+
+        // Функции для работы с авторизацией
+        async function checkAuth() {
+            if (!isApiAvailable) return null;
+            
+            const token = localStorage.getItem('access_token');
+            if (!token) return null;
+            
+            try {
+                const response = await fetch(`${API_URL}/users/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    localStorage.removeItem('access_token');
+                    return null;
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                return null;
+            }
+        }
+
+        async function updateAuthUI() {
+            try {
+                currentUser = await checkAuth();
+                const guestView = document.getElementById('guest-view');
+                const authView = document.getElementById('authenticated-view');
+                
+                if (currentUser) {
+                    // Показываем авторизованный вид
+                    document.getElementById('profile-username').textContent = currentUser.username || 'Пользователь';
+                    document.getElementById('profile-email').textContent = currentUser.email || 'Не указан';
+                    document.getElementById('profile-button').innerHTML = 
+                        `<i class="fas fa-user"></i> ${currentUser.username || 'Профиль'}`;
+                    
+                    // Жёстко переключаем видимость
+                    guestView.style.display = 'none';
+                    authView.style.display = 'block';
+                    loginForm.classList.remove('active');
+                    registerForm.classList.remove('active');
+                } else {
+                    // Показываем гостевой вид
+                    document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
+                    guestView.style.display = 'flex';
+                    authView.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Ошибка при обновлении UI:', error);
+            }
+        }
+
+        // Обработчик кнопки "Перейти в профиль"
+        document.getElementById('go-to-profile').addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            if (!currentUser) {
+                alert("Сначала войдите в аккаунт");
+                return;
+            }
+            
+            // Просто редирект без проверки (проверка будет на сервере)
+            window.location.href = `/profile/${currentUser.username}`;
+        });
+
+        // Проверка профиля при загрузке страницы
+        async function checkProfilePage() {
+            const path = window.location.pathname;
+            if (path.startsWith('/profile/')) {
+                const username = path.split('/profile/')[1];
+                try {
+                    const response = await fetch(`${API_URL}/users/${username}`, {
+                        timeout: 5000
+                    });
+                    if (!response.ok) {
+                        // Сервер сам перенаправит на 404
+                        return;
+                    }
+                } catch (error) {
+                    console.error("Ошибка:", error);
+                }
+            }
+        }
+
+        // Обработчики кнопок входа/регистрации
+        loginOption.addEventListener('click', () => {
+            document.getElementById('guest-view').style.display = 'none';
+            loginForm.classList.add('active');
+        });
+        
+        registerOption.addEventListener('click', () => {
+            document.getElementById('guest-view').style.display = 'none';
+            registerForm.classList.add('active');
+        });
+
+        function showError(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+        }
+
         // Обработчики событий
         filtersButton.addEventListener('click', () => {
             showModal(filtersModal);
@@ -801,18 +852,150 @@
         closeFilters.addEventListener('click', () => hideModal(filtersModal));
         closeProfile.addEventListener('click', () => hideModal(profileModal));
 
-        // Обработчик для кнопки "Применить фильтры"
-        applyFiltersBtn.addEventListener('click', () => {
-            updateFilters();
-            updateMapMarkers();
-            hideModal(filtersModal);
+        backFromLogin.addEventListener('click', resetAuthForms);
+        backFromRegister.addEventListener('click', resetAuthForms);
+
+        // Регистрация
+        registerButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            registerError.style.display = 'none';
+            
+            if (!isApiAvailable) {
+                showError(registerError, 'Сервис временно недоступен');
+                return;
+            }
+
+            if (registerPassword.value !== registerPasswordRepeat.value) {
+                showError(registerError, 'Пароли не совпадают');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: registerEmail.value,
+                        username: registerLogin.value,
+                        password: registerPassword.value,
+                        password_repeat: registerPasswordRepeat.value
+                    }),
+                    timeout: 10000
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Ошибка регистрации');
+                }
+
+                localStorage.setItem('access_token', data.access_token);
+                await updateAuthUI();
+                resetAuthForms();
+                hideModal(profileModal);
+            } catch (error) {
+                showError(registerError, error.message || 'Ошибка соединения');
+            }
+        });
+
+        // Вход
+        loginButton.addEventListener('click', async (e) => {
+            e.preventDefault();
+            loginError.style.display = 'none';
+
+            if (!isApiAvailable) {
+                showError(loginError, 'Сервис временно недоступен');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        username: loginEmail.value,
+                        password: loginPassword.value
+                    }),
+                    timeout: 10000
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Неверный email или пароль');
+                }
+
+                localStorage.setItem('access_token', data.access_token);
+                await updateAuthUI();
+                resetAuthForms();
+                hideModal(profileModal);
+            } catch (error) {
+                showError(loginError, error.message || 'Ошибка соединения');
+            }
+        });
+
+        // Отправка формы редактирования
+        document.getElementById('edit-profile-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!isApiAvailable) {
+                alert('Сервис временно недоступен');
+                return;
+            }
+            
+            const updatedProfile = {
+                bio: document.getElementById('edit-bio').value,
+                avatar: document.getElementById('edit-avatar').value || '/default-avatar.jpg'
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/users/${currentUser.username}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    body: JSON.stringify(updatedProfile),
+                    timeout: 10000
+                });
+                
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                
+                const updatedUser = await response.json();
+                currentUser = updatedUser;
+                alert('Профиль успешно обновлен!');
+                hideModal(document.getElementById('edit-profile-modal'));
+                await updateAuthUI();
+                
+            } catch (error) {
+                console.error('Ошибка при обновлении профиля:', error);
+                alert('Ошибка: ' + (error.message || 'Не удалось обновить профиль'));
+            }
+        });
+
+        // Выход
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('access_token');
+            currentUser = null;
+            updateAuthUI();
+            hideModal(profileModal);
+        });
+
+        // Закрытие модалок при клике вне их области
+        window.addEventListener('click', (e) => {
+            if (e.target === filtersModal) hideModal(filtersModal);
+            if (e.target === profileModal) hideModal(profileModal);
         });
 
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 await checkApiAvailability();
-                await updateMapMarkers();
+                await updateAuthUI();
+                await checkProfilePage();
+                renderTopPosts();
                 
                 // Оптимизация для мобильных устройств
                 if (/Mobi|Android/i.test(navigator.userAgent)) {
@@ -828,8 +1011,49 @@
         window.addEventListener('resize', () => {
             map.invalidateSize();
         });
+        
+        // Загрузка топовых постов
+        async function loadTopPosts(limit = 10) {
+            try {
+                const response = await fetch(`${API_URL}/points`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                return await response.json();
+            } catch (error) {
+                console.error("Ошибка:", error);
+                return [];
+            }
+        }
 
-        // Функция для получения погоды
+        // Добавление маркеров на карту
+        async function renderTopPosts() {
+            const posts = await loadTopPosts(10);
+            posts.forEach(post => {
+                const lat = parseFloat(post.latitude);
+                const lng = parseFloat(post.altitude);
+            
+                if (isNaN(lat) || isNaN(lng)) {
+                    console.error("Некорректные координаты:", post.latitude, post.altitude);
+                    return;
+                }
+            
+                L.marker([lat, lng]).addTo(map).bindPopup(`...`);
+            });
+            if (posts.length === 0) {
+                console.log("Нет данных для отображения");
+                return;
+            }
+            
+            posts.forEach(post => {
+                L.marker([post.latitude, post.altitude])
+                    .addTo(map)
+                    .bindPopup(`
+                        <h3>${post.title}</h3>
+                        <img src="${post.photo_url}" width="200" />
+                        <p>❤️ ${post.likes_count} likes</p>
+                    `);
+            });
+        }
+
         async function fetchWeatherTips() {
             try {
                 const response = await fetch(`${API_URL}/weather-message`);
@@ -841,7 +1065,6 @@
             }
         }
 
-        // Обновление виджета погоды
         async function updateWeatherWidget() {
             const weatherInfo = document.getElementById('weather-info');
             const weatherTip = document.getElementById('weather-tip');
@@ -861,7 +1084,133 @@
 
         // Инициализация виджета погоды
         document.getElementById('refresh-weather').addEventListener('click', updateWeatherWidget);
-        updateWeatherWidget();
+
+        // Функция для загрузки постов
+        async function loadPosts() {
+            const container = document.getElementById('posts-container');
+            
+            try {
+                // Показываем индикатор загрузки
+                container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+                
+                // Получаем токен из localStorage
+                const token = localStorage.getItem('access_token');
+                const headers = {};
+                
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                // Делаем запрос к API
+                const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки постов');
+                }
+                
+                const posts = await response.json();
+                
+                // Очищаем контейнер
+                container.innerHTML = '';
+                
+                // Если постов нет
+                if (posts.length === 0) {
+                    container.innerHTML = `
+                        <div class="no-posts">
+                            <i class="fas fa-camera"></i>
+                            <p>Пока нет ни одного поста</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Отображаем посты
+                posts.forEach(post => {
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post-card';
+                    postElement.dataset.postId = post.id;
+                    
+                    postElement.innerHTML = `
+                        <img src="${post.photo_url}" class="post-image" alt="Фото места">
+                        <div class="post-content">
+                            <div class="post-header">
+                                <img src="${post.user_avatar || '/default-avatar.jpg'}" class="user-avatar" alt="Аватар">
+                                <div class="user-info">
+                                    <p class="username">${post.username}</p>
+                                    <p class="post-time">${new Date(post.created_at).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <p class="post-description">${post.description || ''}</p>
+                            <div class="location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                Широта: ${post.latitude.toFixed(6)}, Долгота: ${post.altitude.toFixed(6)}
+                            </div>
+                            <div class="post-actions">
+                                <button class="like-button ${post.is_liked ? 'liked' : ''}" onclick="toggleLike(${post.id}, this)">
+                                    <i class="fas fa-heart"></i>
+                                    <span class="likes-count">${post.likes_count}</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(postElement);
+                });
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                container.innerHTML = `
+                    <div class="error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>${error.message}</p>
+                        <button onclick="loadPosts()">Попробовать снова</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Функция для лайка/анлайка поста
+        async function toggleLike(postId, button) {
+            if (!currentUser) {
+                alert('Для этого действия нужно войти в аккаунт');
+                return;
+            }
+            
+            const isLiked = button.classList.contains('liked');
+            const endpoint = isLiked ? 'unlike' : 'like';
+            const likesCountElement = button.querySelector('.likes-count');
+            
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                
+                const result = await response.json();
+                
+                // Обновляем UI
+                button.classList.toggle('liked');
+                likesCountElement.textContent = result.likes_count;
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Не удалось выполнить действие');
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPosts();
+        });
     </script>
 </body>
 </html>
