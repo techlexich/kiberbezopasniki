@@ -854,6 +854,11 @@
 
         backFromLogin.addEventListener('click', resetAuthForms);
         backFromRegister.addEventListener('click', resetAuthForms);
+        // Обработчик кнопки "Применить фильтры"
+        document.getElementById('apply-filters').addEventListener('click', () => {
+            renderTopPosts();
+            hideModal(filtersModal);
+        });
 
         // Регистрация
         registerButton.addEventListener('click', async (e) => {
