@@ -638,38 +638,35 @@
             gap: 8px;
             margin-top: 8px;
         }
-        
-        .tag-checkbox {
-            display: flex;
-            align-items: center;
+
+        .tag-button {
             padding: 6px 12px;
             background: var(--bg);
+            border: 1px solid var(--border);
             border-radius: 20px;
             cursor: pointer;
-            border: 1px solid var(--border);
             transition: all 0.2s ease;
+            font-size: 14px;
+            color: var(--text);
         }
-        
-        .tag-checkbox:hover {
+
+        .tag-button:hover {
             border-color: var(--primary);
         }
-        
-        .tag-checkbox input {
-            display: none;
+
+        .tag-button.selected {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
         }
-        
-        .tag-checkbox input:checked + span {
-            color: var(--primary);
-            font-weight: 500;
-        }
-        
+
         .post-tags {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
             margin-top: 10px;
         }
-        
+
         .post-tag {
             background: var(--primary-light);
             color: white;
@@ -793,19 +790,12 @@
                 <div class="form-group">
                     <label>Теги</label>
                     <div class="tags-container">
-                        <label class="tag-checkbox">
-                            <input type="checkbox" name="tags" value="Архитектура"> Архитектура
-                        </label>
-                        <label class="tag-checkbox">
-                            <input type="checkbox" name="tags" value="История"> История
-                        </label>
-                        <label class="tag-checkbox">
-                            <input type="checkbox" name="tags" value="Памятники"> Памятники
-                        </label>
-                        <label class="tag-checkbox">
-                            <input type="checkbox" name="tags" value="Культура"> Культура
-                        </label>
+                        <button type="button" class="tag-button" data-tag="Архитектура">Архитектура</button>
+                        <button type="button" class="tag-button" data-tag="История">История</button>
+                        <button type="button" class="tag-button" data-tag="Памятники">Памятники</button>
+                        <button type="button" class="tag-button" data-tag="Культура">Культура</button>
                     </div>
+                    <input type="hidden" id="post-tags" name="tags">
                 </div>
                 <div class="form-group">
                     <textarea id="post-description" placeholder="Добавьте описание..." rows="4"></textarea>
@@ -845,6 +835,23 @@
                 throw new Error(error?.detail || `HTTP error ${response.status}`);
             }
             return response.json();
+        }
+
+        // Инициализация кнопок тегов
+        function initTagButtons() {
+            const tagButtons = document.querySelectorAll('.tag-button');
+            
+            tagButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Переключаем класс selected при клике
+                    this.classList.toggle('selected');
+                    
+                    // Обновляем скрытое поле с выбранными тегами
+                    const selectedTags = Array.from(document.querySelectorAll('.tag-button.selected'))
+                        .map(btn => btn.dataset.tag);
+                    document.getElementById('post-tags').value = selectedTags.join(',');
+                });
+            });
         }
 
         // Загрузка профиля
@@ -980,7 +987,7 @@
                 
                 postElement.appendChild(tagsContainer);
             }
-g
+
             // Обработчики событий
             postElement.addEventListener('click', (e) => {
                 if (!e.target.closest('.delete-post-btn, .action-button')) {
@@ -1037,6 +1044,22 @@ g
                     </div>
                 </div>
             `;
+            
+            if (post.tags) {
+                const tagsContainer = document.createElement('div');
+                tagsContainer.className = 'post-tags';
+                
+                post.tags.split(',').forEach(tag => {
+                    if (tag.trim()) {
+                        const tagElement = document.createElement('span');
+                        tagElement.className = 'post-tag';
+                        tagElement.textContent = tag.trim();
+                        tagsContainer.appendChild(tagElement);
+                    }
+                });
+                
+                container.querySelector('.post').appendChild(tagsContainer);
+            }
             
             if (isCurrentUserPost) {
                 container.querySelector('.delete-post-btn').addEventListener('click', (e) => {
@@ -1213,11 +1236,11 @@ g
 
         createPostForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-
-            const tagCheckboxes = document.querySelectorAll('input[name="tags"]:checked');
-            const tags = Array.from(tagCheckboxes).map(cb => cb.value).join(',');
             
-            formData.append('tags', tags);
+            // Получаем выбранные теги
+            const selectedTags = Array.from(document.querySelectorAll('.tag-button.selected'))
+                .map(btn => btn.dataset.tag);
+            const tags = selectedTags.join(',');
             
             const submitBtn = document.getElementById('submit-post-btn');
             submitBtn.disabled = true;
@@ -1248,6 +1271,7 @@ g
                 formData.append('description', description);
                 formData.append('altitude', longitude);
                 formData.append('latitude', latitude);
+                formData.append('tags', tags);
                 
                 const token = localStorage.getItem('access_token');
                 if (!token) throw new Error('Требуется авторизация');
@@ -1274,6 +1298,12 @@ g
                 previewImage.src = '';
                 fileUploadLabel.style.display = 'block';
                 if (postMarker) postMap.removeLayer(postMarker);
+                
+                // Сброс выбранных тегов
+                document.querySelectorAll('.tag-button.selected').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                document.getElementById('post-tags').value = '';
                 
                 // Закрытие модального окна
                 postModal.classList.remove('active');
@@ -1410,6 +1440,7 @@ g
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
             loadProfile();
+            initTagButtons();
             
             // Проверяем наличие поста в URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -1421,59 +1452,6 @@ g
                     .catch(console.error);
             }
         });
-
-        // Добавляем стили для корректного отображения
-        const style = document.createElement('style');
-        style.textContent = `
-            .profile-bio {
-                color: var(--text-light);
-                margin-bottom: 16px;
-                word-break: break-word;
-                overflow-wrap: break-word;
-                max-width: 100%;
-            }
-            
-            .post-avatar {
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                margin-right: 12px;
-                background: url('/static/default_avatar.jpg') center/cover no-repeat;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-weight: 500;
-                flex-shrink: 0;
-            }
-            
-            .avatar-preview {
-                width: 120px;
-                height: 120px;
-                border-radius: 50%;
-                margin: 0 auto 16px;
-                background-color: #f1f3f5;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                overflow: hidden;
-                border: 2px solid var(--border);
-                cursor: pointer;
-                transition: all 0.3s ease;
-            }
-            
-            .avatar-preview:hover {
-                transform: scale(1.05);
-                border-color: var(--primary);
-            }
-            
-            .avatar-preview-text {
-                font-size: 36px;
-                font-weight: 600;
-                color: white;
-            }
-        `;
-        document.head.appendChild(style);
     </script>
 </body>
 </html>
