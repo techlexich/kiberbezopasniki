@@ -523,7 +523,7 @@
             </div>
         </div>
         
-        <button class="auth-option primary" style="margin-top: 12px;">
+        <button id="apply-filters" class="auth-option primary" style="margin-top: 12px;">
             Применить фильтры
         </button>
     </div>
@@ -646,6 +646,10 @@
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
         let isApiAvailable = false;
+
+        // Глобальные переменные для маркеров
+        let allMarkers = [];  // Все загруженные маркеры
+        let currentMarkers = [];  // Маркеры, которые сейчас отображаются на карте
 
         // Проверка доступности API
         async function checkApiAvailability() {
@@ -989,14 +993,28 @@
             if (e.target === profileModal) hideModal(profileModal);
         });
 
-        // Инициализация при загрузке
+        // Инициализация карты и загрузка данных
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 await checkApiAvailability();
                 await updateAuthUI();
                 await checkProfilePage();
-                renderTopPosts();
-                
+
+                // Загружаем все посты
+                const response = await fetch(`${API_URL}/points`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                allMarkers = await response.json();
+
+                // Проверяем координаты
+                allMarkers = allMarkers.filter(post => {
+                    const lat = parseFloat(post.latitude);
+                    const lng = parseFloat(post.altitude);
+                    return !isNaN(lat) && !isNaN(lng);
+                });
+
+                // Показываем все маркеры
+                addMarkersToMap(allMarkers);
+
                 // Оптимизация для мобильных устройств
                 if (/Mobi|Android/i.test(navigator.userAgent)) {
                     map.options.preferCanvas = true;
@@ -1006,7 +1024,6 @@
                 console.error('Ошибка инициализации:', error);
             }
         });
-
         // Обновление размера карты при изменении окна
         window.addEventListener('resize', () => {
             map.invalidateSize();
@@ -1024,34 +1041,52 @@
             }
         }
 
-        // Добавление маркеров на карту
-        async function renderTopPosts() {
-            const posts = await loadTopPosts(10);
+        // Функция добавления маркеров на карту
+        function addMarkersToMap(posts) {
+            // Удаляем текущие маркеры
+            currentMarkers.forEach(marker => map.removeLayer(marker));
+            currentMarkers = [];
+
+            // Добавляем новые маркеры
             posts.forEach(post => {
-                const lat = parseFloat(post.latitude);
-                const lng = parseFloat(post.altitude);
-            
-                if (isNaN(lat) || isNaN(lng)) {
-                    console.error("Некорректные координаты:", post.latitude, post.altitude);
-                    return;
-                }
-            
-                L.marker([lat, lng]).addTo(map).bindPopup(`...`);
-            });
-            if (posts.length === 0) {
-                console.log("Нет данных для отображения");
-                return;
-            }
-            
-            posts.forEach(post => {
-                L.marker([post.latitude, post.altitude])
+                const marker = L.marker([post.latitude, post.altitude])
                     .addTo(map)
                     .bindPopup(`
-                        <h3>${post.title}</h3>
+                        <h3>${post.username || 'Без названия'}</h3>
                         <img src="${post.photo_url}" width="200" />
                         <p>❤️ ${post.likes_count} likes</p>
+                        <div class="post-tags">${post.tags?.join(', ') || ''}</div>
                     `);
+                currentMarkers.push(marker);
             });
+        }
+
+        // Функция фильтрации маркеров
+        async function applyFilters() {
+            // Получаем выбранные фильтры
+            const selectedTags = Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(cb => cb.value);
+            const selectedTimes = Array.from(document.querySelectorAll('input[name="time"]:checked')).map(cb => cb.value);
+            const selectedSeasons = Array.from(document.querySelectorAll('input[name="season"]:checked')).map(cb => cb.value);
+
+            // Если нет фильтров - показываем всё
+            if (selectedTags.length === 0 && selectedTimes.length === 0 && selectedSeasons.length === 0) {
+                addMarkersToMap(allMarkers);
+                return;
+            }
+
+            // Фильтруем посты
+            const filteredPosts = allMarkers.filter(post => {
+                const postTags = post.tags || [];
+                
+                // Проверяем, есть ли хотя бы один совпадающий тег для каждого типа фильтра
+                const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => postTags.includes(tag));
+                const matchesTimes = selectedTimes.length === 0 || selectedTimes.some(time => postTags.includes(time));
+                const matchesSeasons = selectedSeasons.length === 0 || selectedSeasons.some(season => postTags.includes(season));
+                
+                return matchesTags && matchesTimes && matchesSeasons;
+            });
+
+            addMarkersToMap(filteredPosts);
         }
 
         async function fetchWeatherTips() {
@@ -1171,10 +1206,6 @@
             }
         }
 
-        // Глобальные переменные
-        let allMarkers = [];  // Все маркеры
-        let filteredMarkers = [];  // Отфильтрованные маркеры
-
         // Функция загрузки постов с фильтрами
         async function loadFilteredPosts(filters = {}) {
             try {
@@ -1227,11 +1258,6 @@
             await updateMapMarkers(filters);
         });
 
-        // Инициализация карты при загрузке
-        document.addEventListener('DOMContentLoaded', async () => {
-            await updateMapMarkers();  // Загружаем все посты без фильтров
-        });
-
         // Функция для лайка/анлайка поста
         async function toggleLike(postId, button) {
             if (!currentUser) {
@@ -1268,10 +1294,8 @@
             }
         }
 
-        // Инициализация при загрузке страницы
-        document.addEventListener('DOMContentLoaded', () => {
-            loadPosts();
-        });
+        // Обработчик кнопки "Применить фильтры"
+        document.getElementById('apply-filters').addEventListener('click', applyFilters);
     </script>
 </body>
 </html>
