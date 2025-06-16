@@ -1041,53 +1041,88 @@
             }
         }
 
-        // Функция добавления маркеров на карту
-        function addMarkersToMap(posts) {
-            // Удаляем текущие маркеры
+        // Глобальные переменные
+        let allMarkersData = [];
+        let currentMarkers = [];
+
+        // Функция создания маркеров
+        function createMarkers(posts) {
+            // Удаляем старые маркеры
             currentMarkers.forEach(marker => map.removeLayer(marker));
             currentMarkers = [];
 
-            // Добавляем новые маркеры
+            // Добавляем новые
             posts.forEach(post => {
-                const marker = L.marker([post.latitude, post.altitude])
-                    .addTo(map)
-                    .bindPopup(`
-                        <h3>${post.username || 'Без названия'}</h3>
-                        <img src="${post.photo_url}" width="200" />
-                        <p>❤️ ${post.likes_count} likes</p>
-                        <div class="post-tags">${post.tags?.join(', ') || ''}</div>
-                    `);
-                currentMarkers.push(marker);
+                try {
+                    const lat = parseFloat(post.latitude);
+                    const lng = parseFloat(post.altitude);
+                    
+                    if (isNaN(lat) || isNaN(lng)) {
+                        console.error("Некорректные координаты:", post);
+                        return;
+                    }
+
+                    const marker = L.marker([lat, lng]).addTo(map)
+                        .bindPopup(`
+                            <h3>${post.title || 'Без названия'}</h3>
+                            <img src="${post.photo_url}" style="max-width:200px;">
+                            <p>Теги: ${post.tags?.join(', ') || 'нет'}</p>
+                        `);
+                        
+                    currentMarkers.push(marker);
+                } catch (e) {
+                    console.error("Ошибка создания маркера:", e);
+                }
             });
         }
 
-        // Функция фильтрации маркеров
-        async function applyFilters() {
-            // Получаем выбранные фильтры
-            const selectedTags = Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(cb => cb.value);
-            const selectedTimes = Array.from(document.querySelectorAll('input[name="time"]:checked')).map(cb => cb.value);
-            const selectedSeasons = Array.from(document.querySelectorAll('input[name="season"]:checked')).map(cb => cb.value);
+        // Загрузка данных
+        async function loadMarkers() {
+            try {
+                const response = await fetch(`${API_URL}/points`);
+                if (!response.ok) throw new Error("Ошибка сервера");
+                
+                allMarkersData = await response.json();
+                console.log("Получены метки:", allMarkersData);
+                
+                if (!Array.isArray(allMarkersData)) {
+                    throw new Error("Данные не в формате массива");
+                }
+                
+                createMarkers(allMarkersData);
+            } catch (error) {
+                console.error("Ошибка загрузки:", error);
+                alert("Не удалось загрузить метки");
+            }
+        }
 
-            // Если нет фильтров - показываем всё
-            if (selectedTags.length === 0 && selectedTimes.length === 0 && selectedSeasons.length === 0) {
-                addMarkersToMap(allMarkers);
+        // Фильтрация
+        function applyFilters() {
+            const activeTags = [
+                ...Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(el => el.value),
+                ...Array.from(document.querySelectorAll('input[name="time"]:checked')).map(el => el.value),
+                ...Array.from(document.querySelectorAll('input[name="season"]:checked')).map(el => el.value)
+            ];
+
+            if (activeTags.length === 0) {
+                createMarkers(allMarkersData);
                 return;
             }
 
-            // Фильтруем посты
-            const filteredPosts = allMarkers.filter(post => {
-                const postTags = post.tags || [];
-                
-                // Проверяем, есть ли хотя бы один совпадающий тег для каждого типа фильтра
-                const matchesTags = selectedTags.length === 0 || selectedTags.some(tag => postTags.includes(tag));
-                const matchesTimes = selectedTimes.length === 0 || selectedTimes.some(time => postTags.includes(time));
-                const matchesSeasons = selectedSeasons.length === 0 || selectedSeasons.some(season => postTags.includes(season));
-                
-                return matchesTags && matchesTimes && matchesSeasons;
-            });
-
-            addMarkersToMap(filteredPosts);
+            const filtered = allMarkersData.filter(post => 
+                post.tags && post.tags.some(tag => activeTags.includes(tag))
+            );
+            
+            createMarkers(filtered);
         }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMarkers();
+            
+            // Назначение обработчика кнопки
+            document.querySelector('.auth-option.primary').addEventListener('click', applyFilters);
+        });
 
         async function fetchWeatherTips() {
             try {
