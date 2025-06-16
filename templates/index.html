@@ -646,21 +646,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const tagTranslations = {
-            'morning': 'Утро',
-            'day': 'День',
-            'evening': 'Вечер',
-            'night': 'Ночь',
-            'winter': 'Зима',
-            'spring': 'Весна',
-            'summer': 'Лето',
-            'autumn': 'Осень',
-            'new_architecture': 'Архитектура',
-            'old_town': 'История',
-            'monument': 'Памятники',
-            'fountain': 'Фонтаны'
-        };
-        
         // Инициализация карты
         const map = L.map('map', {
             zoomControl: true,
@@ -687,14 +672,7 @@
         // Проверка доступности API
         async function checkApiAvailability() {
             try {
-                const response = await fetch(`${API_URL}/health`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 5000
-                });
-                
+                const response = await fetch(`${API_URL}/health`);
                 if (response.ok) {
                     isApiAvailable = true;
                     return true;
@@ -713,56 +691,64 @@
             markers = [];
             
             // Формируем URL с учетом фильтров
-            const url = tags ? `${API_URL}/points?tags=${tags.join(',')}` : `${API_URL}/points`;
+            const url = tags ? `${API_URL}/points?tags=${encodeURIComponent(tags.join(','))}` : `${API_URL}/points`;
             
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error("Ошибка загрузки данных");
                 const posts = await response.json();
                 
-                if (!posts.length) {
+                if (!posts || !posts.length) {
                     console.log("Нет данных для отображения");
                     return;
                 }
                 
                 // Добавляем новые маркеры
                 posts.forEach(post => {
+                    if (!post.latitude || !post.altitude) {
+                        console.error("Отсутствуют координаты у поста:", post);
+                        return;
+                    }
+                    
+                    // Проверяем наличие фото
+                    const photoUrl = post.photo_url || '/static/default-photo.jpg';
+                    
+                    // Создаем контент для попапа
+                    const popupContent = `
+                        <div class="popup-content" style="max-width: 250px;">
+                            <img src="${photoUrl}" style="width: 100%; border-radius: 8px; margin-bottom: 8px;" 
+                                onerror="this.src='/static/default-photo.jpg'">
+                            <div style="font-weight: 500; margin-bottom: 4px;">
+                                ${post.username || 'Анонимный пользователь'}
+                            </div>
+                            ${post.description ? `<p style="margin: 8px 0; font-size: 14px;">${post.description}</p>` : ''}
+                            <div class="post-tags" style="margin-top: 8px;">
+                                ${post.tags ? post.tags.split(',').map(tag => 
+                                    `<span style="display: inline-block; background: #f1f3f5; 
+                                    padding: 4px 8px; border-radius: 12px; 
+                                    margin-right: 4px; font-size: 12px;">${tag.trim()}</span>`
+                                ).join('') : ''}
+                            </div>
+                            <div style="margin-top: 8px; color: #666; font-size: 12px;">
+                                ❤️ ${post.likes_count || 0} лайков
+                            </div>
+                        </div>
+                    `;
+                    
                     const marker = L.marker([post.latitude, post.altitude])
                         .addTo(map)
-                        .bindPopup(`
-                            <div class="popup-content">
-                                <img src="${post.photo_url}" width="200" style="border-radius: 8px; margin-bottom: 8px;">
-                                <div style="font-weight: 500; margin-bottom: 4px;">${post.username || 'Аноним'}</div>
-                                ${post.description ? `<p style="margin: 8px 0;">${post.description}</p>` : ''}
-                                <div class="post-tags" style="margin-top: 8px;">
-                                    ${post.tags ? post.tags.split(',').map(tag => 
-                                        `<span style="display: inline-block; background: #f1f3f5; 
-                                        padding: 4px 8px; border-radius: 12px; 
-                                        margin-right: 4px; font-size: 12px;">${tag.trim()}</span>`
-                                    ).join('') : ''}
-                                </div>
-                                <div style="margin-top: 8px; color: #666; font-size: 12px;">
-                                    ❤️ ${post.likes_count || 0} лайков
-                                </div>
-                            </div>
-                        `);
+                        .bindPopup(popupContent);
                     
                     markers.push(marker);
                 });
+                
+                // Если есть маркеры, подгоняем карту чтобы показать их все
+                if (markers.length > 0) {
+                    const markerGroup = new L.featureGroup(markers);
+                    map.fitBounds(markerGroup.getBounds(), { padding: [50, 50] });
+                }
             } catch (error) {
-                console.error("Ошибка:", error);
-            }
-        }
-
-        // Загрузка топовых постов (старая версия для совместимости)
-        async function loadTopPosts(limit = 10) {
-            try {
-                const response = await fetch(`${API_URL}/points`);
-                if (!response.ok) throw new Error("Ошибка загрузки данных");
-                return await response.json();
-            } catch (error) {
-                console.error("Ошибка:", error);
-                return [];
+                console.error("Ошибка при загрузке постов:", error);
             }
         }
 
@@ -847,8 +833,7 @@
                 const response = await fetch(`${API_URL}/users/me`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
-                    },
-                    timeout: 5000
+                    }
                 });
                 
                 if (response.ok) {
@@ -870,19 +855,16 @@
                 const authView = document.getElementById('authenticated-view');
                 
                 if (currentUser) {
-                    // Показываем авторизованный вид
                     document.getElementById('profile-username').textContent = currentUser.username || 'Пользователь';
                     document.getElementById('profile-email').textContent = currentUser.email || 'Не указан';
                     document.getElementById('profile-button').innerHTML = 
                         `<i class="fas fa-user"></i> ${currentUser.username || 'Профиль'}`;
                     
-                    // Жёстко переключаем видимость
                     guestView.style.display = 'none';
                     authView.style.display = 'block';
                     loginForm.classList.remove('active');
                     registerForm.classList.remove('active');
                 } else {
-                    // Показываем гостевой вид
                     document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
                     guestView.style.display = 'flex';
                     authView.style.display = 'none';
@@ -910,9 +892,7 @@
             if (path.startsWith('/profile/')) {
                 const username = path.split('/profile/')[1];
                 try {
-                    const response = await fetch(`${API_URL}/users/${username}`, {
-                        timeout: 5000
-                    });
+                    const response = await fetch(`${API_URL}/users/${username}`);
                     if (!response.ok) {
                         return;
                     }
@@ -974,8 +954,7 @@
                         username: registerLogin.value,
                         password: registerPassword.value,
                         password_repeat: registerPasswordRepeat.value
-                    }),
-                    timeout: 10000
+                    })
                 });
 
                 const data = await response.json();
@@ -1010,8 +989,7 @@
                     body: new URLSearchParams({
                         username: loginEmail.value,
                         password: loginPassword.value
-                    }),
-                    timeout: 10000
+                    })
                 });
 
                 const data = await response.json();
@@ -1050,8 +1028,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                     },
-                    body: JSON.stringify(updatedProfile),
-                    timeout: 10000
+                    body: JSON.stringify(updatedProfile)
                 });
                 
                 if (!response.ok) {
@@ -1088,17 +1065,17 @@
         document.querySelector('.auth-option.primary').addEventListener('click', async () => {
             const selectedFilters = [];
             
-            // Собираем выбранные фильтры
+            // Собираем выбранные фильтры с учетом перевода
             document.querySelectorAll('input[name="time"]:checked').forEach(checkbox => {
-                selectedFilters.push(checkbox.value);
+                selectedFilters.push(checkbox.nextElementSibling.textContent);
             });
             
             document.querySelectorAll('input[name="season"]:checked').forEach(checkbox => {
-                selectedFilters.push(checkbox.value);
+                selectedFilters.push(checkbox.nextElementSibling.textContent);
             });
             
             document.querySelectorAll('input[name="tag"]:checked').forEach(checkbox => {
-                selectedFilters.push(checkbox.value);
+                selectedFilters.push(checkbox.nextElementSibling.textContent);
             });
             
             // Применяем фильтры
@@ -1116,42 +1093,6 @@
             // Показываем все маркеры
             await renderTopPosts();
             hideModal(filtersModal);
-        });
-
-        // Инициализация при загрузке
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await checkApiAvailability();
-                await updateAuthUI();
-                await checkProfilePage();
-                
-                // Загружаем все посты при первом открытии
-                await renderTopPosts();
-                
-                // Оптимизация для мобильных устройств
-                if (/Mobi|Android/i.test(navigator.userAgent)) {
-                    map.options.preferCanvas = true;
-                    map.options.fadeAnimation = false;
-                }
-                
-                // Обновляем карту при изменении фильтров
-                document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.addEventListener('change', async () => {
-                        const selectedFilters = [];
-                        document.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-                            selectedFilters.push(cb.value);
-                        });
-                        await renderTopPosts(selectedFilters.length ? selectedFilters : null);
-                    });
-                });
-            } catch (error) {
-                console.error('Ошибка инициализации:', error);
-            }
-        });
-
-        // Обновление размера карты при изменении окна
-        window.addEventListener('resize', () => {
-            map.invalidateSize();
         });
 
         // Функция для обновления виджета погоды
@@ -1183,19 +1124,53 @@
             weatherTip.textContent = data.message;
         }
 
-        // Инициализация виджета погоды
-        document.getElementById('refresh-weather').addEventListener('click', updateWeatherWidget);
-        updateWeatherWidget(); // Загружаем погоду при старте
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await checkApiAvailability();
+                await updateAuthUI();
+                await checkProfilePage();
+                
+                // Загружаем все посты при первом открытии
+                await renderTopPosts();
+                
+                // Оптимизация для мобильных устройств
+                if (/Mobi|Android/i.test(navigator.userAgent)) {
+                    map.options.preferCanvas = true;
+                    map.options.fadeAnimation = false;
+                }
+                
+                // Обновляем карту при изменении фильтров
+                document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', async () => {
+                        const selectedFilters = [];
+                        document.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                            selectedFilters.push(cb.nextElementSibling.textContent);
+                        });
+                        await renderTopPosts(selectedFilters.length ? selectedFilters : null);
+                    });
+                });
+
+                // Инициализация виджета погоды
+                document.getElementById('refresh-weather').addEventListener('click', updateWeatherWidget);
+                updateWeatherWidget();
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+            }
+        });
+
+        // Обновление размера карты при изменении окна
+        window.addEventListener('resize', () => {
+            map.invalidateSize();
+        });
 
         // Функция для загрузки постов
         async function loadPosts() {
             const container = document.getElementById('posts-container');
             
             try {
-                // Показываем индикатор загрузки
                 container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
                 
-                // Получаем токен из localStorage
                 const token = localStorage.getItem('access_token');
                 const headers = {};
                 
@@ -1203,7 +1178,6 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
                 
-                // Делаем запрос к API
                 const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
                     headers: headers
                 });
@@ -1214,10 +1188,8 @@
                 
                 const posts = await response.json();
                 
-                // Очищаем контейнер
                 container.innerHTML = '';
                 
-                // Если постов нет
                 if (posts.length === 0) {
                     container.innerHTML = `
                         <div class="no-posts">
@@ -1228,19 +1200,18 @@
                     return;
                 }
                 
-                // Отображаем посты
                 posts.forEach(post => {
                     const postElement = document.createElement('div');
                     postElement.className = 'post-card';
                     postElement.dataset.postId = post.id;
                     
                     postElement.innerHTML = `
-                        <img src="${post.photo_url}" class="post-image" alt="Фото места">
+                        <img src="${post.photo_url}" class="post-image" alt="Фото места" onerror="this.src='/static/default-photo.jpg'">
                         <div class="post-content">
                             <div class="post-header">
-                                <img src="${post.user_avatar || '/default-avatar.jpg'}" class="user-avatar" alt="Аватар">
+                                <img src="${post.user_avatar || '/static/default-avatar.jpg'}" class="user-avatar" alt="Аватар">
                                 <div class="user-info">
-                                    <p class="username">${post.username}</p>
+                                    <p class="username">${post.username || 'Аноним'}</p>
                                     <p class="post-time">${new Date(post.created_at).toLocaleString()}</p>
                                 </div>
                             </div>
@@ -1299,7 +1270,6 @@
                 
                 const result = await response.json();
                 
-                // Обновляем UI
                 button.classList.toggle('liked');
                 likesCountElement.textContent = result.likes_count;
                 
