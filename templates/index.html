@@ -625,10 +625,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        fetch('https://kiberbezopasniki.onrender.com/health')
-            .then(response => console.log('API доступен:', response.ok))
-            .catch(error => console.error('API недоступен:', error));
-
         // Инициализация карты
         const map = L.map('map', {
             zoomControl: true,
@@ -646,13 +642,6 @@
 
         map.zoomControl.setPosition('bottomright');
 
-        setTimeout(() => {
-            if (!map.getCenter()) {
-                console.error('Карта не инициализирована');
-                map.setView([56.835184, 60.609573], 13);
-            }
-        }, 1000);
-
         // Настройки API
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
@@ -661,28 +650,6 @@
         // Глобальные переменные для маркеров
         let allMarkersData = [];
         let currentMarkers = [];
-
-        // Проверка доступности API
-        async function checkApiAvailability() {
-            try {
-                const response = await fetch(`${API_URL}/health`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 5000
-                });
-                
-                if (response.ok) {
-                    isApiAvailable = true;
-                    return true;
-                }
-            } catch (error) {
-                console.error('API недоступен:', error);
-                isApiAvailable = false;
-                return false;
-            }
-        }
 
         // Функция создания маркеров
         function createMarkers(posts) {
@@ -758,7 +725,7 @@
                 console.error("Ошибка загрузки точек:", error);
                 
                 const errorElement = document.createElement('div');
-                errorElement.textContent = `Ошибка загрузки точек: ${error.message}`;
+                errorElement.textContent = `Не удалось загрузить точки. Попробуйте обновить страницу.`;
                 errorElement.style.color = 'red';
                 errorElement.style.position = 'absolute';
                 errorElement.style.top = '20px';
@@ -766,6 +733,7 @@
                 errorElement.style.zIndex = '1000';
                 errorElement.style.background = 'white';
                 errorElement.style.padding = '10px';
+                errorElement.style.borderRadius = '5px';
                 document.getElementById('map').appendChild(errorElement);
             } finally {
                 loadingIndicator.remove();
@@ -795,6 +763,52 @@
             
             createMarkers(filtered);
         }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Проверяем доступность API
+                const apiAvailable = await fetch(`${API_URL}/health`)
+                    .then(response => response.ok)
+                    .catch(() => false);
+                
+                isApiAvailable = apiAvailable;
+                
+                if (!isApiAvailable) {
+                    throw new Error("Сервер временно недоступен");
+                }
+
+                // Загружаем данные пользователя и точки
+                await Promise.all([
+                    updateAuthUI(),
+                    checkProfilePage(),
+                    loadMarkers()
+                ]);
+
+                // Назначаем обработчик кнопки "Применить фильтры"
+                document.getElementById('apply-filters').addEventListener('click', applyFilters);
+
+                // Оптимизация для мобильных устройств
+                if (/Mobi|Android/i.test(navigator.userAgent)) {
+                    map.options.preferCanvas = true;
+                    map.options.fadeAnimation = false;
+                }
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+                
+                const errorElement = document.createElement('div');
+                errorElement.textContent = `Ошибка загрузки данных: ${error.message}`;
+                errorElement.style.color = 'red';
+                errorElement.style.position = 'absolute';
+                errorElement.style.top = '20px';
+                errorElement.style.left = '20px';
+                errorElement.style.zIndex = '1000';
+                errorElement.style.background = 'white';
+                errorElement.style.padding = '10px';
+                errorElement.style.borderRadius = '5px';
+                document.getElementById('map').appendChild(errorElement);
+            }
+        });
 
         // Элементы интерфейса
         const filtersButton = document.getElementById('filters-button');
