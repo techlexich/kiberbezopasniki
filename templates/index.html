@@ -1064,7 +1064,7 @@
                 
                 // Добавляем новые маркеры
                 posts.forEach(post => {
-                    L.marker([post.latitude, post.altitude])
+                    const marker = L.marker([post.latitude, post.altitude])
                         .addTo(map)
                         .bindPopup(`
                             <div style="max-width: 200px">
@@ -1075,6 +1075,9 @@
                                 </div>
                             </div>
                         `);
+                    
+                    // Добавляем теги в data-атрибуты маркера для возможной дальнейшей фильтрации на клиенте
+                    marker.options.tags = post.tags || [];
                 });
                 
             } catch (error) {
@@ -1082,7 +1085,6 @@
                 alert("Не удалось загрузить данные. Попробуйте позже.");
             }
         }
-
         async function fetchWeatherTips() {
             try {
                 const response = await fetch(`${API_URL}/weather-message`);

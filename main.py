@@ -552,7 +552,6 @@ async def read_me(request: Request, user=Depends(get_current_user)):
     }
 
 
-
 @app.get("/points", response_model=list[Post])
 def get_points(
     limit: int = 10, 
