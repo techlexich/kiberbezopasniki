@@ -482,19 +482,19 @@
             <span class="filter-title">Время суток</span>
             <div class="filter-options">
                 <div class="filter-option">
-                    <input type="checkbox" id="time-morning" name="time" value="morning">
+                    <input type="checkbox" id="time-morning" name="time" value="Утро">
                     <label for="time-morning">Утро</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="time-day" name="time" value="day">
+                    <input type="checkbox" id="time-day" name="time" value="День">
                     <label for="time-day">День</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="time-evening" name="time" value="evening">
+                    <input type="checkbox" id="time-evening" name="time" value="Вечер">
                     <label for="time-evening">Вечер</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="time-night" name="time" value="night">
+                    <input type="checkbox" id="time-night" name="time" value="Ночь">
                     <label for="time-night">Ночь</label>
                 </div>
             </div>
@@ -504,19 +504,19 @@
             <span class="filter-title">Время года</span>
             <div class="filter-options">
                 <div class="filter-option">
-                    <input type="checkbox" id="season-winter" name="season" value="winter">
+                    <input type="checkbox" id="season-winter" name="season" value="Зима">
                     <label for="season-winter">Зима</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="season-spring" name="season" value="spring">
+                    <input type="checkbox" id="season-spring" name="season" value="Весна">
                     <label for="season-spring">Весна</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="season-summer" name="season" value="summer">
+                    <input type="checkbox" id="season-summer" name="season" value="Лето">
                     <label for="season-summer">Лето</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="season-autumn" name="season" value="autumn">
+                    <input type="checkbox" id="season-autumn" name="season" value="Осень">
                     <label for="season-autumn">Осень</label>
                 </div>
             </div>
@@ -526,20 +526,20 @@
             <span class="filter-title">Категории</span>
             <div class="filter-options">
                 <div class="filter-option">
-                    <input type="checkbox" id="tag-new" name="tag" value="new_architecture">
-                    <label for="tag-new">Архитектура</label>
+                    <input type="checkbox" id="tag-architecture" name="tag" value="Архитектура">
+                    <label for="tag-architecture">Архитектура</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="tag-old" name="tag" value="old_town">
-                    <label for="tag-old">История</label>
+                    <input type="checkbox" id="tag-history" name="tag" value="История">
+                    <label for="tag-history">История</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="tag-monument" name="tag" value="monument">
+                    <input type="checkbox" id="tag-monument" name="tag" value="Памятники">
                     <label for="tag-monument">Памятники</label>
                 </div>
                 <div class="filter-option">
-                    <input type="checkbox" id="tag-fountain" name="tag" value="fountain">
-                    <label for="tag-fountain">Фонтаны</label>
+                    <input type="checkbox" id="tag-culture" name="tag" value="Культура">
+                    <label for="tag-culture">Культура</label>
                 </div>
             </div>
         </div>
@@ -686,6 +686,8 @@
 
         // Функция для отображения постов на карте с фильтрацией
         async function renderTopPosts(tags = null) {
+            console.log("Applying filters:", tags); // Логирование фильтров
+            
             // Удаляем старые маркеры
             markers.forEach(marker => map.removeLayer(marker));
             markers = [];
@@ -697,6 +699,8 @@
                 const response = await fetch(url);
                 if (!response.ok) throw new Error("Ошибка загрузки данных");
                 const posts = await response.json();
+                
+                console.log("Received posts:", posts); // Логирование полученных постов
                 
                 if (!posts || !posts.length) {
                     console.log("Нет данных для отображения");
@@ -750,6 +754,18 @@
             } catch (error) {
                 console.error("Ошибка при загрузке постов:", error);
             }
+        }
+
+        // Функция для сбора выбранных фильтров
+        function getSelectedFilters() {
+            const selectedFilters = [];
+            
+            // Собираем все выбранные checkbox'ы
+            document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedFilters.push(checkbox.value);
+            });
+            
+            return selectedFilters;
         }
 
         // Элементы интерфейса
@@ -1055,43 +1071,10 @@
             hideModal(profileModal);
         });
 
-        // Закрытие модалок при клике вне их области
-        window.addEventListener('click', (e) => {
-            if (e.target === filtersModal) hideModal(filtersModal);
-            if (e.target === profileModal) hideModal(profileModal);
-        });
-
         // Обработчик кнопки "Применить фильтры"
         document.querySelector('.auth-option.primary').addEventListener('click', async () => {
-            const selectedFilters = [];
-            
-            // Собираем выбранные фильтры с учетом перевода
-            document.querySelectorAll('input[name="time"]:checked').forEach(checkbox => {
-                selectedFilters.push(checkbox.nextElementSibling.textContent);
-            });
-            
-            document.querySelectorAll('input[name="season"]:checked').forEach(checkbox => {
-                selectedFilters.push(checkbox.nextElementSibling.textContent);
-            });
-            
-            document.querySelectorAll('input[name="tag"]:checked').forEach(checkbox => {
-                selectedFilters.push(checkbox.nextElementSibling.textContent);
-            });
-            
-            // Применяем фильтры
+            const selectedFilters = getSelectedFilters();
             await renderTopPosts(selectedFilters.length ? selectedFilters : null);
-            hideModal(filtersModal);
-        });
-
-        // Обработчик кнопки "Сбросить фильтры"
-        document.getElementById('reset-filters')?.addEventListener('click', async () => {
-            // Сбрасываем все чекбоксы
-            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                checkbox.checked = false;
-            });
-            
-            // Показываем все маркеры
-            await renderTopPosts();
             hideModal(filtersModal);
         });
 
@@ -1143,10 +1126,7 @@
                 // Обновляем карту при изменении фильтров
                 document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
                     checkbox.addEventListener('change', async () => {
-                        const selectedFilters = [];
-                        document.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-                            selectedFilters.push(cb.nextElementSibling.textContent);
-                        });
+                        const selectedFilters = getSelectedFilters();
                         await renderTopPosts(selectedFilters.length ? selectedFilters : null);
                     });
                 });
