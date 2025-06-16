@@ -625,6 +625,9 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        fetch('https://kiberbezopasniki.onrender.com/health')
+            .then(response => console.log('API доступен:', response.ok))
+            .catch(error => console.error('API недоступен:', error));
         // Инициализация карты
         const map = L.map('map', {
             zoomControl: true,
@@ -641,6 +644,13 @@
         }).addTo(map);
 
         map.zoomControl.setPosition('bottomright');
+
+        setTimeout(() => {
+            if (!map.getCenter()) {
+                console.error('Карта не инициализирована');
+                map.setView([56.835184, 60.609573], 13); // Повторная попытка
+            }
+        }, 1000);
 
         // Настройки API
         const API_URL = 'https://kiberbezopasniki.onrender.com';
@@ -1043,7 +1053,6 @@
 
         // Глобальные переменные
         let allMarkersData = [];
-        let currentMarkers = [];
 
         // Функция создания маркеров
         function createMarkers(posts) {
@@ -1080,7 +1089,10 @@
         async function loadMarkers() {
             try {
                 const response = await fetch(`${API_URL}/points`);
-                if (!response.ok) throw new Error("Ошибка сервера");
+                if (!response.ok) {
+                    console.error('Ошибка сервера:', response.status);
+                    throw new Error("Ошибка сервера");
+                }
                 
                 allMarkersData = await response.json();
                 console.log("Получены метки:", allMarkersData);
@@ -1092,7 +1104,7 @@
                 createMarkers(allMarkersData);
             } catch (error) {
                 console.error("Ошибка загрузки:", error);
-                alert("Не удалось загрузить метки");
+                alert("Не удалось загрузить метки: " + error.message);
             }
         }
 
