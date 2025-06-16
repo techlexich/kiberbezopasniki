@@ -686,9 +686,11 @@
 
         // Функция создания маркеров
         function createMarkers(posts) {
+            // Удаляем старые маркеры
             currentMarkers.forEach(marker => map.removeLayer(marker));
             currentMarkers = [];
 
+            // Добавляем новые маркеры
             posts.forEach(post => {
                 try {
                     const lat = parseFloat(post.latitude);
@@ -713,7 +715,7 @@
             });
         }
 
-        // Загрузка данных
+        // Загрузка данных с сервера
         async function loadMarkers() {
             const loadingIndicator = document.createElement('div');
             loadingIndicator.textContent = 'Загрузка точек...';
@@ -731,7 +733,7 @@
                 const response = await fetch(`${API_URL}/points`);
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`Ошибка сервера: ${response.status}`);
                 }
 
                 const data = await response.json();
@@ -740,6 +742,7 @@
                     throw new Error("Данные не являются массивом");
                 }
 
+                // Сохраняем все данные о точках
                 allMarkersData = data.filter(point => 
                     point.latitude !== undefined && 
                     point.altitude !== undefined
@@ -749,6 +752,7 @@
                     throw new Error("Нет точек с валидными координатами");
                 }
 
+                // Показываем все точки при первой загрузке
                 createMarkers(allMarkersData);
             } catch (error) {
                 console.error("Ошибка загрузки точек:", error);
@@ -763,32 +767,12 @@
                 errorElement.style.background = 'white';
                 errorElement.style.padding = '10px';
                 document.getElementById('map').appendChild(errorElement);
-
-                allMarkersData = [
-                    {
-                        id: 1,
-                        title: "Тестовая точка 1",
-                        latitude: 56.835184,
-                        altitude: 60.609573,
-                        photo_url: "https://via.placeholder.com/200",
-                        tags: ["morning", "winter", "new_architecture", "old_town"]
-                    },
-                    {
-                        id: 2,
-                        title: "Тестовая точка 2",
-                        latitude: 56.838,
-                        altitude: 60.612,
-                        photo_url: "https://via.placeholder.com/200",
-                        tags: ["day", "summer", "monument"]
-                    }
-                ];
-                createMarkers(allMarkersData);
             } finally {
                 loadingIndicator.remove();
             }
         }
 
-        // Фильтрация
+        // Фильтрация точек
         function applyFilters() {
             const activeFilters = [
                 ...Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(el => el.value),
@@ -796,11 +780,13 @@
                 ...Array.from(document.querySelectorAll('input[name="season"]:checked')).map(el => el.value)
             ];
 
+            // Если нет активных фильтров - показываем все точки
             if (activeFilters.length === 0) {
                 createMarkers(allMarkersData);
                 return;
             }
 
+            // Фильтруем точки (должны содержать ВСЕ выбранные фильтры)
             const filtered = allMarkersData.filter(post => {
                 return activeFilters.every(filter => 
                     post.tags && post.tags.includes(filter)
@@ -1125,16 +1111,18 @@
             if (e.target === profileModal) hideModal(profileModal);
         });
 
-        // Инициализация карты и загрузка данных
+        // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 await checkApiAvailability();
                 await updateAuthUI();
                 await checkProfilePage();
-                await loadMarkers();
+                await loadMarkers(); // Загружаем и показываем все точки
 
+                // Назначаем обработчик кнопки "Применить фильтры"
                 document.getElementById('apply-filters').addEventListener('click', applyFilters);
 
+                // Оптимизация для мобильных устройств
                 if (/Mobi|Android/i.test(navigator.userAgent)) {
                     map.options.preferCanvas = true;
                     map.options.fadeAnimation = false;
