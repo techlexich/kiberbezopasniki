@@ -1171,6 +1171,67 @@
             }
         }
 
+        // Глобальные переменные
+        let allMarkers = [];  // Все маркеры
+        let filteredMarkers = [];  // Отфильтрованные маркеры
+
+        // Функция загрузки постов с фильтрами
+        async function loadFilteredPosts(filters = {}) {
+            try {
+                // Формируем параметры запроса
+                const params = new URLSearchParams();
+                if (filters.tags) params.append('tags', filters.tags);
+                if (filters.time) params.append('time', filters.time);
+                if (filters.season) params.append('season', filters.season);
+
+                const response = await fetch(`${API_URL}/points?${params.toString()}`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                return await response.json();
+            } catch (error) {
+                console.error("Ошибка:", error);
+                return [];
+            }
+        }
+
+        // Функция обновления маркеров на карте
+        async function updateMapMarkers(filters = {}) {
+            // Удаляем старые маркеры
+            allMarkers.forEach(marker => map.removeLayer(marker));
+            allMarkers = [];
+            
+            // Загружаем отфильтрованные посты
+            const posts = await loadFilteredPosts(filters);
+            
+            // Добавляем новые маркеры
+            posts.forEach(post => {
+                const marker = L.marker([post.latitude, post.altitude])
+                    .addTo(map)
+                    .bindPopup(`
+                        <h3>${post.username || 'Без названия'}</h3>
+                        <img src="${post.photo_url}" width="200" />
+                        <p>❤️ ${post.likes_count} likes</p>
+                        <div class="post-tags">${post.tags?.join(', ') || ''}</div>
+                    `);
+                allMarkers.push(marker);
+            });
+        }
+
+        // Обработчик применения фильтров
+        document.querySelector('.auth-option.primary').addEventListener('click', async () => {
+            const filters = {
+                tags: Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(cb => cb.value).join(','),
+                time: Array.from(document.querySelectorAll('input[name="time"]:checked')).map(cb => cb.value).join(','),
+                season: Array.from(document.querySelectorAll('input[name="season"]:checked')).map(cb => cb.value).join(',')
+            };
+            
+            await updateMapMarkers(filters);
+        });
+
+        // Инициализация карты при загрузке
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateMapMarkers();  // Загружаем все посты без фильтров
+        });
+
         // Функция для лайка/анлайка поста
         async function toggleLike(postId, button) {
             if (!currentUser) {

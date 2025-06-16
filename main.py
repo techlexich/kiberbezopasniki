@@ -560,21 +560,14 @@ def get_points(
     season: Optional[str] = None
 ):
     try:
-        conn = psycopg2.connect(
-            dbname="auth_db_17at_90uu",
-            user="auth_db_17at_user",
-            password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
-            host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
-            port="5432",
-            sslmode="require",
-            cursor_factory=RealDictCursor
-        )
-        
+        conn = psycopg2.connect(DB_URL)
         with conn.cursor() as cursor:
             query = """
-                SELECT id, latitude, altitude, 
-                       likes_count, photo_url, tags
-                FROM posts 
+                SELECT p.id, p.latitude, p.altitude, 
+                       p.likes_count, p.photo_url, p.tags,
+                       u.username
+                FROM posts p
+                JOIN users u ON p.user_id = u.id
                 WHERE 1=1
             """
             
@@ -583,22 +576,22 @@ def get_points(
             # Фильтрация по категориям (тегам)
             if tags:
                 tag_list = [tag.strip() for tag in tags.split(',')]
-                query += " AND tags && %s"
+                query += " AND p.tags && %s"
                 params.append(tag_list)
             
             # Фильтрация по времени суток
             if time:
                 time_list = [t.strip() for t in time.split(',')]
-                query += " AND tags && %s"
+                query += " AND p.tags && %s"
                 params.append(time_list)
             
             # Фильтрация по времени года
             if season:
                 season_list = [s.strip() for s in season.split(',')]
-                query += " AND tags && %s"
+                query += " AND p.tags && %s"
                 params.append(season_list)
             
-            query += " ORDER BY likes_count DESC LIMIT %s"
+            query += " ORDER BY p.likes_count DESC LIMIT %s"
             params.append(limit)
             
             cursor.execute(query, params)
@@ -661,37 +654,14 @@ async def create_post(
     description: str = Form(default=""),
     altitude: str = Form(...),
     latitude: str = Form(...),
-    # Добавляем параметры для тегов
-    new_architecture: Optional[bool] = Form(default=False),
-    old_town: Optional[bool] = Form(default=False),
-    monument: Optional[bool] = Form(default=False),
-    fountain: Optional[bool] = Form(default=False),
-    time_of_day: str = Form(...),  # morning/day/evening/night
-    season: str = Form(...),       # winter/spring/summer/autumn
+    tags: str = Form(...),  # Теги в формате "Архитектура,История,Утро,Зима"
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    # Собираем теги в массив
-    tags = []
-    
-    # Категории
-    if new_architecture:
-        tags.append("new_architecture")
-    if old_town:
-        tags.append("old_town")
-    if monument:
-        tags.append("monument")
-    if fountain:
-        tags.append("fountain")
-    
-    # Время суток и года
-    tags.append(time_of_day)
-    tags.append(season)
-
     try:
-        # Остальная часть функции остается без изменений
-        # до момента вставки в БД
-        
+        # Загрузка фото в S3 (опущено для краткости)
+        photo_url = "url_to_uploaded_photo"
+
         with db.cursor() as cur:
             cur.execute("""
                 INSERT INTO posts (
@@ -700,13 +670,9 @@ async def create_post(
                     user_id,
                     latitude,
                     altitude,
-                    tags,  # Добавляем поле tags
-                    shooting_time,
-                    created_at,
-                    likes_count,
-                    comments_count
+                    tags
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, NOW(), 0, 0
+                    %s, %s, %s, %s, %s, %s
                 )
                 RETURNING id
             """, (
@@ -715,15 +681,13 @@ async def create_post(
                 current_user["id"],
                 latitude,
                 altitude,
-                tags,  # Передаем массив тегов
-                datetime.now().strftime('%H:%M')
+                tags.split(',')  # Сохраняем теги как массив в PostgreSQL
             ))
             
             new_post = cur.fetchone()
             db.commit()
             
         return {"status": "success", "post_id": new_post["id"]}
-        
     except Exception as e:
         logger.error(f"Error creating post: {str(e)}")
         raise HTTPException(500, detail="Post creation failed")
