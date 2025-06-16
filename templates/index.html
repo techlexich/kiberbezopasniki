@@ -628,6 +628,7 @@
         fetch('https://kiberbezopasniki.onrender.com/health')
             .then(response => console.log('API доступен:', response.ok))
             .catch(error => console.error('API недоступен:', error));
+
         // Инициализация карты
         const map = L.map('map', {
             zoomControl: true,
@@ -648,7 +649,7 @@
         setTimeout(() => {
             if (!map.getCenter()) {
                 console.error('Карта не инициализирована');
-                map.setView([56.835184, 60.609573], 13); // Повторная попытка
+                map.setView([56.835184, 60.609573], 13);
             }
         }, 1000);
 
@@ -658,8 +659,8 @@
         let isApiAvailable = false;
 
         // Глобальные переменные для маркеров
-        let allMarkers = [];  // Все загруженные маркеры
-        let currentMarkers = [];  // Маркеры, которые сейчас отображаются на карте
+        let allMarkersData = [];
+        let currentMarkers = [];
 
         // Проверка доступности API
         async function checkApiAvailability() {
@@ -681,6 +682,132 @@
                 isApiAvailable = false;
                 return false;
             }
+        }
+
+        // Функция создания маркеров
+        function createMarkers(posts) {
+            currentMarkers.forEach(marker => map.removeLayer(marker));
+            currentMarkers = [];
+
+            posts.forEach(post => {
+                try {
+                    const lat = parseFloat(post.latitude);
+                    const lng = parseFloat(post.altitude);
+                    
+                    if (isNaN(lat) || isNaN(lng)) {
+                        console.error("Некорректные координаты:", post);
+                        return;
+                    }
+
+                    const marker = L.marker([lat, lng]).addTo(map)
+                        .bindPopup(`
+                            <h3>${post.title || 'Без названия'}</h3>
+                            <img src="${post.photo_url}" style="max-width:200px;">
+                            <p>Теги: ${post.tags?.join(', ') || 'нет'}</p>
+                        `);
+                        
+                    currentMarkers.push(marker);
+                } catch (e) {
+                    console.error("Ошибка создания маркера:", e);
+                }
+            });
+        }
+
+        // Загрузка данных
+        async function loadMarkers() {
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.textContent = 'Загрузка точек...';
+            loadingIndicator.style.position = 'absolute';
+            loadingIndicator.style.top = '50%';
+            loadingIndicator.style.left = '50%';
+            loadingIndicator.style.transform = 'translate(-50%, -50%)';
+            loadingIndicator.style.zIndex = '1000';
+            loadingIndicator.style.background = 'white';
+            loadingIndicator.style.padding = '10px 20px';
+            loadingIndicator.style.borderRadius = '5px';
+            document.getElementById('map').appendChild(loadingIndicator);
+
+            try {
+                const response = await fetch(`${API_URL}/points`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (!Array.isArray(data)) {
+                    throw new Error("Данные не являются массивом");
+                }
+
+                allMarkersData = data.filter(point => 
+                    point.latitude !== undefined && 
+                    point.altitude !== undefined
+                );
+
+                if (allMarkersData.length === 0) {
+                    throw new Error("Нет точек с валидными координатами");
+                }
+
+                createMarkers(allMarkersData);
+            } catch (error) {
+                console.error("Ошибка загрузки точек:", error);
+                
+                const errorElement = document.createElement('div');
+                errorElement.textContent = `Ошибка загрузки точек: ${error.message}`;
+                errorElement.style.color = 'red';
+                errorElement.style.position = 'absolute';
+                errorElement.style.top = '20px';
+                errorElement.style.left = '20px';
+                errorElement.style.zIndex = '1000';
+                errorElement.style.background = 'white';
+                errorElement.style.padding = '10px';
+                document.getElementById('map').appendChild(errorElement);
+
+                allMarkersData = [
+                    {
+                        id: 1,
+                        title: "Тестовая точка 1",
+                        latitude: 56.835184,
+                        altitude: 60.609573,
+                        photo_url: "https://via.placeholder.com/200",
+                        tags: ["morning", "winter", "new_architecture", "old_town"]
+                    },
+                    {
+                        id: 2,
+                        title: "Тестовая точка 2",
+                        latitude: 56.838,
+                        altitude: 60.612,
+                        photo_url: "https://via.placeholder.com/200",
+                        tags: ["day", "summer", "monument"]
+                    }
+                ];
+                createMarkers(allMarkersData);
+            } finally {
+                loadingIndicator.remove();
+            }
+        }
+
+        // Фильтрация
+        function applyFilters() {
+            const activeFilters = [
+                ...Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(el => el.value),
+                ...Array.from(document.querySelectorAll('input[name="time"]:checked')).map(el => el.value),
+                ...Array.from(document.querySelectorAll('input[name="season"]:checked')).map(el => el.value)
+            ];
+
+            if (activeFilters.length === 0) {
+                createMarkers(allMarkersData);
+                return;
+            }
+
+            const filtered = allMarkersData.filter(post => {
+                return activeFilters.every(filter => 
+                    post.tags && post.tags.includes(filter)
+                );
+            });
+            
+            createMarkers(filtered);
         }
 
         // Элементы интерфейса
@@ -787,19 +914,16 @@
                 const authView = document.getElementById('authenticated-view');
                 
                 if (currentUser) {
-                    // Показываем авторизованный вид
                     document.getElementById('profile-username').textContent = currentUser.username || 'Пользователь';
                     document.getElementById('profile-email').textContent = currentUser.email || 'Не указан';
                     document.getElementById('profile-button').innerHTML = 
                         `<i class="fas fa-user"></i> ${currentUser.username || 'Профиль'}`;
                     
-                    // Жёстко переключаем видимость
                     guestView.style.display = 'none';
                     authView.style.display = 'block';
                     loginForm.classList.remove('active');
                     registerForm.classList.remove('active');
                 } else {
-                    // Показываем гостевой вид
                     document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
                     guestView.style.display = 'flex';
                     authView.style.display = 'none';
@@ -818,7 +942,6 @@
                 return;
             }
             
-            // Просто редирект без проверки (проверка будет на сервере)
             window.location.href = `/profile/${currentUser.username}`;
         });
 
@@ -832,7 +955,6 @@
                         timeout: 5000
                     });
                     if (!response.ok) {
-                        // Сервер сам перенаправит на 404
                         return;
                     }
                 } catch (error) {
@@ -1009,23 +1131,10 @@
                 await checkApiAvailability();
                 await updateAuthUI();
                 await checkProfilePage();
+                await loadMarkers();
 
-                // Загружаем все посты
-                const response = await fetch(`${API_URL}/points`);
-                if (!response.ok) throw new Error("Ошибка загрузки данных");
-                allMarkers = await response.json();
+                document.getElementById('apply-filters').addEventListener('click', applyFilters);
 
-                // Проверяем координаты
-                allMarkers = allMarkers.filter(post => {
-                    const lat = parseFloat(post.latitude);
-                    const lng = parseFloat(post.altitude);
-                    return !isNaN(lat) && !isNaN(lng);
-                });
-
-                // Показываем все маркеры
-                addMarkersToMap(allMarkers);
-
-                // Оптимизация для мобильных устройств
                 if (/Mobi|Android/i.test(navigator.userAgent)) {
                     map.options.preferCanvas = true;
                     map.options.fadeAnimation = false;
@@ -1034,11 +1143,12 @@
                 console.error('Ошибка инициализации:', error);
             }
         });
+
         // Обновление размера карты при изменении окна
         window.addEventListener('resize', () => {
             map.invalidateSize();
         });
-        
+
         // Загрузка топовых постов
         async function loadTopPosts(limit = 10) {
             try {
@@ -1050,124 +1160,6 @@
                 return [];
             }
         }
-
-        // Глобальные переменные
-        let allMarkersData = [];
-
-        // Функция создания маркеров
-        function createMarkers(posts) {
-            // Удаляем старые маркеры
-            currentMarkers.forEach(marker => map.removeLayer(marker));
-            currentMarkers = [];
-
-            // Добавляем новые
-            posts.forEach(post => {
-                try {
-                    const lat = parseFloat(post.latitude);
-                    const lng = parseFloat(post.altitude);
-                    
-                    if (isNaN(lat) || isNaN(lng)) {
-                        console.error("Некорректные координаты:", post);
-                        return;
-                    }
-
-                    const marker = L.marker([lat, lng]).addTo(map)
-                        .bindPopup(`
-                            <h3>${post.title || 'Без названия'}</h3>
-                            <img src="${post.photo_url}" style="max-width:200px;">
-                            <p>Теги: ${post.tags?.join(', ') || 'нет'}</p>
-                        `);
-                        
-                    currentMarkers.push(marker);
-                } catch (e) {
-                    console.error("Ошибка создания маркера:", e);
-                }
-            });
-        }
-
-        // Загрузка данных
-        async function loadMarkers() {
-            const loadingIndicator = document.createElement('div');
-            loadingIndicator.textContent = 'Загрузка точек...';
-            loadingIndicator.style.position = 'absolute';
-            loadingIndicator.style.top = '50%';
-            loadingIndicator.style.left = '50%';
-            loadingIndicator.style.transform = 'translate(-50%, -50%)';
-            loadingIndicator.style.zIndex = '1000';
-            loadingIndicator.style.background = 'white';
-            loadingIndicator.style.padding = '10px 20px';
-            loadingIndicator.style.borderRadius = '5px';
-            document.getElementById('map').appendChild(loadingIndicator);
-
-            try {
-                const response = await fetch(`${API_URL}/points`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                
-                if (!Array.isArray(data)) {
-                    throw new Error("Данные не являются массивом");
-                }
-
-                // Проверяем, есть ли у точек координаты
-                const validPoints = data.filter(point => 
-                    point.latitude !== undefined && 
-                    point.altitude !== undefined
-                );
-
-                if (validPoints.length === 0) {
-                    throw new Error("Нет точек с валидными координатами");
-                }
-
-                createMarkers(validPoints);
-            } catch (error) {
-                console.error("Ошибка загрузки точек:", error);
-                
-                const errorElement = document.createElement('div');
-                errorElement.textContent = `Ошибка загрузки точек: ${error.message}`;
-                errorElement.style.color = 'red';
-                errorElement.style.position = 'absolute';
-                errorElement.style.top = '20px';
-                errorElement.style.left = '20px';
-                errorElement.style.zIndex = '1000';
-                errorElement.style.background = 'white';
-                errorElement.style.padding = '10px';
-                document.getElementById('map').appendChild(errorElement);
-            } finally {
-                loadingIndicator.remove();
-            }
-        }
-
-        // Фильтрация
-        function applyFilters() {
-            const activeTags = [
-                ...Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(el => el.value),
-                ...Array.from(document.querySelectorAll('input[name="time"]:checked')).map(el => el.value),
-                ...Array.from(document.querySelectorAll('input[name="season"]:checked')).map(el => el.value)
-            ];
-
-            if (activeTags.length === 0) {
-                createMarkers(allMarkersData);
-                return;
-            }
-
-            const filtered = allMarkersData.filter(post => 
-                post.tags && post.tags.some(tag => activeTags.includes(tag))
-            );
-            
-            createMarkers(filtered);
-        }
-
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', () => {
-            loadMarkers();
-            
-            // Назначение обработчика кнопки
-            document.querySelector('.auth-option.primary').addEventListener('click', applyFilters);
-        });
 
         async function fetchWeatherTips() {
             try {
@@ -1205,10 +1197,8 @@
             const container = document.getElementById('posts-container');
             
             try {
-                // Показываем индикатор загрузки
                 container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
                 
-                // Получаем токен из localStorage
                 const token = localStorage.getItem('access_token');
                 const headers = {};
                 
@@ -1216,7 +1206,6 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
                 
-                // Делаем запрос к API
                 const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
                     headers: headers
                 });
@@ -1227,10 +1216,8 @@
                 
                 const posts = await response.json();
                 
-                // Очищаем контейнер
                 container.innerHTML = '';
                 
-                // Если постов нет
                 if (posts.length === 0) {
                     container.innerHTML = `
                         <div class="no-posts">
@@ -1241,7 +1228,6 @@
                     return;
                 }
                 
-                // Отображаем посты
                 posts.forEach(post => {
                     const postElement = document.createElement('div');
                     postElement.className = 'post-card';
@@ -1289,7 +1275,6 @@
         // Функция загрузки постов с фильтрами
         async function loadFilteredPosts(filters = {}) {
             try {
-                // Формируем параметры запроса
                 const params = new URLSearchParams();
                 if (filters.tags) params.append('tags', filters.tags);
                 if (filters.time) params.append('time', filters.time);
@@ -1306,14 +1291,11 @@
 
         // Функция обновления маркеров на карте
         async function updateMapMarkers(filters = {}) {
-            // Удаляем старые маркеры
             allMarkers.forEach(marker => map.removeLayer(marker));
             allMarkers = [];
             
-            // Загружаем отфильтрованные посты
             const posts = await loadFilteredPosts(filters);
             
-            // Добавляем новые маркеры
             posts.forEach(post => {
                 const marker = L.marker([post.latitude, post.altitude])
                     .addTo(map)
@@ -1326,17 +1308,6 @@
                 allMarkers.push(marker);
             });
         }
-
-        // Обработчик применения фильтров
-        document.querySelector('.auth-option.primary').addEventListener('click', async () => {
-            const filters = {
-                tags: Array.from(document.querySelectorAll('input[name="tag"]:checked')).map(cb => cb.value).join(','),
-                time: Array.from(document.querySelectorAll('input[name="time"]:checked')).map(cb => cb.value).join(','),
-                season: Array.from(document.querySelectorAll('input[name="season"]:checked')).map(cb => cb.value).join(',')
-            };
-            
-            await updateMapMarkers(filters);
-        });
 
         // Функция для лайка/анлайка поста
         async function toggleLike(postId, button) {
@@ -1364,7 +1335,6 @@
                 
                 const result = await response.json();
                 
-                // Обновляем UI
                 button.classList.toggle('liked');
                 likesCountElement.textContent = result.likes_count;
                 
