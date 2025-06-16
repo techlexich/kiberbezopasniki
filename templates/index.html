@@ -1087,24 +1087,57 @@
 
         // Загрузка данных
         async function loadMarkers() {
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.textContent = 'Загрузка точек...';
+            loadingIndicator.style.position = 'absolute';
+            loadingIndicator.style.top = '50%';
+            loadingIndicator.style.left = '50%';
+            loadingIndicator.style.transform = 'translate(-50%, -50%)';
+            loadingIndicator.style.zIndex = '1000';
+            loadingIndicator.style.background = 'white';
+            loadingIndicator.style.padding = '10px 20px';
+            loadingIndicator.style.borderRadius = '5px';
+            document.getElementById('map').appendChild(loadingIndicator);
+
             try {
                 const response = await fetch(`${API_URL}/points`);
+                
                 if (!response.ok) {
-                    console.error('Ошибка сервера:', response.status);
-                    throw new Error("Ошибка сервера");
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
+
+                const data = await response.json();
                 
-                allMarkersData = await response.json();
-                console.log("Получены метки:", allMarkersData);
-                
-                if (!Array.isArray(allMarkersData)) {
-                    throw new Error("Данные не в формате массива");
+                if (!Array.isArray(data)) {
+                    throw new Error("Данные не являются массивом");
                 }
-                
-                createMarkers(allMarkersData);
+
+                // Проверяем, есть ли у точек координаты
+                const validPoints = data.filter(point => 
+                    point.latitude !== undefined && 
+                    point.altitude !== undefined
+                );
+
+                if (validPoints.length === 0) {
+                    throw new Error("Нет точек с валидными координатами");
+                }
+
+                createMarkers(validPoints);
             } catch (error) {
-                console.error("Ошибка загрузки:", error);
-                alert("Не удалось загрузить метки: " + error.message);
+                console.error("Ошибка загрузки точек:", error);
+                
+                const errorElement = document.createElement('div');
+                errorElement.textContent = `Ошибка загрузки точек: ${error.message}`;
+                errorElement.style.color = 'red';
+                errorElement.style.position = 'absolute';
+                errorElement.style.top = '20px';
+                errorElement.style.left = '20px';
+                errorElement.style.zIndex = '1000';
+                errorElement.style.background = 'white';
+                errorElement.style.padding = '10px';
+                document.getElementById('map').appendChild(errorElement);
+            } finally {
+                loadingIndicator.remove();
             }
         }
 
