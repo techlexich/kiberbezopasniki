@@ -644,7 +644,23 @@
         </div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        const tagTranslations = {
+            'morning': 'Утро',
+            'day': 'День',
+            'evening': 'Вечер',
+            'night': 'Ночь',
+            'winter': 'Зима',
+            'spring': 'Весна',
+            'summer': 'Лето',
+            'autumn': 'Осень',
+            'new_architecture': 'Архитектура',
+            'old_town': 'История',
+            'monument': 'Памятники',
+            'fountain': 'Фонтаны'
+        };
+        
         // Инициализация карты
         const map = L.map('map', {
             zoomControl: true,
@@ -735,6 +751,18 @@
                 });
             } catch (error) {
                 console.error("Ошибка:", error);
+            }
+        }
+
+        // Загрузка топовых постов (старая версия для совместимости)
+        async function loadTopPosts(limit = 10) {
+            try {
+                const response = await fetch(`${API_URL}/points`);
+                if (!response.ok) throw new Error("Ошибка загрузки данных");
+                return await response.json();
+            } catch (error) {
+                console.error("Ошибка:", error);
+                return [];
             }
         }
 
@@ -1158,6 +1186,133 @@
         // Инициализация виджета погоды
         document.getElementById('refresh-weather').addEventListener('click', updateWeatherWidget);
         updateWeatherWidget(); // Загружаем погоду при старте
+
+        // Функция для загрузки постов
+        async function loadPosts() {
+            const container = document.getElementById('posts-container');
+            
+            try {
+                // Показываем индикатор загрузки
+                container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+                
+                // Получаем токен из localStorage
+                const token = localStorage.getItem('access_token');
+                const headers = {};
+                
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                // Делаем запрос к API
+                const response = await fetch(`${API_URL}/tape/posts?limit=10`, {
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки постов');
+                }
+                
+                const posts = await response.json();
+                
+                // Очищаем контейнер
+                container.innerHTML = '';
+                
+                // Если постов нет
+                if (posts.length === 0) {
+                    container.innerHTML = `
+                        <div class="no-posts">
+                            <i class="fas fa-camera"></i>
+                            <p>Пока нет ни одного поста</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Отображаем посты
+                posts.forEach(post => {
+                    const postElement = document.createElement('div');
+                    postElement.className = 'post-card';
+                    postElement.dataset.postId = post.id;
+                    
+                    postElement.innerHTML = `
+                        <img src="${post.photo_url}" class="post-image" alt="Фото места">
+                        <div class="post-content">
+                            <div class="post-header">
+                                <img src="${post.user_avatar || '/default-avatar.jpg'}" class="user-avatar" alt="Аватар">
+                                <div class="user-info">
+                                    <p class="username">${post.username}</p>
+                                    <p class="post-time">${new Date(post.created_at).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <p class="post-description">${post.description || ''}</p>
+                            <div class="location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                Широта: ${post.latitude.toFixed(6)}, Долгота: ${post.altitude.toFixed(6)}
+                            </div>
+                            <div class="post-actions">
+                                <button class="like-button ${post.is_liked ? 'liked' : ''}" onclick="toggleLike(${post.id}, this)">
+                                    <i class="fas fa-heart"></i>
+                                    <span class="likes-count">${post.likes_count}</span>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(postElement);
+                });
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                container.innerHTML = `
+                    <div class="error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>${error.message}</p>
+                        <button onclick="loadPosts()">Попробовать снова</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Функция для лайка/анлайка поста
+        async function toggleLike(postId, button) {
+            if (!currentUser) {
+                alert('Для этого действия нужно войти в аккаунт');
+                return;
+            }
+            
+            const isLiked = button.classList.contains('liked');
+            const endpoint = isLiked ? 'unlike' : 'like';
+            const likesCountElement = button.querySelector('.likes-count');
+            
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                
+                const result = await response.json();
+                
+                // Обновляем UI
+                button.classList.toggle('liked');
+                likesCountElement.textContent = result.likes_count;
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Не удалось выполнить действие');
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPosts();
+        });
     </script>
 </body>
 </html>
