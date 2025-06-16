@@ -756,12 +756,12 @@
             }
         }
 
-        // Функция для сбора выбранных фильтров
+        // Функция для сбора выбранных фильтров (ИСПРАВЛЕНА)
         function getSelectedFilters() {
             const selectedFilters = [];
             
-            // Собираем все выбранные checkbox'ы
-            document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+            // Собираем ВСЕ выбранные checkbox'ы из ВСЕХ групп
+            document.querySelectorAll('.filter-options input[type="checkbox"]:checked').forEach(checkbox => {
                 selectedFilters.push(checkbox.value);
             });
             
@@ -1071,11 +1071,20 @@
             hideModal(profileModal);
         });
 
-        // Обработчик кнопки "Применить фильтры"
+        // Обработчик кнопки "Применить фильтры" (ИСПРАВЛЕН)
         document.querySelector('.auth-option.primary').addEventListener('click', async () => {
             const selectedFilters = getSelectedFilters();
+            console.log("Applying filters:", selectedFilters);
             await renderTopPosts(selectedFilters.length ? selectedFilters : null);
             hideModal(filtersModal);
+        });
+
+        // Обработчик изменения фильтров в реальном времени (ИСПРАВЛЕН)
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', async () => {
+                const selectedFilters = getSelectedFilters();
+                await renderTopPosts(selectedFilters.length ? selectedFilters : null);
+            });
         });
 
         // Функция для обновления виджета погоды
@@ -1123,14 +1132,6 @@
                     map.options.fadeAnimation = false;
                 }
                 
-                // Обновляем карту при изменении фильтров
-                document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                    checkbox.addEventListener('change', async () => {
-                        const selectedFilters = getSelectedFilters();
-                        await renderTopPosts(selectedFilters.length ? selectedFilters : null);
-                    });
-                });
-
                 // Инициализация виджета погоды
                 document.getElementById('refresh-weather').addEventListener('click', updateWeatherWidget);
                 updateWeatherWidget();
