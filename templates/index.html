@@ -1026,17 +1026,13 @@
 
         // Добавление маркеров на карту
         async function renderTopPosts() {
-            const posts = await loadTopPosts(10);
-            posts.forEach(post => {
-                const lat = parseFloat(post.latitude);
-                const lng = parseFloat(post.altitude);
+            // Получаем выбранные фильтры
+            const selectedTags = Array.from(document.querySelectorAll('input[name="tag"]:checked'))
+                .map(el => el.value);
             
-                if (isNaN(lat) || isNaN(lng)) {
-                    console.error("Некорректные координаты:", post.latitude, post.altitude);
-                    return;
-                }
+            const selectedTimes = Array.from(document.querySelectorAll('input[name="time"]:checked'))
+                .map(el => el.value);
             
-<<<<<<< HEAD
             const selectedSeasons = Array.from(document.querySelectorAll('input[name="season"]:checked'))
                 .map(el => el.value);
 
@@ -1084,26 +1080,7 @@
                 alert("Не удалось загрузить данные. Попробуйте позже.");
             }
         }
-=======
-                L.marker([lat, lng]).addTo(map).bindPopup(`...`);
-            });
-            if (posts.length === 0) {
-                console.log("Нет данных для отображения");
-                return;
-            }
-            
-            posts.forEach(post => {
-                L.marker([post.latitude, post.altitude])
-                    .addTo(map)
-                    .bindPopup(`
-                        <h3>${post.title}</h3>
-                        <img src="${post.photo_url}" width="200" />
-                        <p>❤️ ${post.likes_count} likes</p>
-                    `);
-            });
-        }
 
->>>>>>> a9227e437e8f0a328512e8997296c29b87997f9b
         async function fetchWeatherTips() {
             try {
                 const response = await fetch(`${API_URL}/weather-message`);
