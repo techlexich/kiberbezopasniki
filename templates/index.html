@@ -1241,6 +1241,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadPosts();
         });
+        // Обработчик для кнопки комментариев в ленте
+        document.addEventListener('click', async (e) => {
+            if (e.target.closest('.view-comments')) {
+                const postId = e.target.closest('.post-card').dataset.postId;
+                window.location.href = `/post?id=${postId}`;
+        }
+});
     </script>
 </body>
 </html>

@@ -228,7 +228,6 @@
         </header>
     </div>
 
-    <!-- Модальное окно комментариев -->
     <div id="comments-modal" class="comments-modal">
         <div class="comments-modal-content">
             <span class="close-comments-modal">&times;</span>
@@ -241,334 +240,102 @@
         </div>
     </div>
 
-    <!-- Модальное окно для изображения -->
-    <div id="image-modal" class="image-modal">
-        <span class="close-image-modal">&times;</span>
-        <img class="image-modal-content" id="expanded-image">
-    </div>
-
-    <!-- Модальное окно профиля -->
-    <div id="profile-modal" class="profile-modal">
-        <!-- ... (ваш существующий код профиля) ... -->
-    </div>
-
-    <button class="new-post-button">
-        <i class="fas fa-plus"></i>
-    </button>
-
     <script>
-        // Конфигурация API
+        // Основные переменные
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
         let currentPostId = null;
 
-        // Инициализация при загрузке страницы
+        // Инициализация
         document.addEventListener('DOMContentLoaded', async () => {
             await checkAuth();
-            await renderPosts();
+            await loadPosts();
             setupEventListeners();
         });
 
         // Проверка авторизации
         async function checkAuth() {
             const token = localStorage.getItem('access_token');
-            if (!token) {
-                currentUser = null;
-                return;
-            }
-
+            if (!token) return;
+            
             try {
                 const response = await fetch(`${API_URL}/users/me`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: {'Authorization': `Bearer ${token}`}
                 });
-
-                if (response.ok) {
-                    currentUser = await response.json();
-                    updateAuthUI();
-                } else {
-                    localStorage.removeItem('access_token');
-                    currentUser = null;
-                }
-            } catch (error) {
-                console.error('Ошибка проверки авторизации:', error);
-                currentUser = null;
+                if (response.ok) currentUser = await response.json();
+            } catch (e) {
+                console.error('Auth error:', e);
             }
         }
 
-        // Обновление UI в зависимости от авторизации
-        function updateAuthUI() {
-            const authView = document.getElementById('authenticated-view');
-            const guestView = document.getElementById('guest-view');
-            
-            if (currentUser) {
-                document.getElementById('profile-username').textContent = currentUser.username;
-                document.getElementById('profile-email').textContent = currentUser.email;
-                document.getElementById('profile-button').innerHTML = `<i class="fas fa-user"></i> ${currentUser.username}`;
-                authView.style.display = 'block';
-                guestView.style.display = 'none';
-            } else {
-                document.getElementById('profile-button').innerHTML = '<i class="fas fa-user"></i> Профиль';
-                authView.style.display = 'none';
-                guestView.style.display = 'flex';
-            }
-        }
-
-        // Загрузка и отображение постов
-        async function renderPosts() {
-            const container = document.getElementById('posts-container');
-            
+        // Загрузка постов
+        async function loadPosts() {
             try {
-                // Показываем индикатор загрузки
-                container.innerHTML = `
-                    <header class="header">
-                        <div class="logo">FRAMES</div>
-                        <div class="nav-buttons">
-                            <button id="profile-button" class="nav-button">
-                                <i class="fas fa-user"></i> Профиль
-                            </button>
-                            <form action="/">
-                                <button class="nav-button">
-                                    <i class="fas fa-map-marker-alt"></i> Карта
-                                </button>
-                            </form>
-                        </div>
-                    </header>
-                    <div class="loading-posts">
-                        <div class="loading" style="width: 100%; height: 100px;"></div>
-                        <div class="loading" style="width: 100%; height: 300px; margin: 20px 0;"></div>
-                    </div>
-                `;
-
-                // Загрузка постов
                 const response = await fetch(`${API_URL}/tape/posts`);
-                if (!response.ok) throw new Error('Ошибка загрузки ленты');
-                
                 const posts = await response.json();
-                renderPostsList(posts);
+                renderPosts(posts);
             } catch (error) {
-                console.error('Ошибка:', error);
-                container.innerHTML = `
-                    <header class="header">
-                        <div class="logo">FRAMES</div>
-                        <div class="nav-buttons">
-                            <button id="profile-button" class="nav-button">
-                                <i class="fas fa-user"></i> Профиль
-                            </button>
-                            <form action="/">
-                                <button class="nav-button">
-                                    <i class="fas fa-map-marker-alt"></i> Карта
-                                </button>
-                            </form>
-                        </div>
-                    </header>
-                    <div class="error-message">
-                        <p>Не удалось загрузить ленту</p>
-                        <button onclick="location.reload()" class="nav-button">
-                            <i class="fas fa-sync-alt"></i> Попробовать снова
-                        </button>
-                    </div>
-                `;
+                console.error('Failed to load posts:', error);
             }
         }
 
-        // Рендер списка постов
-        function renderPostsList(posts) {
+        // Отображение постов
+        function renderPosts(posts) {
             const container = document.getElementById('posts-container');
-            
-            if (!posts || posts.length === 0) {
-                container.innerHTML = `
-                    <header class="header">
-                        <div class="logo">FRAMES</div>
-                        <div class="nav-buttons">
-                            <button id="profile-button" class="nav-button">
-                                <i class="fas fa-user"></i> Профиль
-                            </button>
-                            <form action="/">
-                                <button class="nav-button">
-                                    <i class="fas fa-map-marker-alt"></i> Карта
-                                </button>
-                            </form>
-                        </div>
-                    </header>
-                    <div class="no-posts">
-                        <p>Пока нет постов</p>
-                        ${!currentUser ? `
-                            <button onclick="showModal(document.getElementById('profile-modal'))" class="nav-button">
-                                <i class="fas fa-sign-in-alt"></i> Войти, чтобы добавить пост
-                            </button>
-                        ` : `
-                            <button onclick="window.location.href='/new-post'" class="nav-button">
-                                <i class="fas fa-plus"></i> Добавить первый пост
-                            </button>
-                        `}
-                    </div>
-                `;
-                return;
-            }
-
-            let postsHTML = `
-                <header class="header">
-                    <div class="logo">FRAMES</div>
-                    <div class="nav-buttons">
-                        <button id="profile-button" class="nav-button">
-                            <i class="fas fa-user"></i> Профиль
+            container.innerHTML = posts.map(post => `
+                <div class="post" data-post-id="${post.id}">
+                    <!-- ... (остальная разметка поста) ... -->
+                    <div class="post-actions">
+                        <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
+                            <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
+                            <span>${post.likes_count}</span>
                         </button>
-                        <form action="/">
-                            <button class="nav-button">
-                                <i class="fas fa-map-marker-alt"></i> Карта
-                            </button>
-                        </form>
-                    </div>
-                </header>
-            `;
-
-            posts.forEach(post => {
-                const postDate = new Date(post.created_at).toLocaleString('ru-RU');
-                postsHTML += `
-                    <div class="post" data-post-id="${post.id}">
-                        <div class="post-header">
-                            <div class="avatar">${post.username.charAt(0).toUpperCase()}</div>
-                            <div class="user-info">
-                                <div class="username">${post.username}</div>
-                                <div class="post-time">${postDate}</div>
-                            </div>
-                        </div>
-                        ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                        ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
-                        <div class="post-actions">
-                            <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
-                                <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
-                                <span>${post.likes_count}</span>
-                            </button>
-                            <button class="action-button comment-button">
-                                <i class="far fa-comment"></i>
-                                <span>${post.comments_count}</span>
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = postsHTML;
-        }
-
-        // Настройка обработчиков событий
-        function setupEventListeners() {
-            // Обработчик кнопки комментариев
-            document.addEventListener('click', async (e) => {
-                if (e.target.closest('.comment-button')) {
-                    const postElement = e.target.closest('.post');
-                    currentPostId = postElement.dataset.postId;
-                    await openCommentsModal(currentPostId);
-                }
-            });
-
-            // Обработчик отправки комментария
-            document.getElementById('submit-comment').addEventListener('click', async () => {
-                await submitComment();
-            });
-
-            // Обработчик закрытия модального окна комментариев
-            document.querySelector('.close-comments-modal').addEventListener('click', () => {
-                closeCommentsModal();
-            });
-
-            // Обработчик нажатия Enter в поле комментария
-            document.getElementById('comment-input').addEventListener('keypress', async (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    await submitComment();
-                }
-            });
-        }
-
-        // Открытие модального окна комментариев
-        async function openCommentsModal(postId) {
-            if (!currentUser) {
-                showModal(document.getElementById('profile-modal'));
-                alert('Для просмотра комментариев войдите в систему');
-                return;
-            }
-
-            const modal = document.getElementById('comments-modal');
-            const commentsList = document.getElementById('comments-list');
-            const commentInput = document.getElementById('comment-input');
-            
-            modal.style.display = 'flex';
-            commentsList.innerHTML = '<div class="loading-comments"><i class="fas fa-spinner fa-spin"></i> Загрузка комментариев...</div>';
-            commentInput.value = '';
-
-            try {
-                const response = await fetch(`${API_URL}/posts/${postId}/comments`);
-                if (!response.ok) throw new Error('Ошибка загрузки комментариев');
-                
-                const comments = await response.json();
-                renderComments(comments);
-            } catch (error) {
-                console.error('Ошибка:', error);
-                commentsList.innerHTML = `<div class="error-message">${error.message || 'Ошибка загрузки комментариев'}</div>`;
-            }
-        }
-
-        // Закрытие модального окна комментариев
-        function closeCommentsModal() {
-            document.getElementById('comments-modal').style.display = 'none';
-            currentPostId = null;
-        }
-
-        // Рендер списка комментариев
-        function renderComments(comments) {
-            const commentsList = document.getElementById('comments-list');
-            
-            if (!comments || comments.length === 0) {
-                commentsList.innerHTML = '<div class="no-comments">Пока нет комментариев</div>';
-                return;
-            }
-
-            commentsList.innerHTML = comments.map(comment => `
-                <div class="comment" data-comment-id="${comment.id}">
-                    <div class="comment-avatar">${comment.username.charAt(0).toUpperCase()}</div>
-                    <div class="comment-content">
-                        <div class="comment-header">
-                            <span class="comment-username">${comment.username}</span>
-                            <span class="comment-time">${new Date(comment.created_at).toLocaleString('ru-RU')}</span>
-                        </div>
-                        <p class="comment-text">${comment.text}</p>
-                        ${comment.user_id === currentUser.id ? `
-                            <button class="delete-comment-btn" data-comment-id="${comment.id}">
-                                <i class="fas fa-trash-alt"></i> Удалить
-                            </button>
-                        ` : ''}
+                        <button class="action-button comment-btn">
+                            <i class="far fa-comment"></i>
+                            <span>${post.comments_count}</span>
+                        </button>
                     </div>
                 </div>
             `).join('');
-
-            // Добавляем обработчики для кнопок удаления
-            document.querySelectorAll('.delete-comment-btn').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    const commentId = e.target.closest('.delete-comment-btn').dataset.commentId;
-                    await deleteComment(commentId);
-                });
-            });
         }
 
-        // Отправка нового комментария
-        async function submitComment() {
-            if (!currentPostId) return;
+        // Работа с комментариями
+        async function openCommentsModal(postId) {
+            currentPostId = postId;
+            const modal = document.getElementById('comments-modal');
+            modal.style.display = 'flex';
             
-            const commentInput = document.getElementById('comment-input');
-            const text = commentInput.value.trim();
-            
-            if (!text) {
-                alert('Комментарий не может быть пустым');
-                return;
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/comments`);
+                const comments = await response.json();
+                renderComments(comments);
+            } catch (error) {
+                console.error('Failed to load comments:', error);
             }
+        }
 
-            const submitBtn = document.getElementById('submit-comment');
-            submitBtn.disabled = true;
-            
+        function renderComments(comments) {
+            const container = document.getElementById('comments-list');
+            container.innerHTML = comments.map(comment => `
+                <div class="comment" data-comment-id="${comment.id}">
+                    <div class="comment-avatar">${comment.username.charAt(0)}</div>
+                    <div class="comment-content">
+                        <div class="comment-header">
+                            <span class="comment-username">${comment.username}</span>
+                            <span class="comment-time">${new Date(comment.created_at).toLocaleString()}</span>
+                            ${comment.user_id === currentUser?.id ? `
+                                <button class="delete-comment-btn" data-comment-id="${comment.id}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                        <p class="comment-text">${comment.text}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addComment(text) {
             try {
                 const response = await fetch(`${API_URL}/posts/${currentPostId}/comments`, {
                     method: 'POST',
@@ -578,59 +345,37 @@
                     },
                     body: JSON.stringify({ text })
                 });
-
-                if (!response.ok) throw new Error('Ошибка отправки комментария');
-                
-                commentInput.value = '';
-                await openCommentsModal(currentPostId); // Перезагружаем комментарии
-                
-                // Обновляем счетчик комментариев в посте
-                updateCommentsCounter(currentPostId, 1);
+                return await response.json();
             } catch (error) {
-                console.error('Ошибка:', error);
-                alert(error.message || 'Не удалось отправить комментарий');
-            } finally {
-                submitBtn.disabled = false;
+                console.error('Failed to add comment:', error);
             }
         }
 
-        // Удаление комментария
-        async function deleteComment(commentId) {
-            if (!confirm('Вы уверены, что хотите удалить этот комментарий?')) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/comments/${commentId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                    }
-                });
+        // Настройка обработчиков событий
+        function setupEventListeners() {
+            // Открытие комментариев
+            document.addEventListener('click', async (e) => {
+                if (e.target.closest('.comment-btn')) {
+                    const postId = e.target.closest('.post').dataset.postId;
+                    await openCommentsModal(postId);
+                }
+            });
 
-                if (!response.ok) throw new Error('Ошибка удаления комментария');
+            // Отправка комментария
+            document.getElementById('submit-comment').addEventListener('click', async () => {
+                const text = document.getElementById('comment-input').value.trim();
+                if (!text) return;
                 
-                await openCommentsModal(currentPostId); // Перезагружаем комментарии
-                
-                // Обновляем счетчик комментариев в посте
-                updateCommentsCounter(currentPostId, -1);
-            } catch (error) {
-                console.error('Ошибка:', error);
-                alert(error.message || 'Не удалось удалить комментарий');
-            }
-        }
+                await addComment(text);
+                document.getElementById('comment-input').value = '';
+                await openCommentsModal(currentPostId);
+            });
 
-        // Обновление счетчика комментариев в посте
-        function updateCommentsCounter(postId, change) {
-            const postElement = document.querySelector(`.post[data-post-id="${postId}"]`);
-            if (!postElement) return;
-            
-            const counterElement = postElement.querySelector('.comment-button span');
-            if (counterElement) {
-                const currentCount = parseInt(counterElement.textContent) || 0;
-                counterElement.textContent = Math.max(0, currentCount + change);
-            }
+            // Закрытие модального окна
+            document.querySelector('.close-comments-modal').addEventListener('click', () => {
+                document.getElementById('comments-modal').style.display = 'none';
+            });
         }
-
-        // ... (остальные функции из вашего кода) ...
     </script>
 </body>
 </html>

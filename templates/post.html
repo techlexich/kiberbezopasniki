@@ -359,269 +359,58 @@
         </button>
     </header>
 
-    <div class="post-container" id="post-container">
-        <div class="loading-post">
-            <i class="fas fa-spinner fa-spin"></i> Загрузка поста...
-        </div>
+    <div class="post-container">
+        <!-- ... (разметка поста) ... -->
     </div>
 
     <div class="comments-section">
         <h3 class="comments-title"><i class="fas fa-comments"></i> Комментарии</h3>
-        <div class="comments-list" id="comments-list">
-            <div class="loading-comments">
-                <i class="fas fa-spinner fa-spin"></i> Загрузка комментариев...
-            </div>
-        </div>
-        <div class="add-comment-form" id="comment-form">
+        <div class="comments-list" id="comments-list"></div>
+        <div class="add-comment-form">
             <textarea class="comment-input" id="comment-input" placeholder="Напишите комментарий..."></textarea>
             <button class="submit-comment" id="submit-comment">Отправить</button>
         </div>
     </div>
 
     <script>
-        // Конфигурация API
         const API_URL = 'https://kiberbezopasniki.onrender.com';
         let currentUser = null;
-        let currentPostId = null;
+        const postId = new URLSearchParams(window.location.search).get('id');
 
-        // Инициализация при загрузке страницы
+        // Инициализация
         document.addEventListener('DOMContentLoaded', async () => {
-            currentPostId = new URLSearchParams(window.location.search).get('id');
-            if (!currentPostId) {
-                window.location.href = '/';
-                return;
-            }
-
             await checkAuth();
-            await loadPost(currentPostId);
-            await loadComments(currentPostId);
+            await loadPost();
+            await loadComments();
             setupEventListeners();
         });
 
-        // Проверка авторизации
-        async function checkAuth() {
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                currentUser = null;
-                updateAuthUI();
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_URL}/users/me`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    currentUser = await response.json();
-                } else {
-                    localStorage.removeItem('access_token');
-                    currentUser = null;
-                }
-            } catch (error) {
-                console.error('Ошибка проверки авторизации:', error);
-                currentUser = null;
-            }
-            
-            updateAuthUI();
-        }
-
-        // Обновление UI в зависимости от авторизации
-        function updateAuthUI() {
-            const commentForm = document.getElementById('comment-form');
-            if (currentUser) {
-                commentForm.style.display = 'block';
-            } else {
-                commentForm.style.display = 'none';
-            }
-        }
-
         // Загрузка поста
-        async function loadPost(postId) {
-            const container = document.getElementById('post-container');
-            
+        async function loadPost() {
             try {
                 const response = await fetch(`${API_URL}/posts/${postId}`);
-                if (!response.ok) throw new Error('Ошибка загрузки поста');
-                
                 const post = await response.json();
                 renderPost(post);
             } catch (error) {
-                console.error('Ошибка:', error);
-                container.innerHTML = `
-                    <div class="error-message">
-                        <p>Не удалось загрузить пост</p>
-                        <button onclick="window.location.href='/'" class="back-button">
-                            <i class="fas fa-arrow-left"></i> Вернуться в ленту
-                        </button>
-                        ${error.message ? `<p class="error-detail">${error.message}</p>` : ''}
-                    </div>
-                `;
-            }
-        }
-
-        // Рендер поста
-        function renderPost(post) {
-            const container = document.getElementById('post-container');
-            const postDate = new Date(post.created_at).toLocaleString('ru-RU');
-            
-            container.innerHTML = `
-                <div class="post-header">
-                    <div class="post-avatar">${post.username.charAt(0).toUpperCase()}</div>
-                    <div class="post-user-info">
-                        <div class="post-username">${post.username}</div>
-                        <div class="post-time">${postDate}</div>
-                    </div>
-                </div>
-                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
-                <div class="location-info">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <span>Местоположение: ${post.latitude.toFixed(4)}, ${post.longitude.toFixed(4)}</span>
-                </div>
-                ${post.photo_url ? `<img src="${post.photo_url}" class="post-image" alt="Фото">` : ''}
-                <div class="post-actions">
-                    <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
-                        <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
-                        <span>${post.likes_count}</span>
-                    </button>
-                    <button class="action-button">
-                        <i class="far fa-comment"></i>
-                        <span>${post.comments_count}</span>
-                    </button>
-                    <button class="action-button">
-                        <i class="fas fa-share"></i>
-                        <span>Поделиться</span>
-                    </button>
-                </div>
-            `;
-
-            // Обработчик лайков
-            container.querySelector('.like-button').addEventListener('click', async () => {
-                await toggleLike(post.id, post.is_liked);
-            });
-
-            // Обработчик клика на изображение
-            if (post.photo_url) {
-                container.querySelector('.post-image').addEventListener('click', () => {
-                    openImageModal(post.photo_url);
-                });
-            }
-        }
-
-        // Переключение лайка
-        async function toggleLike(postId, isLiked) {
-            if (!currentUser) {
-                alert('Для оценки поста войдите в систему');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_URL}/posts/${postId}/${isLiked ? 'unlike' : 'like'}`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                    }
-                });
-
-                if (!response.ok) throw new Error('Ошибка оценки поста');
-                
-                // Обновляем UI
-                const likeButton = document.querySelector('.like-button');
-                const likeCount = likeButton.querySelector('span');
-                
-                if (isLiked) {
-                    likeButton.classList.remove('liked');
-                    likeButton.querySelector('i').className = 'far fa-heart';
-                    likeCount.textContent = parseInt(likeCount.textContent) - 1;
-                } else {
-                    likeButton.classList.add('liked');
-                    likeButton.querySelector('i').className = 'fas fa-heart';
-                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
-                }
-            } catch (error) {
-                console.error('Ошибка:', error);
-                alert(error.message || 'Не удалось оценить пост');
+                console.error('Failed to load post:', error);
             }
         }
 
         // Загрузка комментариев
-        async function loadComments(postId) {
-            const commentsList = document.getElementById('comments-list');
-            
+        async function loadComments() {
             try {
                 const response = await fetch(`${API_URL}/posts/${postId}/comments`);
-                if (!response.ok) throw new Error('Ошибка загрузки комментариев');
-                
                 const comments = await response.json();
                 renderComments(comments);
             } catch (error) {
-                console.error('Ошибка:', error);
-                commentsList.innerHTML = `
-                    <div class="error-message">
-                        <p>Не удалось загрузить комментарии</p>
-                        <button onclick="location.reload()" class="back-button">
-                            <i class="fas fa-sync-alt"></i> Попробовать снова
-                        </button>
-                    </div>
-                `;
+                console.error('Failed to load comments:', error);
             }
         }
 
-        // Рендер комментариев
-        function renderComments(comments) {
-            const commentsList = document.getElementById('comments-list');
-            
-            if (!comments || comments.length === 0) {
-                commentsList.innerHTML = '<div class="no-comments">Пока нет комментариев</div>';
-                return;
-            }
-
-            commentsList.innerHTML = comments.map(comment => `
-                <div class="comment" data-comment-id="${comment.id}">
-                    <div class="comment-avatar">${comment.username.charAt(0).toUpperCase()}</div>
-                    <div class="comment-content">
-                        <div class="comment-header">
-                            <span class="comment-username">${comment.username}</span>
-                            <span class="comment-time">${new Date(comment.created_at).toLocaleString('ru-RU')}</span>
-                        </div>
-                        <p class="comment-text">${comment.text}</p>
-                        ${currentUser && comment.user_id === currentUser.id ? `
-                            <button class="delete-comment-btn" data-comment-id="${comment.id}">
-                                <i class="fas fa-trash-alt"></i> Удалить
-                            </button>
-                        ` : ''}
-                    </div>
-                </div>
-            `).join('');
-
-            // Добавляем обработчики для кнопок удаления
-            document.querySelectorAll('.delete-comment-btn').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    const commentId = e.target.closest('.delete-comment-btn').dataset.commentId;
-                    await deleteComment(commentId);
-                });
-            });
-        }
-
-        // Отправка нового комментария
-        async function submitComment() {
-            if (!currentPostId) return;
-            
-            const commentInput = document.getElementById('comment-input');
-            const text = commentInput.value.trim();
-            
-            if (!text) {
-                alert('Комментарий не может быть пустым');
-                return;
-            }
-
-            const submitBtn = document.getElementById('submit-comment');
-            submitBtn.disabled = true;
-            
+        // Отправка комментария
+        async function addComment(text) {
             try {
-                const response = await fetch(`${API_URL}/posts/${currentPostId}/comments`, {
+                const response = await fetch(`${API_URL}/posts/${postId}/comments`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
@@ -629,92 +418,21 @@
                     },
                     body: JSON.stringify({ text })
                 });
-
-                if (!response.ok) throw new Error('Ошибка отправки комментария');
-                
-                commentInput.value = '';
-                await loadComments(currentPostId); // Перезагружаем комментарии
-                
-                // Обновляем счетчик комментариев
-                updateCommentsCounter(1);
+                return await response.json();
             } catch (error) {
-                console.error('Ошибка:', error);
-                alert(error.message || 'Не удалось отправить комментарий');
-            } finally {
-                submitBtn.disabled = false;
+                console.error('Failed to add comment:', error);
             }
         }
 
-        // Удаление комментария
-        async function deleteComment(commentId) {
-            if (!confirm('Вы уверены, что хотите удалить этот комментарий?')) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/comments/${commentId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                    }
-                });
-
-                if (!response.ok) throw new Error('Ошибка удаления комментария');
-                
-                await loadComments(currentPostId); // Перезагружаем комментарии
-                
-                // Обновляем счетчик комментариев
-                updateCommentsCounter(-1);
-            } catch (error) {
-                console.error('Ошибка:', error);
-                alert(error.message || 'Не удалось удалить комментарий');
-            }
-        }
-
-        // Обновление счетчика комментариев
-        function updateCommentsCounter(change) {
-            const counterElement = document.querySelector('.post-actions .action-button:nth-child(2) span');
-            if (counterElement) {
-                const currentCount = parseInt(counterElement.textContent) || 0;
-                counterElement.textContent = Math.max(0, currentCount + change);
-            }
-        }
-
-        // Открытие изображения в модальном окне
-        function openImageModal(imageUrl) {
-            const modal = document.createElement('div');
-            modal.style.position = 'fixed';
-            modal.style.top = '0';
-            modal.style.left = '0';
-            modal.style.width = '100%';
-            modal.style.height = '100%';
-            modal.style.backgroundColor = 'rgba(0,0,0,0.9)';
-            modal.style.display = 'flex';
-            modal.style.justifyContent = 'center';
-            modal.style.alignItems = 'center';
-            modal.style.zIndex = '2000';
-            
-            modal.innerHTML = `
-                <img src="${imageUrl}" style="max-width: 90%; max-height: 90%; object-fit: contain;">
-                <button style="position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; background: none; border: none; cursor: pointer;">&times;</button>
-            `;
-            
-            modal.querySelector('button').addEventListener('click', () => {
-                document.body.removeChild(modal);
-            });
-            
-            document.body.appendChild(modal);
-        }
-
-        // Настройка обработчиков событий
+        // Настройка обработчиков
         function setupEventListeners() {
-            // Обработчик отправки комментария
-            document.getElementById('submit-comment').addEventListener('click', submitComment);
-            
-            // Обработчик нажатия Enter в поле комментария
-            document.getElementById('comment-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    submitComment();
-                }
+            document.getElementById('submit-comment').addEventListener('click', async () => {
+                const text = document.getElementById('comment-input').value.trim();
+                if (!text) return;
+                
+                await addComment(text);
+                document.getElementById('comment-input').value = '';
+                await loadComments();
             });
         }
     </script>
