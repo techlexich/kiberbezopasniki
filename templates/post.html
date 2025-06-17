@@ -543,7 +543,7 @@
     }
     
     // Обработчик клика по кнопке комментариев (прокрутка к секции комментариев)
-    document.querySelector('.comment-toggle-button').addEventListener('click', function() {
+    document.querySelector('far fa-comment').addEventListener('click', function() {
         const commentsSection = document.getElementById('commentsSection');
         commentsSection.scrollIntoView({ behavior: 'smooth' });
         
@@ -585,7 +585,7 @@
             `).join('');
             
             // Обновляем счетчик комментариев
-            document.querySelector('.comment-toggle-button span').textContent = comments.length;
+            document.querySelector('far fa-comment span').textContent = comments.length;
         } catch (error) {
             console.error('Error loading comments:', error);
             alert('Ошибка при загрузке комментариев');
