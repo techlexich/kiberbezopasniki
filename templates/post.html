@@ -17,6 +17,7 @@
             --card: #ffffff;
             --border: #e9ecef;
             --shadow: 0 2px 8px rgba(0,0,0,0.05);
+            --error: #ff4757;
         }
         
         * {
@@ -64,6 +65,11 @@
             gap: 6px;
         }
 
+        .back-button:hover {
+            background: #f1f6fe;
+            border-color: var(--primary-light);
+        }
+
         .post-container {
             max-width: 800px;
             margin: 0 auto;
@@ -72,7 +78,7 @@
             padding: 24px;
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
-            margin-bottom: 20px;
+            margin-bottom: 30px;
         }
 
         .post-header {
@@ -126,6 +132,19 @@
             background: #f1f3f5;
         }
 
+        .location-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .location-info i {
+            color: var(--primary);
+        }
+
         .post-actions {
             display: flex;
             justify-content: space-between;
@@ -162,35 +181,6 @@
             color: #ff4757;
         }
 
-        .delete-post-btn {
-            background: none;
-            border: none;
-            color: var(--text-light);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin-left: auto;
-            padding: 4px;
-            border-radius: 4px;
-        }
-
-        .delete-post-btn:hover {
-            color: #ff4757;
-            background: rgba(255, 71, 87, 0.1);
-        }
-
-        .location-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 16px;
-            color: var(--text-light);
-            font-size: 14px;
-        }
-
-        .location-info i {
-            color: var(--primary);
-        }
-
         /* Стили для комментариев */
         .comments-section {
             max-width: 800px;
@@ -203,78 +193,28 @@
         }
 
         .comments-title {
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 20px;
             margin-bottom: 20px;
             display: flex;
             align-items: center;
-            gap: 8px;
-        }
-
-        .comments-title i {
-            color: var(--primary);
-        }
-
-        .comment-form {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .comment-input {
-            flex-grow: 1;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 14px;
-            resize: none;
-            min-height: 50px;
-            transition: all 0.2s ease;
-        }
-
-        .comment-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
-        }
-
-        .comment-submit {
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0 20px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            height: 50px;
-            align-self: flex-end;
-        }
-
-        .comment-submit:hover {
-            background: var(--primary-light);
-        }
-
-        .comment-submit:disabled {
-            background: var(--text-light);
-            cursor: not-allowed;
+            gap: 10px;
         }
 
         .comments-list {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+            margin-bottom: 20px;
         }
 
         .comment {
             display: flex;
             gap: 12px;
+            margin-bottom: 16px;
             padding-bottom: 16px;
             border-bottom: 1px solid var(--border);
         }
 
         .comment:last-child {
             border-bottom: none;
+            margin-bottom: 0;
             padding-bottom: 0;
         }
 
@@ -288,7 +228,6 @@
             justify-content: center;
             color: white;
             font-weight: 600;
-            font-size: 16px;
             flex-shrink: 0;
         }
 
@@ -298,9 +237,8 @@
 
         .comment-header {
             display: flex;
-            align-items: center;
+            justify-content: space-between;
             margin-bottom: 6px;
-            gap: 8px;
         }
 
         .comment-username {
@@ -318,49 +256,86 @@
             line-height: 1.5;
         }
 
-        .comment-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 8px;
-        }
-
-        .comment-action {
-            font-size: 12px;
-            color: var(--text-light);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .comment-action:hover {
-            color: var(--primary);
-        }
-
-        .no-comments {
-            color: var(--text-light);
-            text-align: center;
-            padding: 20px 0;
-            font-size: 14px;
-        }
-
         .delete-comment-btn {
-            color: var(--text-light);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
             background: none;
             border: none;
-            padding: 0;
+            color: var(--error);
+            font-size: 12px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
         }
 
         .delete-comment-btn:hover {
-            color: #ff4757;
+            background: rgba(255, 71, 87, 0.1);
+        }
+
+        .add-comment-form {
+            margin-top: 20px;
+        }
+
+        .comment-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            resize: vertical;
+            min-height: 80px;
+            margin-bottom: 12px;
+            font-family: inherit;
+        }
+
+        .comment-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+        }
+
+        .submit-comment {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .submit-comment:hover {
+            background: var(--primary-light);
+        }
+
+        .submit-comment:disabled {
+            background: var(--text-light);
+            cursor: not-allowed;
+        }
+
+        .no-comments {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-light);
+        }
+
+        .loading-comments {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading-post {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
         }
 
         @media (max-width: 600px) {
-            .post-container, .comments-section {
+            .post-container,
+            .comments-section {
                 padding: 16px;
             }
             
@@ -373,15 +348,6 @@
             .post-text {
                 font-size: 15px;
             }
-
-            .comment-form {
-                flex-direction: column;
-            }
-
-            .comment-submit {
-                width: 100%;
-                height: 40px;
-            }
         }
     </style>
 </head>
@@ -393,287 +359,364 @@
         </button>
     </header>
 
-    <div class="post-container">
-        <div class="post-header">
-            <div class="post-avatar">{{ post.username[0] }}</div>
-            <div class="post-user-info">
-                <div class="post-username">{{ post.username }}</div>
-                <div class="post-time">{{ post.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
-            </div>
-        </div>
-
-        {% if post.description %}
-        <div class="post-text">{{ post.description }}</div>
-        {% endif %}
-
-        <div class="location-info">
-            <i class="fas fa-map-marker-alt"></i>
-            <span>Местоположение: {{ "%.4f, %.4f"|format(post.latitude, post.altitude) }}</span>
-        </div>
-
-        <img src="{{ post.photo_url }}" class="post-image" alt="Фото">
-
-        <div class="post-actions">
-            <button class="action-button like-button">
-                <i class="far fa-heart"></i> <span>{{ post.likes_count }}</span>
-            </button>
-            <button class="action-button comment-toggle-button" id="commentButton">
-                <i class="far fa-comment"></i> <span>{{ post.comments_count }}</span>
-            </button>
-            <button class="action-button">
-                <i class="fas fa-share"></i> <span>Поделиться</span>
-            </button>
+    <div class="post-container" id="post-container">
+        <div class="loading-post">
+            <i class="fas fa-spinner fa-spin"></i> Загрузка поста...
         </div>
     </div>
 
-<div class="comments-section" id="commentsSection">
-    <h3 class="comments-title"><i class="fas fa-comments"></i> Комментарии</h3>
-    
-    <form class="comment-form" id="commentForm">
-        <textarea class="comment-input" id="commentInput" placeholder="Напишите комментарий..." required></textarea>
-        <button type="submit" class="comment-submit" id="commentSubmit">Отправить</button>
-    </form>
-    
-    <div class="comments-list" id="commentsList">
-        {% if post.comments %}
-            {% for comment in post.comments %}
-            <div class="comment" data-comment-id="{{ comment.id }}">
-                <div class="comment-avatar">{{ comment.username[0] }}</div>
-                <div class="comment-content">
-                    <div class="comment-header">
-                        <span class="comment-username">{{ comment.username }}</span>
-                        <span class="comment-time">{{ comment.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
-                        {% if current_user and (current_user.id == comment.user_id or current_user.id == post.user_id) %}
-                        <button class="delete-comment-btn" onclick="deleteComment('{{ comment.id }}')">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                        {% endif %}
-                    </div>
-                    <p class="comment-text">{{ comment.text }}</p>
-                </div>
+    <div class="comments-section">
+        <h3 class="comments-title"><i class="fas fa-comments"></i> Комментарии</h3>
+        <div class="comments-list" id="comments-list">
+            <div class="loading-comments">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка комментариев...
             </div>
-            {% endfor %}
-        {% else %}
-            <p class="no-comments">Пока нет комментариев. Будьте первым!</p>
-        {% endif %}
+        </div>
+        <div class="add-comment-form" id="comment-form">
+            <textarea class="comment-input" id="comment-input" placeholder="Напишите комментарий..."></textarea>
+            <button class="submit-comment" id="submit-comment">Отправить</button>
+        </div>
     </div>
-</div>
 
     <script>
-    // Получаем данные о посте
-    const postId = new URLSearchParams(window.location.search).get('id') || '{{ post.id }}';
-    let currentUser = null;
-    
-    // Проверяем авторизацию
-    const token = localStorage.getItem('access_token');
-    if (token) {
-        try {
-            const response = await fetch('/users/me', {
-                headers: {'Authorization': `Bearer ${token}`}
-            });
-            
-            if (response.ok) {
-                currentUser = await response.json();
-            }
-        } catch (e) {
-            console.error('Auth check failed:', e);
-        }
-    }
-    
-    // Обработчик лайков
-    document.querySelector('.like-button').addEventListener('click', async function() {
-        if (!token) {
-            alert('Для этого действия нужно войти в аккаунт');
-            return;
-        }
-        
-        const isLiked = this.classList.contains('liked');
-        const endpoint = isLiked ? 'unlike' : 'like';
-        
-        try {
-            const response = await fetch(`/posts/${postId}/${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to update like');
-            }
-            
-            const result = await response.json();
-            const likeCount = this.querySelector('span');
-            
-            if (isLiked) {
-                this.classList.remove('liked');
-                this.querySelector('i').className = 'far fa-heart';
-                likeCount.textContent = parseInt(likeCount.textContent) - 1;
-            } else {
-                this.classList.add('liked');
-                this.querySelector('i').className = 'fas fa-heart';
-                likeCount.textContent = parseInt(likeCount.textContent) + 1;
-            }
-        } catch (error) {
-            console.error('Like error:', error);
-            alert('Ошибка при обновлении лайка');
-        }
-    });
-    
-    // Проверяем, лайкнул ли текущий пользователь этот пост
-    async function checkLikeStatus() {
-        if (!token) return;
-        
-        try {
-            const response = await fetch(`/posts/${postId}/like`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            if (response.ok) {
-                const likeButton = document.querySelector('.like-button');
-                likeButton.classList.add('liked');
-                likeButton.querySelector('i').className = 'fas fa-heart';
-            }
-        } catch (error) {
-            console.error('Like check error:', error);
-        }
-    }
-    
-    // Обработчик клика по кнопке комментариев (прокрутка к секции комментариев)
-    document.querySelector('far fa-comment').addEventListener('click', function() {
-        const commentsSection = document.getElementById('commentsSection');
-        commentsSection.scrollIntoView({ behavior: 'smooth' });
-        
-        // Фокусируем поле ввода комментария
-        if (token) {
-            document.getElementById('commentInput').focus();
-        }
-    });
-    
-    // Функция для загрузки комментариев
-    async function loadComments() {
-        try {
-            const response = await fetch(`/posts/${postId}/comments`);
-            if (!response.ok) throw new Error('Failed to load comments');
-            
-            const comments = await response.json();
-            const commentsList = document.getElementById('commentsList');
-            
-            if (comments.length === 0) {
-                commentsList.innerHTML = '<p class="no-comments">Пока нет комментариев. Будьте первым!</p>';
+        // Конфигурация API
+        const API_URL = 'https://kiberbezopasniki.onrender.com';
+        let currentUser = null;
+        let currentPostId = null;
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentPostId = new URLSearchParams(window.location.search).get('id');
+            if (!currentPostId) {
+                window.location.href = '/';
                 return;
             }
+
+            await checkAuth();
+            await loadPost(currentPostId);
+            await loadComments(currentPostId);
+            setupEventListeners();
+        });
+
+        // Проверка авторизации
+        async function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                currentUser = null;
+                updateAuthUI();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/users/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    currentUser = await response.json();
+                } else {
+                    localStorage.removeItem('access_token');
+                    currentUser = null;
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+                currentUser = null;
+            }
             
+            updateAuthUI();
+        }
+
+        // Обновление UI в зависимости от авторизации
+        function updateAuthUI() {
+            const commentForm = document.getElementById('comment-form');
+            if (currentUser) {
+                commentForm.style.display = 'block';
+            } else {
+                commentForm.style.display = 'none';
+            }
+        }
+
+        // Загрузка поста
+        async function loadPost(postId) {
+            const container = document.getElementById('post-container');
+            
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}`);
+                if (!response.ok) throw new Error('Ошибка загрузки поста');
+                
+                const post = await response.json();
+                renderPost(post);
+            } catch (error) {
+                console.error('Ошибка:', error);
+                container.innerHTML = `
+                    <div class="error-message">
+                        <p>Не удалось загрузить пост</p>
+                        <button onclick="window.location.href='/'" class="back-button">
+                            <i class="fas fa-arrow-left"></i> Вернуться в ленту
+                        </button>
+                        ${error.message ? `<p class="error-detail">${error.message}</p>` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        // Рендер поста
+        function renderPost(post) {
+            const container = document.getElementById('post-container');
+            const postDate = new Date(post.created_at).toLocaleString('ru-RU');
+            
+            container.innerHTML = `
+                <div class="post-header">
+                    <div class="post-avatar">${post.username.charAt(0).toUpperCase()}</div>
+                    <div class="post-user-info">
+                        <div class="post-username">${post.username}</div>
+                        <div class="post-time">${postDate}</div>
+                    </div>
+                </div>
+                ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                <div class="location-info">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>Местоположение: ${post.latitude.toFixed(4)}, ${post.longitude.toFixed(4)}</span>
+                </div>
+                ${post.photo_url ? `<img src="${post.photo_url}" class="post-image" alt="Фото">` : ''}
+                <div class="post-actions">
+                    <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
+                        <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
+                        <span>${post.likes_count}</span>
+                    </button>
+                    <button class="action-button">
+                        <i class="far fa-comment"></i>
+                        <span>${post.comments_count}</span>
+                    </button>
+                    <button class="action-button">
+                        <i class="fas fa-share"></i>
+                        <span>Поделиться</span>
+                    </button>
+                </div>
+            `;
+
+            // Обработчик лайков
+            container.querySelector('.like-button').addEventListener('click', async () => {
+                await toggleLike(post.id, post.is_liked);
+            });
+
+            // Обработчик клика на изображение
+            if (post.photo_url) {
+                container.querySelector('.post-image').addEventListener('click', () => {
+                    openImageModal(post.photo_url);
+                });
+            }
+        }
+
+        // Переключение лайка
+        async function toggleLike(postId, isLiked) {
+            if (!currentUser) {
+                alert('Для оценки поста войдите в систему');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/${isLiked ? 'unlike' : 'like'}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Ошибка оценки поста');
+                
+                // Обновляем UI
+                const likeButton = document.querySelector('.like-button');
+                const likeCount = likeButton.querySelector('span');
+                
+                if (isLiked) {
+                    likeButton.classList.remove('liked');
+                    likeButton.querySelector('i').className = 'far fa-heart';
+                    likeCount.textContent = parseInt(likeCount.textContent) - 1;
+                } else {
+                    likeButton.classList.add('liked');
+                    likeButton.querySelector('i').className = 'fas fa-heart';
+                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert(error.message || 'Не удалось оценить пост');
+            }
+        }
+
+        // Загрузка комментариев
+        async function loadComments(postId) {
+            const commentsList = document.getElementById('comments-list');
+            
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/comments`);
+                if (!response.ok) throw new Error('Ошибка загрузки комментариев');
+                
+                const comments = await response.json();
+                renderComments(comments);
+            } catch (error) {
+                console.error('Ошибка:', error);
+                commentsList.innerHTML = `
+                    <div class="error-message">
+                        <p>Не удалось загрузить комментарии</p>
+                        <button onclick="location.reload()" class="back-button">
+                            <i class="fas fa-sync-alt"></i> Попробовать снова
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Рендер комментариев
+        function renderComments(comments) {
+            const commentsList = document.getElementById('comments-list');
+            
+            if (!comments || comments.length === 0) {
+                commentsList.innerHTML = '<div class="no-comments">Пока нет комментариев</div>';
+                return;
+            }
+
             commentsList.innerHTML = comments.map(comment => `
                 <div class="comment" data-comment-id="${comment.id}">
-                    <div class="comment-avatar">${comment.username[0]}</div>
+                    <div class="comment-avatar">${comment.username.charAt(0).toUpperCase()}</div>
                     <div class="comment-content">
                         <div class="comment-header">
                             <span class="comment-username">${comment.username}</span>
                             <span class="comment-time">${new Date(comment.created_at).toLocaleString('ru-RU')}</span>
-                            ${currentUser && (currentUser.id === comment.user_id || currentUser.id === '{{ post.user_id }}') ? 
-                                `<button class="delete-comment-btn" onclick="deleteComment('${comment.id}')">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>` : ''}
                         </div>
                         <p class="comment-text">${comment.text}</p>
+                        ${currentUser && comment.user_id === currentUser.id ? `
+                            <button class="delete-comment-btn" data-comment-id="${comment.id}">
+                                <i class="fas fa-trash-alt"></i> Удалить
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             `).join('');
+
+            // Добавляем обработчики для кнопок удаления
+            document.querySelectorAll('.delete-comment-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const commentId = e.target.closest('.delete-comment-btn').dataset.commentId;
+                    await deleteComment(commentId);
+                });
+            });
+        }
+
+        // Отправка нового комментария
+        async function submitComment() {
+            if (!currentPostId) return;
             
-            // Обновляем счетчик комментариев
-            document.querySelector('far fa-comment span').textContent = comments.length;
-        } catch (error) {
-            console.error('Error loading comments:', error);
-            alert('Ошибка при загрузке комментариев');
+            const commentInput = document.getElementById('comment-input');
+            const text = commentInput.value.trim();
+            
+            if (!text) {
+                alert('Комментарий не может быть пустым');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submit-comment');
+            submitBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_URL}/posts/${currentPostId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+
+                if (!response.ok) throw new Error('Ошибка отправки комментария');
+                
+                commentInput.value = '';
+                await loadComments(currentPostId); // Перезагружаем комментарии
+                
+                // Обновляем счетчик комментариев
+                updateCommentsCounter(1);
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert(error.message || 'Не удалось отправить комментарий');
+            } finally {
+                submitBtn.disabled = false;
+            }
         }
-    }
-    
-    // Обработчик отправки комментария
-    document.getElementById('commentForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        if (!token) {
-            alert('Для комментирования нужно войти в аккаунт');
-            return;
+
+        // Удаление комментария
+        async function deleteComment(commentId) {
+            if (!confirm('Вы уверены, что хотите удалить этот комментарий?')) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/comments/${commentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Ошибка удаления комментария');
+                
+                await loadComments(currentPostId); // Перезагружаем комментарии
+                
+                // Обновляем счетчик комментариев
+                updateCommentsCounter(-1);
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert(error.message || 'Не удалось удалить комментарий');
+            }
         }
-        
-        const commentInput = document.getElementById('commentInput');
-        const commentText = commentInput.value.trim();
-        
-        if (!commentText) return;
-        
-        const submitButton = document.getElementById('commentSubmit');
-        submitButton.disabled = true;
-        
-        try {
-            const response = await fetch(`/posts/${postId}/comments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ text: commentText })
+
+        // Обновление счетчика комментариев
+        function updateCommentsCounter(change) {
+            const counterElement = document.querySelector('.post-actions .action-button:nth-child(2) span');
+            if (counterElement) {
+                const currentCount = parseInt(counterElement.textContent) || 0;
+                counterElement.textContent = Math.max(0, currentCount + change);
+            }
+        }
+
+        // Открытие изображения в модальном окне
+        function openImageModal(imageUrl) {
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.9)';
+            modal.style.display = 'flex';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.style.zIndex = '2000';
+            
+            modal.innerHTML = `
+                <img src="${imageUrl}" style="max-width: 90%; max-height: 90%; object-fit: contain;">
+                <button style="position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; background: none; border: none; cursor: pointer;">&times;</button>
+            `;
+            
+            modal.querySelector('button').addEventListener('click', () => {
+                document.body.removeChild(modal);
             });
             
-            if (!response.ok) throw new Error('Failed to post comment');
+            document.body.appendChild(modal);
+        }
+
+        // Настройка обработчиков событий
+        function setupEventListeners() {
+            // Обработчик отправки комментария
+            document.getElementById('submit-comment').addEventListener('click', submitComment);
             
-            commentInput.value = '';
-            await loadComments();
-        } catch (error) {
-            console.error('Error posting comment:', error);
-            alert('Ошибка при отправке комментария');
-        } finally {
-            submitButton.disabled = false;
-        }
-    });
-    
-    // Функция удаления комментария
-    window.deleteComment = async function(commentId) {
-        if (!confirm('Вы уверены, что хотите удалить этот комментарий?')) return;
-        
-        if (!token) {
-            alert('Для этого действия нужно войти в аккаунт');
-            return;
-        }
-        
-        try {
-            const response = await fetch(`/posts/${postId}/comments/${commentId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
+            // Обработчик нажатия Enter в поле комментария
+            document.getElementById('comment-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submitComment();
                 }
             });
-            
-            if (!response.ok) throw new Error('Failed to delete comment');
-            
-            await loadComments();
-        } catch (error) {
-            console.error('Error deleting comment:', error);
-            alert('Ошибка при удалении комментария');
         }
-    };
-    
-    // Инициализация при загрузке страницы
-    window.addEventListener('DOMContentLoaded', () => {
-        checkLikeStatus();
-        
-        // Обновляем URL в адресной строке без перезагрузки
-        if (!window.location.pathname.includes('/post/')) {
-            history.replaceState(null, null, `/post/${postId}`);
-        }
-        
-        // Если пользователь не авторизован, скрываем форму комментария
-        if (!token) {
-            document.getElementById('commentForm').style.display = 'none';
-        }
-        
-        // Загружаем комментарии при загрузке страницы
-        loadComments();
-    });
     </script>
 </body>
 </html>
