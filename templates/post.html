@@ -417,7 +417,7 @@
             <button class="action-button like-button">
                 <i class="far fa-heart"></i> <span>{{ post.likes_count }}</span>
             </button>
-            <button class="action-button comment-toggle-button">
+            <button class="action-button comment-toggle-button" id="commentButton">
                 <i class="far fa-comment"></i> <span>{{ post.comments_count }}</span>
             </button>
             <button class="action-button">
@@ -426,38 +426,38 @@
         </div>
     </div>
 
-    <div class="comments-section" id="commentsSection">
-        <h3 class="comments-title"><i class="fas fa-comments"></i> Комментарии</h3>
-        
-        <form class="comment-form" id="commentForm">
-            <textarea class="comment-input" id="commentInput" placeholder="Напишите комментарий..." required></textarea>
-            <button type="submit" class="comment-submit" id="commentSubmit">Отправить</button>
-        </form>
-        
-        <div class="comments-list" id="commentsList">
-            {% if post.comments %}
-                {% for comment in post.comments %}
-                <div class="comment" data-comment-id="{{ comment.id }}">
-                    <div class="comment-avatar">{{ comment.username[0] }}</div>
-                    <div class="comment-content">
-                        <div class="comment-header">
-                            <span class="comment-username">{{ comment.username }}</span>
-                            <span class="comment-time">{{ comment.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
-                            {% if current_user and (current_user.id == comment.user_id or current_user.id == post.user_id) %}
-                            <button class="delete-comment-btn" onclick="deleteComment('{{ comment.id }}')">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                            {% endif %}
-                        </div>
-                        <p class="comment-text">{{ comment.text }}</p>
+<div class="comments-section" id="commentsSection">
+    <h3 class="comments-title"><i class="fas fa-comments"></i> Комментарии</h3>
+    
+    <form class="comment-form" id="commentForm">
+        <textarea class="comment-input" id="commentInput" placeholder="Напишите комментарий..." required></textarea>
+        <button type="submit" class="comment-submit" id="commentSubmit">Отправить</button>
+    </form>
+    
+    <div class="comments-list" id="commentsList">
+        {% if post.comments %}
+            {% for comment in post.comments %}
+            <div class="comment" data-comment-id="{{ comment.id }}">
+                <div class="comment-avatar">{{ comment.username[0] }}</div>
+                <div class="comment-content">
+                    <div class="comment-header">
+                        <span class="comment-username">{{ comment.username }}</span>
+                        <span class="comment-time">{{ comment.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                        {% if current_user and (current_user.id == comment.user_id or current_user.id == post.user_id) %}
+                        <button class="delete-comment-btn" onclick="deleteComment('{{ comment.id }}')">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        {% endif %}
                     </div>
+                    <p class="comment-text">{{ comment.text }}</p>
                 </div>
-                {% endfor %}
-            {% else %}
-                <p class="no-comments">Пока нет комментариев. Будьте первым!</p>
-            {% endif %}
-        </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="no-comments">Пока нет комментариев. Будьте первым!</p>
+        {% endif %}
     </div>
+</div>
 
     <script>
     // Получаем данные о посте
