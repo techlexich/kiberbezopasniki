@@ -571,6 +571,88 @@
             text-align: center;
             padding: 40px 20px;
         }
+
+        .comments-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--bg);
+            border-radius: 12px;
+        }
+
+        .comments-list {
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .comment {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .comment:last-child {
+            border-bottom: none;
+        }
+
+        .comment-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .comment-content {
+            flex: 1;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .comment-username {
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .comment-time {
+            font-size: 12px;
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        .comment-text {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .delete-comment {
+            background: none;
+            border: none;
+            color: var(--error);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 0;
+        }
+
+        .add-comment {
+            margin-top: 20px;
+        }
+
+        .add-comment textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            resize: vertical;
+            font-family: 'Inter', sans-serif;
+            margin-bottom: 12px;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -858,6 +940,143 @@
             }
         }
     
+
+        // Функция для загрузки комментариев
+        async function loadComments(postId) {
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/comments`);
+                if (!response.ok) throw new Error('Ошибка загрузки комментариев');
+                return await response.json();
+            } catch (error) {
+                console.error('Ошибка:', error);
+                return [];
+            }
+        }
+
+        // Функция для отображения комментариев
+        async function renderComments(postId) {
+            const commentsList = document.getElementById('comments-list');
+            const commentsCount = document.getElementById('comments-count');
+            
+            commentsList.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+            
+            const comments = await loadComments(postId);
+            commentsCount.textContent = comments.length;
+            
+            if (comments.length === 0) {
+                commentsList.innerHTML = '<p>Пока нет комментариев</p>';
+                return;
+            }
+            
+            commentsList.innerHTML = '';
+            
+            comments.forEach(comment => {
+                const commentElement = document.createElement('div');
+                commentElement.className = 'comment';
+                commentElement.dataset.commentId = comment.id;
+                
+                const isCurrentUser = currentUser && currentUser.id === comment.user_id;
+                const time = new Date(comment.created_at).toLocaleString();
+                
+                commentElement.innerHTML = `
+                    <img src="${comment.avatar}" class="comment-avatar" alt="Аватар">
+                    <div class="comment-content">
+                        <div class="comment-header">
+                            <p class="comment-username">${comment.username}</p>
+                            <p class="comment-time">${time}</p>
+                        </div>
+                        <p class="comment-text">${comment.content}</p>
+                        ${isCurrentUser ? '<button class="delete-comment">Удалить</button>' : ''}
+                    </div>
+                `;
+                
+                commentsList.appendChild(commentElement);
+            });
+            
+            // Добавляем обработчики для кнопок удаления
+            document.querySelectorAll('.delete-comment').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const commentId = e.target.closest('.comment').dataset.commentId;
+                    await deleteComment(commentId);
+                    await renderComments(postId);
+                });
+            });
+        }
+
+        // Функция для отправки комментария
+        async function addComment(postId, content) {
+            if (!currentUser) {
+                alert('Для комментирования необходимо войти в систему');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    },
+                    body: JSON.stringify({ content })
+                });
+                
+                if (!response.ok) throw new Error('Ошибка при отправке комментария');
+                
+                return await response.json();
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert(error.message || 'Не удалось отправить комментарий');
+                return null;
+            }
+        }
+
+        // Функция для удаления комментария
+        async function deleteComment(commentId) {
+            try {
+                const response = await fetch(`${API_URL}/comments/${commentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Ошибка при удалении комментария');
+                
+                return true;
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert(error.message || 'Не удалось удалить комментарий');
+                return false;
+            }
+        }
+
+        // Инициализация системы комментариев на странице поста
+        document.addEventListener('DOMContentLoaded', () => {
+            const path = window.location.pathname;
+            const postMatch = path.match(/\/post\/(\d+)/);
+            
+            if (postMatch) {
+                const postId = postMatch[1];
+                
+                // Загружаем комментарии
+                renderComments(postId);
+                
+                // Обработчик отправки комментария
+                document.getElementById('submit-comment')?.addEventListener('click', async () => {
+                    const input = document.getElementById('comment-input');
+                    const content = input.value.trim();
+                    
+                    if (!content) {
+                        alert('Комментарий не может быть пустым');
+                        return;
+                    }
+                    
+                    await addComment(postId, content);
+                    input.value = '';
+                    await renderComments(postId);
+                });
+            }
+        });
         async function updateAuthUI() {
             try {
                 currentUser = await checkAuth();

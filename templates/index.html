@@ -1084,7 +1084,6 @@
             hideModal(filtersModal);
         });
 
-<<<<<<< HEAD
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', async () => {
             try {
@@ -1176,17 +1175,6 @@
                 alert("Не удалось загрузить данные. Попробуйте позже.");
             }
         }
-=======
-        // Обработчик изменения фильтров в реальном времени (ИСПРАВЛЕН)
-        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-            checkbox.addEventListener('change', async () => {
-                const selectedFilters = getSelectedFilters();
-                await renderTopPosts(selectedFilters.length ? selectedFilters : null);
-            });
-        });
-
-        // Функция для обновления виджета погоды
->>>>>>> 617bde0d0170981aa5bb57135c703686a591e675
         async function fetchWeatherTips() {
             try {
                 const response = await fetch(`${API_URL}/weather-message`);
@@ -1307,6 +1295,9 @@
                                 </button>
                             </div>
                         </div>
+                        <button class="view-comments" onclick="location.href='/post/${post.id}'">
+                             <i class="fas fa-comment"></i> ${post.comments_count}
+                        </button>
                     `;
                     
                     container.appendChild(postElement);

@@ -197,7 +197,23 @@ class Post(BaseModel):
     camera_model: Optional[str] = None
     camera_settings: Optional[dict] = None
 
+class CommentBase(BaseModel):
+    content: str = Field(..., min_length=1, max_length=500)
 
+class CommentCreate(CommentBase):
+    pass
+
+class Comment(CommentBase):
+    id: int
+    post_id: int
+    user_id: int
+    username: str
+    avatar: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class UserProfile(BaseModel):
     bio: str = Field(default="", max_length=500)
@@ -550,6 +566,117 @@ async def read_me(request: Request, user=Depends(get_current_user)):
             "avatar": avatar
         }
     }
+
+@app.post("/posts/{post_id}/comments", response_model=Comment)
+async def create_comment(
+    post_id: int,
+    comment: CommentCreate,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    with db.cursor() as cur:
+        # Проверяем существование поста
+        cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, "Post not found")
+        
+        # Создаем комментарий
+        cur.execute("""
+            INSERT INTO comments (post_id, user_id, content)
+            VALUES (%s, %s, %s)
+            RETURNING id, post_id, user_id, content, created_at, updated_at
+        """, (post_id, current_user["id"], comment.content))
+        
+        new_comment = cur.fetchone()
+        
+        # Обновляем счетчик комментариев в посте
+        cur.execute("""
+            UPDATE posts 
+            SET comments_count = comments_count + 1 
+            WHERE id = %s
+        """, (post_id,))
+        
+        db.commit()
+        
+        # Получаем информацию о пользователе
+        cur.execute("""
+            SELECT username, avatar_url FROM users WHERE id = %s
+        """, (current_user["id"],))
+        user_info = cur.fetchone()
+        
+        return {
+            **new_comment,
+            "username": user_info["username"],
+            "avatar": user_info["avatar_url"] or "/default-avatar.jpg"
+        }
+
+@app.get("/posts/{post_id}/comments", response_model=list[Comment])
+async def get_comments(
+    post_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    db=Depends(get_db)
+):
+    with db.cursor() as cur:
+        # Проверяем существование поста
+        cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+        if not cur.fetchone():
+            raise HTTPException(404, "Post not found")
+        
+        # Получаем комментарии с информацией о пользователях
+        cur.execute("""
+            SELECT 
+                c.id, c.post_id, c.user_id, c.content, 
+                c.created_at, c.updated_at,
+                u.username, 
+                COALESCE(u.avatar_url, '/default-avatar.jpg') as avatar
+            FROM comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.post_id = %s
+            ORDER BY c.created_at DESC
+            LIMIT %s OFFSET %s
+        """, (post_id, limit, skip))
+        
+        return cur.fetchall()
+
+@app.delete("/comments/{comment_id}")
+async def delete_comment(
+    comment_id: int,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+    ):
+    with db.cursor() as cur:
+        # Проверяем существование комментария и права пользователя
+        cur.execute("""
+            SELECT id, user_id, post_id FROM comments WHERE id = %s
+        """, (comment_id,))
+        comment = cur.fetchone()
+        
+        if not comment:
+            raise HTTPException(404, "Comment not found")
+        
+        if comment["user_id"] != current_user["id"]:
+            raise HTTPException(403, "You can delete only your own comments")
+        
+        # Удаляем комментарий
+        cur.execute("DELETE FROM comments WHERE id = %s RETURNING id", (comment_id,))
+        deleted_comment = cur.fetchone()
+        
+        # Обновляем счетчик комментариев в посте
+        cur.execute("""
+            UPDATE posts 
+            SET comments_count = comments_count - 1 
+            WHERE id = %s
+        """, (comment["post_id"],))
+        
+        db.commit()
+        
+        if not deleted_comment:
+            raise HTTPException(500, "Failed to delete comment")
+        
+        return {"status": "ok", "comment_id": comment_id}
+                
+
 
 
 @app.get("/points", response_model=list[Post])
