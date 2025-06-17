@@ -209,6 +209,148 @@
                 padding: 16px;
             }
         }
+          /* Стили для ленты и постов */
+        .feed-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding-bottom: 80px;
+        }
+
+        .post {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .post:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+        }
+
+        .post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            font-size: 15px;
+        }
+
+        .user-info {
+            flex-grow: 1;
+        }
+
+        .username {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 15px;
+        }
+
+        .post-time {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 2px;
+        }
+
+        .post-image {
+            width: 100%;
+            border-radius: 10px;
+            margin: 16px 0;
+            display: block;
+            background: #f1f3f5;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            cursor: pointer;
+        }
+
+        .post-text {
+            margin-bottom: 14px;
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid var(--border);
+            padding-top: 14px;
+        }
+        /* Состояния загрузки и ошибок */
+        .loading {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-light);
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+        }
+
+        .error-message p {
+            margin-bottom: 20px;
+        }
+
+        .no-posts {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+        }
+
+        /* Анимации */
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        .loading-skeleton {
+            background: linear-gradient(to right, #f1f3f5 4%, #e9ecef 25%, #f1f3f5 36%);
+            background-size: 1000px 100%;
+            animation: shimmer 1.5s infinite linear;
+            border-radius: 8px;
+        }
+        .new-post-button {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .new-post-button:hover {
+            transform: scale(1.05) translateY(-3px);
+            box-shadow: 0 6px 16px rgba(67, 97, 238, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -271,32 +413,79 @@
         // Загрузка постов
         async function loadPosts() {
             try {
+                const container = document.getElementById('posts-container');
+                container.innerHTML = '<div class="loading">Загрузка ленты...</div>';
+
                 const response = await fetch(`${API_URL}/tape/posts`);
+                if (!response.ok) throw new Error('Ошибка загрузки ленты');
+                
                 const posts = await response.json();
                 renderPosts(posts);
             } catch (error) {
-                console.error('Failed to load posts:', error);
+                console.error('Ошибка загрузки постов:', error);
+                document.getElementById('posts-container').innerHTML = `
+                    <div class="error-message">
+                        <p>Не удалось загрузить ленту</p>
+                        <button onclick="loadPosts()" class="back-button">
+                            <i class="fas fa-sync-alt"></i> Попробовать снова
+                        </button>
+                    </div>
+                `;
             }
         }
 
         // Отображение постов
-        function renderPosts(posts) {
+       function renderPosts(posts) {
             const container = document.getElementById('posts-container');
-            container.innerHTML = posts.map(post => `
-                <div class="post" data-post-id="${post.id}">
-                    <!-- ... (остальная разметка поста) ... -->
-                    <div class="post-actions">
-                        <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
-                            <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
-                            <span>${post.likes_count}</span>
-                        </button>
-                        <button class="action-button comment-btn">
-                            <i class="far fa-comment"></i>
-                            <span>${post.comments_count}</span>
-                        </button>
+            
+            if (!posts || posts.length === 0) {
+                container.innerHTML = `
+                    <div class="no-posts">
+                        <p>Пока нет постов</p>
+                        ${!currentUser ? `
+                            <button onclick="showModal(document.getElementById('profile-modal'))" class="nav-button">
+                                <i class="fas fa-sign-in-alt"></i> Войти, чтобы добавить пост
+                            </button>
+                        ` : `
+                            <button onclick="window.location.href='/new-post'" class="nav-button">
+                                <i class="fas fa-plus"></i> Добавить первый пост
+                            </button>
+                        `}
                     </div>
-                </div>
-            `).join('');
+                `;
+                return;
+            }
+
+            container.innerHTML = posts.map(post => {
+                const postDate = new Date(post.created_at).toLocaleString('ru-RU');
+                return `
+                    <div class="post" data-post-id="${post.id}">
+                        <div class="post-header">
+                            <div class="avatar">${post.username?.charAt(0)?.toUpperCase() || 'U'}</div>
+                            <div class="user-info">
+                                <div class="username">${post.username || 'Неизвестный пользователь'}</div>
+                                <div class="post-time">${postDate}</div>
+                            </div>
+                        </div>
+                        ${post.description ? `<div class="post-text">${post.description}</div>` : ''}
+                        ${post.photo_url ? `<img src="${post.photo_url}" alt="Пост" class="post-image">` : ''}
+                        <div class="post-actions">
+                            <button class="action-button like-button ${post.is_liked ? 'liked' : ''}">
+                                <i class="${post.is_liked ? 'fas' : 'far'} fa-heart"></i>
+                                <span>${post.likes_count || 0}</span>
+                            </button>
+                            <button class="action-button comment-btn">
+                                <i class="far fa-comment"></i>
+                                <span>${post.comments_count || 0}</span>
+                            </button>
+                            <button class="action-button">
+                                <i class="fas fa-share"></i>
+                                <span>Поделиться</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Работа с комментариями
@@ -376,6 +565,94 @@
                 document.getElementById('comments-modal').style.display = 'none';
             });
         }
+           // Добавляем обработчики для лайков
+        document.querySelectorAll('.like-button').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                if (!currentUser) {
+                    showModal(document.getElementById('profile-modal'));
+                    alert('Для оценки поста войдите в систему');
+                    return;
+                }
+                
+                const postId = this.closest('.post').dataset.postId;
+                const isLiked = this.classList.contains('liked');
+                
+                try {
+                    const response = await fetch(`${API_URL}/posts/${postId}/${isLiked ? 'unlike' : 'like'}`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                        }
+                    });
+                    
+                    if (!response.ok) throw new Error('Like action failed');
+                    
+                    const icon = this.querySelector('i');
+                    const countSpan = this.querySelector('span');
+                    let count = parseInt(countSpan.textContent);
+                    
+                    if (isLiked) {
+                        this.classList.remove('liked');
+                        icon.classList.replace('fas', 'far');
+                        countSpan.textContent = count - 1;
+                    } else {
+                        this.classList.add('liked');
+                        icon.classList.replace('far', 'fas');
+                        countSpan.textContent = count + 1;
+                    }
+                } catch (error) {
+                    console.error('Like error:', error);
+                    alert('Не удалось оценить пост');
+                }
+            });
+        });
+
+        // Обработчики для изображений
+        document.querySelectorAll('.post-image').forEach(img => {
+            img.addEventListener('click', () => {
+                const modal = document.createElement('div');
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100%';
+                modal.style.height = '100%';
+                modal.style.backgroundColor = 'rgba(0,0,0,0.9)';
+                modal.style.display = 'flex';
+                modal.style.justifyContent = 'center';
+                modal.style.alignItems = 'center';
+                modal.style.zIndex = '2000';
+                
+                modal.innerHTML = `
+                    <img src="${img.src}" style="max-width: 90%; max-height: 90%; object-fit: contain;">
+                    <button style="position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; background: none; border: none; cursor: pointer;">&times;</button>
+                `;
+                
+                modal.querySelector('button').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                });
+                
+                document.body.appendChild(modal);
+            });
+        });
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            await loadPosts(); // Теперь загружаем посты при открытии
+            setupEventListeners();
+            
+            // Добавляем кнопку нового поста
+            const newPostBtn = document.createElement('button');
+            newPostBtn.className = 'new-post-button';
+            newPostBtn.innerHTML = '<i class="fas fa-plus"></i>';
+            newPostBtn.addEventListener('click', () => {
+                if (!currentUser) {
+                    showModal(document.getElementById('profile-modal'));
+                    alert('Для создания поста войдите в систему');
+                    return;
+                }
+                window.location.href = '/new-post';
+            });
+            document.body.appendChild(newPostBtn);
+        });
     </script>
 </body>
 </html>
