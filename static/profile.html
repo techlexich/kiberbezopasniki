@@ -1408,8 +1408,6 @@
             const description = document.getElementById('post-description').value;
             const latitude = document.getElementById('latitude').value;
             const longitude = document.getElementById('longitude').value;
-            
-            // Получаем выбранные теги
             const selectedCategories = Array.from(document.querySelectorAll('.category-tags .tag-button.selected'))
                 .map(btn => btn.dataset.tag);
             const selectedTime = document.querySelector('.time-tags .tag-button.selected')?.dataset.tag || '';
@@ -1440,7 +1438,7 @@
                 formData.append('description', description);
                 formData.append('altitude', longitude);
                 formData.append('latitude', latitude);
-                formData.append('tags', tags);
+                formData.append('tags', tags); // Добавляем теги в FormData
                 
                 const token = localStorage.getItem('access_token');
                 if (!token) throw new Error('Требуется авторизация');
@@ -1463,7 +1461,7 @@
                 
                 // Полный сброс формы
                 createPostForm.reset();
-                fileInput.value = ''; // Очищаем поле файла
+                fileInput.value = '';
                 previewImage.style.display = 'none';
                 previewImage.src = '';
                 fileUploadLabel.style.display = 'block';
