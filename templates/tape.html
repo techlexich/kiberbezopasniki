@@ -653,6 +653,98 @@
             font-family: 'Inter', sans-serif;
             margin-bottom: 12px;
         }
+        .comments-container {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: var(--bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .comment {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .comment:last-child {
+            border-bottom: none;
+        }
+
+        .comment-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .comment-content {
+            flex-grow: 1;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .comment-username {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text);
+        }
+
+        .comment-time {
+            font-size: 12px;
+            color: var(--text-light);
+        }
+
+        .comment-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text);
+        }
+
+        .add-comment {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .add-comment textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .add-comment button {
+            align-self: flex-end;
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .add-comment button:hover {
+            background: var(--primary-light);
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
