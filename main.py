@@ -4,9 +4,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, field_validator, AnyUrl, Field
 from passlib.context import CryptContext
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from typing import Optional
 import psycopg2
@@ -14,14 +15,16 @@ from psycopg2.extras import RealDictCursor
 import os
 from dotenv import load_dotenv
 from pathlib import Path
-from datetime import datetime, timedelta
+from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import uuid
+import shutil
 import requests
 from requests_aws4auth import AWS4Auth
 from requests.auth import HTTPBasicAuth
+from datetime import datetime, timedelta
 import hashlib
 import base64
 from slugify import slugify
@@ -34,18 +37,17 @@ from botocore.config import Config
 import hmac
 from urllib.parse import urlparse
 
-# Загрузка переменных окружения
+
+# Настройкиi
 load_dotenv()
 
-# Конфигурация
+# Конфигурация с fallback значениями
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-for-dev")
 DB_URL = os.getenv("AUTH_DATABASE_URL")
 BEGET_S3_ENDPOINT = os.getenv("BEGET_S3_ENDPOINT", "")
 BEGET_S3_BUCKET_NAME = os.getenv("BEGET_S3_BUCKET_NAME", "")
 BEGET_S3_ACCESS_KEY = os.getenv("BEGET_S3_ACCESS_KEY", "")
 BEGET_S3_SECRET_KEY = os.getenv("BEGET_S3_SECRET_KEY", "")
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "4c9c5126cac8583846104eb7825d1ae4")
-CITY = os.getenv("CITY", "Ekaterinburg")
 
 # Инициализация приложения
 app = FastAPI()
@@ -60,11 +62,114 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+WEATHER_API_KEY ="4c9c5126cac8583846104eb7825d1ae4"
+CITY = "Ekaterinburg"
+
+PHOTO_TIPS: dict[str, dict[str, list[str]]] = {
+    "clear": {
+        "day": [
+            "Яркое солнце 🌞 - используйте бленду объектива и поляризационный фильтр для насыщенных цветов. ISO 100, f/8-f/11.",
+            "Резкие тени? Снимайте в режимное время или используйте отражатель. Выдержка 1/250-1/1000.",
+            "Контровой свет создаёт красивые блики. Попробуйте f/2.8 для боке. Золотой час в {sunset}!",
+            "Солнечно - идеально для пейзажей с глубокой резкостью. Диафрагма f/11-f/16, штатив обязателен.",
+            "Попробуйте ч/б фотографию - контраст теней будет выглядеть эффектно. ISO 200-400."
+        ],
+        "night": [
+            "Звёздное небо? Широкоугольник, f/2.8, выдержка 15-30 сек, ISO 1600-3200. Используйте штатив!",
+            "Луна освещает пейзаж? Попробуйте выдержку 1/125, f/5.6, ISO 400.",
+            "Городские огни ночью - f/8, выдержка 2-5 сек, низкий ISO для минимизации шумов.",
+            "Световая живопись! Установите камеру на штатив, выдержка 10-30 сек, рисуйте фонарём."
+        ]
+    },
+    "clouds": {
+        "day": [
+            "Мягкий свет ☁️ - идеально для портретов. f/2.8-f/5.6, выдержка 1/125-1/250. Попробуйте холодные тона.",
+            "Облака как гигантский софтбокс! Отлично для предметки. f/8-f/11, ISO 200-400.",
+            "Пасмурно - время для moody-фото. +1EV экспозиции, тёплый баланс белого.",
+            "Серая погода? Ищите яркие акценты - зонты, витрины, элементы одежды.",
+            "Рассеянный свет - снимите лесные пейзажи с детализацией в тенях. f/8, +0.7EV."
+        ],
+        "night": [
+            "Облачное небо ночью отражает городской свет - попробуйте длинную выдержку 5-10 сек.",
+            "Тёмные облака создают драматичный фон для ночной съёмки архитектуры."
+        ]
+    },
+    "rain": {
+        "day": [
+            "Дождь 🌧 - защитите технику! Используйте зонт или дождевик для камеры. f/5.6, выдержка 1/125.",
+            "Капли на стекле - прекрасный объект для макросъёмки. f/2.8, выдержка 1/250, ISO 400.",
+            "Мокрые улицы отражают свет - ищите интересные отражения. f/8, выдержка 1/60.",
+            "Дождь создаёт мягкий свет - отлично подходит для портретов с эмоциями.",
+            "Снимайте через окно с каплями дождя для художественного эффекта."
+        ],
+        "night": [
+            "Ночной дождь - используйте длинную выдержку 1-2 сек для съёмки световых полос от фонарей.",
+            "Мокрый асфальт отражает огни города - попробуйте низкий угол съёмки."
+        ]
+    },
+    "snow": {
+        "day": [
+            "Снег ❄️ - увеличьте экспозицию на +1EV для правильной передачи белого. f/8, ISO 200.",
+            "Снежинки крупным планом - используйте макрообъектив. f/2.8, выдержка 1/500.",
+            "Зимние пейзажи лучше снимать в голубой час. Штатив обязателен!",
+            "Снегопад - попробуйте выдержку 1/125-1/250 для заморозки движения снежинок.",
+            "Ищите контрасты: красные предметы на белом снегу смотрятся эффектно."
+        ],
+        "night": [
+            "Снег ночью отражает свет - можно снимать с более низким ISO. Попробуйте 30 сек выдержки.",
+            "Новогодние огни в снегу - установите баланс белого на 3000K для тёплых тонов."
+        ]
+    },
+    "fog": {
+        "day": [
+            "Туман 🌫 - используйте ручную фокусировку. f/5.6-f/8 для глубины.",
+            "Силуэты в тумане - экспонируйте по светлым участкам. Контрастность +20 в постобработке.",
+            "Туман смягчает фон - идеально для портретов с размытием.",
+            "Ищите одинокие объекты в тумане - деревья, фонари, здания.",
+            "Туман + лес = готовый кадр в стиле фэнтези. Попробуйте холодные тона."
+        ],
+        "night": [
+            "Туман ночью рассеивает свет - попробуйте снимать световые столбы от фонарей.",
+            "Город в тумане - установите баланс белого на 4000K для холодного настроения."
+        ]
+    },
+    "thunderstorm": {
+        "day": [
+            "Гроза ⚡ - будьте осторожны! Снимайте из укрытия. Длинная выдержка 10-30 сек для молний.",
+            "Драматичное небо перед грозой - используйте градиентный ND-фильтр.",
+            "После дождя - ищите отражения в лужах. f/8, выдержка 1/125."
+        ],
+        "night": [
+            "Ночная гроза - используйте пульт ДУ и штатив. Выдержка BULB для захвата молний.",
+            "Молнии на фоне города - фокус на бесконечность, ISO 400."
+        ]
+    }
+}
+
+CAMERA_SETTINGS_TIPS = {
+    "clear": "Совет: При ярком солнце используйте ND-фильтр для длинных выдержек",
+    "clouds": "Совет: При облачности можно увеличить ISO до 400-800 без сильных шумов",
+    "rain": "Совет: Используйте бленду для защиты линзы от капель дождя",
+    "snow": "Совет: Держите запасные батареи в тепле - на холоде они разряжаются быстрее",
+    "fog": "Совет: Используйте бленду для уменьшения бликов от влажного воздуха",
+    "thunderstorm": "Совет: Защитите камеру дождевым чехлом или полиэтиленовым пакетом",
+    "default": "Совет: Экспериментируйте с настройками и пробуйте новые ракурсы"
+}
+
+
+
 # Настройка логгирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Инициализация S3
+
+# Проверка доступности S3
+if not all([BEGET_S3_ENDPOINT, BEGET_S3_BUCKET_NAME, BEGET_S3_ACCESS_KEY, BEGET_S3_SECRET_KEY]):
+    logger.error("S3 credentials not configured")
+    raise HTTPException(500, "S3 storage not configured")
+
+
 s3 = boto3.client(
     's3',
     endpoint_url=BEGET_S3_ENDPOINT,
@@ -77,46 +182,48 @@ s3 = boto3.client(
     )
 )
 
-# Модели данных
+
+
+
+# Модели
+
+# Модель ответа API
+class Post(BaseModel):
+    id: int
+    latitude: float
+    altitude: float
+    likes_count: int
+    photo_url: str
+    camera_model: Optional[str] = None
+    camera_settings: Optional[dict] = None
+
 class CommentBase(BaseModel):
     content: str = Field(..., min_length=1, max_length=500)
 
 class CommentCreate(CommentBase):
     pass
 
-class CommentResponse(BaseModel):
+class Comment(CommentBase):
     id: int
     post_id: int
     user_id: int
     username: str
     avatar: str
-    content: str
     created_at: datetime
     updated_at: datetime
 
-class PostBase(BaseModel):
-    photo_url: str
-    description: Optional[str] = None
-    latitude: Optional[float] = None
-    altitude: Optional[float] = None
-    tags: Optional[str] = None
-
-class PostResponse(BaseModel):
-    id: int
-    photo_url: str
-    description: Optional[str] = None
-    created_at: datetime
-    likes_count: int
-    comments_count: int
-    username: str
-    user_avatar: str
-    is_liked: bool = False
-    latitude: Optional[float] = None
-    altitude: Optional[float] = None
+    class Config:
+        from_attributes = True
 
 class UserProfile(BaseModel):
     bio: str = Field(default="", max_length=500)
-    avatar: str = Field(default="/static/default_avatar.jpg")
+    avatar: str = Field(default="/default-avatar.jpg")
+
+    @field_validator('avatar')
+    def validate_avatar(cls, v):
+        if not v.startswith(('http://', 'https://', '/')):
+            raise ValueError("Avatar должен быть URL или начинаться с /")
+        return v
 
 class User(BaseModel):
     id: int
@@ -146,7 +253,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Подключение к БД
+# Подключение к БД (new)
 def get_db():
     conn = psycopg2.connect(
         dbname="auth_db_17at_90uu",
@@ -161,7 +268,8 @@ def get_db():
         yield conn
     finally:
         conn.close()
-
+        
+        
 # Вспомогательные функции
 def extract_exif_data(image_bytes: bytes) -> dict:
     try:
@@ -175,6 +283,7 @@ def extract_exif_data(image_bytes: bytes) -> dict:
             for tag, value in image._getexif().items()
         }
         
+        # Обработка GPS данных
         if 'GPSInfo' in exif_data:
             gps_info = {
                 GPSTAGS.get(tag, tag): value
@@ -182,6 +291,7 @@ def extract_exif_data(image_bytes: bytes) -> dict:
             }
             exif_data['GPSInfo'] = gps_info
 
+        # Форматирование полезных данных
         useful_data = {
             'camera_make': exif_data.get('Make', ''),
             'camera_model': exif_data.get('Model', ''),
@@ -200,9 +310,11 @@ def extract_exif_data(image_bytes: bytes) -> dict:
         logger.error(f"EXIF extraction error: {str(e)}")
         return {}
 
+
 def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     return jwt.encode({**data, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+
 
 async def get_user(db, username: str):
     with db.cursor() as cur:
@@ -230,21 +342,7 @@ async def get_current_user(db=Depends(get_db), token: str=Depends(oauth2_scheme)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-async def get_current_user_optional(
-    db=Depends(get_db),
-    token: Optional[str] = Depends(oauth2_scheme)
-):
-    if not token:
-        return None
-    
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user = await get_user(db, payload["sub"])
-        return user
-    except JWTError:
-        return None
-
-# Роуты авторизации
+# Роуты
 @app.post("/register", response_model=User)
 async def register(user: UserCreate, db=Depends(get_db)):
     with db.cursor() as cur:
@@ -261,7 +359,187 @@ async def register(user: UserCreate, db=Depends(get_db)):
         """, (user.email, user.username, hashed))
         new_user = cur.fetchone()
         db.commit()
-        return {**new_user, "profile": {"bio": "", "avatar": "/static/default_avatar.jpg"}}
+        return {**new_user, "profile": {"bio": "", "avatar": "/default-avatar.jpg"}}
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    for error in errors:
+        if error["type"] == "value_error.email":
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Некорректный формат email"},
+            )
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Ошибка валидации данных"},
+    )
+    
+@app.put("/users/{username}", response_model=User)
+async def update_user_profile(
+    username: str,
+    avatar: Optional[UploadFile] = File(None),
+    bio: str = Form(default=""),
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    if current_user["username"] != username:
+        raise HTTPException(403, "You can update only your own profile")
+    
+    avatar_url = current_user["avatar"]
+
+    if avatar:
+        try:
+            # Генерируем уникальное имя файла
+            file_ext = avatar.filename.split('.')[-1].lower()
+            file_name = f"avatars/{uuid.uuid4()}.{file_ext}"
+            
+            # Формируем URL для загрузки
+            url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+            
+            # Подготавливаем запрос к S3
+            file_content = await avatar.read()
+            now = datetime.utcnow()
+            timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+            
+            headers = {
+                'Content-Type': avatar.content_type,
+                'x-amz-date': timestamp,
+                'x-amz-acl': 'public-read',
+                'Content-Length': str(len(file_content))
+            }
+            
+            # Создаем подпись запроса
+            auth = AWS4Auth(
+                BEGET_S3_ACCESS_KEY,
+                BEGET_S3_SECRET_KEY,
+                'ru-1',
+                's3'
+            )
+            
+            # Отправляем файл напрямую в S3
+            response = requests.put(
+                url,
+                data=file_content,
+                headers=headers,
+                auth=auth
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(500, "Failed to upload avatar to S3")
+            
+            avatar_url = url
+            
+        except Exception as e:
+            logger.error(f"Avatar upload error: {str(e)}")
+            raise HTTPException(500, "Failed to upload avatar")
+
+    with db.cursor() as cur:
+        cur.execute("""
+            UPDATE users 
+            SET bio = %s, avatar_url = %s
+            WHERE username = %s
+            RETURNING id, username, email, bio, avatar_url
+        """, (bio, avatar_url, username))
+        updated_user = cur.fetchone()
+        db.commit()
+        
+        if not updated_user:
+            raise HTTPException(404, "User not found")
+        
+        return {
+            "id": updated_user["id"],
+            "username": updated_user["username"],
+            "email": updated_user["email"],
+            "profile": {
+                "bio": updated_user["bio"],
+                "avatar": updated_user["avatar_url"]
+            }
+        }
+        
+        
+        
+@app.get("/weather-message")
+async def get_weather_message():
+    weather_data = await fetch_weather()
+    if not weather_data:
+        return {"message": "Не удалось получить данные о погоде."}
+    
+    message = generate_photographer_message(weather_data)
+    return {
+        "message": message,
+        "weather_data": weather_data,
+        "camera_tip": get_camera_tip(weather_data)
+    }
+
+async def fetch_weather():
+    try:
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={WEATHER_API_KEY}&units=metric&lang=ru"
+        response = requests.get(url)
+        data = response.json()
+        
+        if response.status_code != 200:
+            print("Ошибка API погоды:", data.get("message", "Unknown error"))
+            return None
+        
+        return {
+            "temp": data["main"]["temp"],
+            "condition": data["weather"][0]["description"],
+            "sunset": datetime.fromtimestamp(data["sys"]["sunset"]).strftime("%H:%M"),
+            "sunrise": datetime.fromtimestamp(data["sys"]["sunrise"]).strftime("%H:%M"),
+            "humidity": data["main"]["humidity"],
+            "clouds": data["clouds"]["all"],
+            "wind": data["wind"]["speed"],
+            "time": datetime.now().strftime("%H:%M")
+        }
+    except Exception as e:
+        print("Ошибка при запросе погоды:", e)
+        return None
+
+def get_time_of_day(sunset: str, sunrise: str) -> str:
+    now = datetime.now().strftime("%H:%M")
+    return "night" if now > sunset or now < sunrise else "day"
+
+def get_weather_key(condition: str) -> str:
+    condition = condition.lower()
+    if "ясно" in condition or "clear" in condition:
+        return "clear"
+    elif "облачно" in condition or "clouds" in condition:
+        return "clouds"
+    elif "дождь" in condition or "rain" in condition:
+        return "rain"
+    elif "снег" in condition or "snow" in condition:
+        return "snow"
+    elif "туман" in condition or "fog" in condition:
+        return "fog"
+    elif "гроза" in condition or "thunderstorm" in condition:
+        return "thunderstorm"
+    return "default"
+
+def get_camera_tip(weather: dict) -> str:
+    weather_key = get_weather_key(weather["condition"])
+    return CAMERA_SETTINGS_TIPS.get(weather_key, CAMERA_SETTINGS_TIPS["default"])
+
+def generate_photographer_message(weather: dict) -> str:
+    weather_key = get_weather_key(weather["condition"])
+    time_of_day = get_time_of_day(weather["sunset"], weather["sunrise"])
+    
+    if weather_key not in PHOTO_TIPS or time_of_day not in PHOTO_TIPS[weather_key]:
+        weather_key = "default"
+        time_of_day = "day"
+    
+    tips = PHOTO_TIPS.get(weather_key, {}).get(time_of_day, 
+             PHOTO_TIPS["clear"]["day"])  # fallback
+    
+    chosen_tip = random.choice(tips)
+    return chosen_tip.format(
+        sunset=weather["sunset"],
+        sunrise=weather["sunrise"],
+        temp=weather["temp"]
+    )
+    
+    
+    
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_db)):
@@ -289,203 +567,7 @@ async def read_me(request: Request, user=Depends(get_current_user)):
         }
     }
 
-# Роуты постов
-@app.post("/posts")
-async def create_post(
-    photo: UploadFile = File(...),
-    description: str = Form(default=""),
-    altitude: str = Form(...),
-    latitude: str = Form(...),
-    tags: str = Form(default=""),
-    db=Depends(get_db),
-    current_user=Depends(get_current_user)
-):
-    if not photo.filename or not photo.content_type:
-        raise HTTPException(400, detail="Invalid file")
-
-    try:
-        # Загрузка фото в S3
-        file_ext = photo.filename.split('.')[-1].lower()
-        file_name = f"{uuid.uuid4()}.{file_ext}"
-        file_content = await photo.read()
-        
-        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-        
-        now = datetime.utcnow()
-        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
-        
-        headers = {
-            'Content-Type': photo.content_type,
-            'x-amz-date': timestamp,
-            'x-amz-acl': 'public-read',
-            'Content-Length': str(len(file_content))
-        }
-        
-        auth = AWS4Auth(
-            BEGET_S3_ACCESS_KEY,
-            BEGET_S3_SECRET_KEY,
-            'ru-1',
-            's3'
-        )
-        
-        response = requests.put(
-            url,
-            data=file_content,
-            headers=headers,
-            auth=auth
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
-            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
-
-        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
-
-        # Сохранение в БД
-        with db.cursor() as cur:
-            cur.execute("""
-                INSERT INTO posts (
-                    photo_url,
-                    description,
-                    user_id,
-                    created_at,
-                    likes_count,
-                    comments_count,
-                    tags,
-                    altitude,
-                    latitude
-                ) VALUES (
-                    %s, %s, %s, NOW(), 0, 0, %s, %s, %s
-                )
-                RETURNING id, created_at
-            """, (
-                photo_url,
-                description,
-                current_user["id"],
-                tags,
-                altitude,
-                latitude
-            ))
-            new_post = cur.fetchone()
-            db.commit()
-
-        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
-
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="File upload failed")
-
-@app.get("/tape/posts", response_model=list[PostResponse])
-async def get_tape_posts(
-    db=Depends(get_db),
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
-    try:
-        with db.cursor() as cur:
-            query = """
-                SELECT 
-                    p.id,
-                    p.photo_url,
-                    p.description,
-                    p.created_at,
-                    p.likes_count,
-                    p.comments_count,
-                    p.latitude,
-                    p.altitude,
-                    u.username,
-                    COALESCE(u.avatar_url, '/static/default_avatar.jpg') as user_avatar
-            """
-            
-            if current_user:
-                query += """,
-                    EXISTS(
-                        SELECT 1 FROM likes l 
-                        WHERE l.post_id = p.id AND l.user_id = %s
-                    ) as is_liked
-                """
-                params = (current_user["id"],)
-            else:
-                query += ", FALSE as is_liked"
-                params = ()
-            
-            query += """
-                FROM posts p
-                JOIN users u ON p.user_id = u.id
-                ORDER BY p.created_at DESC
-                LIMIT 20
-            """
-            
-            cur.execute(query, params)
-            posts = cur.fetchall()
-            
-            for post in posts:
-                if post['latitude'] is not None:
-                    post['latitude'] = float(post['latitude'])
-                if post['altitude'] is not None:
-                    post['altitude'] = float(post['altitude'])
-                post['is_liked'] = bool(post.get('is_liked', False))
-            
-            return posts
-            
-    except Exception as e:
-        logger.error(f"Error in get_tape_posts: {str(e)}", exc_info=True)
-        raise HTTPException(500, detail="Ошибка при загрузке ленты")
-
-@app.get("/posts/{post_id}", response_model=PostResponse)
-async def get_single_post(
-    post_id: int,
-    db=Depends(get_db),
-    current_user: Optional[dict] = Depends(get_current_user_optional)
-):
-    with db.cursor() as cur:
-        query = """
-            SELECT 
-                p.id,
-                p.photo_url,
-                p.description,
-                p.created_at,
-                p.likes_count,
-                p.comments_count,
-                p.latitude,
-                p.altitude,
-                u.username,
-                COALESCE(u.avatar_url, '/static/default_avatar.jpg') as user_avatar
-        """
-        
-        if current_user:
-            query += """,
-                EXISTS(
-                    SELECT 1 FROM likes l 
-                    WHERE l.post_id = p.id AND l.user_id = %s
-                ) as is_liked
-            """
-            params = (post_id, current_user["id"])
-        else:
-            query += ", FALSE as is_liked"
-            params = (post_id,)
-        
-        query += """
-            FROM posts p
-            JOIN users u ON p.user_id = u.id
-            WHERE p.id = %s
-        """
-        
-        cur.execute(query, params)
-        post = cur.fetchone()
-        
-        if not post:
-            raise HTTPException(404, "Post not found")
-        
-        if post['latitude'] is not None:
-            post['latitude'] = float(post['latitude'])
-        if post['altitude'] is not None:
-            post['altitude'] = float(post['altitude'])
-        post['is_liked'] = bool(post.get('is_liked', False))
-        
-        return post
-
-# Роуты комментариев
-@app.post("/posts/{post_id}/comments", response_model=CommentResponse)
+@app.post("/posts/{post_id}/comments", response_model=Comment)
 async def create_comment(
     post_id: int,
     comment: CommentCreate,
@@ -504,31 +586,31 @@ async def create_comment(
             VALUES (%s, %s, %s)
             RETURNING id, post_id, user_id, content, created_at, updated_at
         """, (post_id, current_user["id"], comment.content))
+        
         new_comment = cur.fetchone()
         
-        # Обновляем счетчик комментариев
+        # Обновляем счетчик комментариев в посте
         cur.execute("""
             UPDATE posts 
             SET comments_count = comments_count + 1 
             WHERE id = %s
         """, (post_id,))
         
-        # Получаем данные пользователя
-        cur.execute("""
-            SELECT username, COALESCE(avatar_url, '/static/default_avatar.jpg') as avatar
-            FROM users WHERE id = %s
-        """, (current_user["id"],))
-        user_data = cur.fetchone()
-        
         db.commit()
+        
+        # Получаем информацию о пользователе
+        cur.execute("""
+            SELECT username, avatar_url FROM users WHERE id = %s
+        """, (current_user["id"],))
+        user_info = cur.fetchone()
         
         return {
             **new_comment,
-            "username": user_data["username"],
-            "avatar": user_data["avatar"]
+            "username": user_info["username"],
+            "avatar": user_info["avatar_url"] or "/default-avatar.jpg"
         }
 
-@app.get("/posts/{post_id}/comments", response_model=list[CommentResponse])
+@app.get("/posts/{post_id}/comments", response_model=list[Comment])
 async def get_comments(
     post_id: int,
     skip: int = 0,
@@ -546,8 +628,8 @@ async def get_comments(
             SELECT 
                 c.id, c.post_id, c.user_id, c.content, 
                 c.created_at, c.updated_at,
-                u.username,
-                COALESCE(u.avatar_url, '/static/default_avatar.jpg') as avatar
+                u.username, 
+                COALESCE(u.avatar_url, '/default-avatar.jpg') as avatar
             FROM comments c
             JOIN users u ON c.user_id = u.id
             WHERE c.post_id = %s
@@ -562,7 +644,7 @@ async def delete_comment(
     comment_id: int,
     db=Depends(get_db),
     current_user=Depends(get_current_user)
-):
+    ):
     with db.cursor() as cur:
         # Проверяем существование комментария и права пользователя
         cur.execute("""
@@ -593,92 +675,485 @@ async def delete_comment(
             raise HTTPException(500, "Failed to delete comment")
         
         return {"status": "ok", "comment_id": comment_id}
+                
 
-# Роуты лайков
+
+
+
+@app.get("/points", response_model=list[Post])
+def get_points(limit: int = 10, tags: Optional[str] = None):
+    try:
+        conn = psycopg2.connect(
+            dbname="auth_db_17at_90uu",
+            user="auth_db_17at_user",
+            password="rOK6TE8lX6zIisiF2E2siOmbGPnpUGxI",
+            host="dpg-d0qvflje5dus739v4q50-a.oregon-postgres.render.com",
+            port="5432",
+            sslmode="require",
+            cursor_factory=RealDictCursor
+        )
+        
+        with conn.cursor() as cursor:
+            query = """
+                SELECT id, latitude, altitude, 
+                       likes_count, photo_url, tags
+                FROM posts 
+            """
+            
+            params = []
+            
+            # Добавляем фильтрацию по тегам если они указаны
+            if tags:
+                tag_list = [tag.strip() for tag in tags.split(',')]
+                query += "WHERE tags && %s "
+                params.append(tag_list)
+            
+            query += "ORDER BY likes_count DESC LIMIT %s"
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            posts = cursor.fetchall()
+        
+        conn.close()
+        
+        for post in posts:
+            post["latitude"] = float(post["latitude"])
+            post["altitude"] = float(post["altitude"])
+        
+        return posts
+    
+    except Exception as e:
+        raise HTTPException(500, detail=f"Ошибка базы данных: {str(e)}")
+    
+
+@app.get("/users/{username}", response_model=User)
+async def get_user_profile(username: str, request: Request, db=Depends(get_db)):
+    user = await get_user(db, username)
+    if not user:
+        raise HTTPException(404, "User not found")
+    
+    avatar = user["avatar"]
+    if avatar.startswith('/'):
+        avatar = str(request.base_url)[:-1] + avatar
+        
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "email": user["email"],
+        "profile": {
+            "bio": user["bio"],
+            "avatar": avatar
+        }
+    }
+
+logger = logging.getLogger(__name__)
+
+# проверка подключения к бакету s3
+@app.get("/check-bucket")
+async def check_bucket():
+    try:
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=BEGET_S3_ENDPOINT,
+            aws_access_key_id=BEGET_S3_ACCESS_KEY,
+            aws_secret_access_key=BEGET_S3_SECRET_KEY
+        )
+        s3_client.head_bucket(Bucket=BEGET_S3_BUCKET_NAME)
+        return {"status": "Bucket exists"}
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        return {"error": f"Bucket check failed: {error_code}"}
+
+@app.post("/posts")
+async def create_post(
+    photo: UploadFile = File(...),
+    description: str = Form(default=""),
+    altitude: str = Form(...),
+    latitude: str = Form(...),
+    tags: str = Form(default=""),
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    if not photo.filename or not photo.content_type:
+        raise HTTPException(400, detail="Invalid file")
+
+    try:
+        # Генерация имени файла и загрузка в S3
+        file_ext = photo.filename.split('.')[-1].lower()
+        file_name = f"{uuid.uuid4()}.{file_ext}"
+        file_content = await photo.read()
+        
+        # Формируем URL для загрузки
+        url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+        
+        # Подготовка заголовков
+        now = datetime.utcnow()
+        timestamp = now.strftime('%Y%m%dT%H%M%SZ')
+        
+        headers = {
+            'Content-Type': photo.content_type,
+            'x-amz-date': timestamp,
+            'x-amz-acl': 'public-read',
+            'Content-Length': str(len(file_content))
+        }
+        
+        # Создаем подпись запроса
+        auth = AWS4Auth(
+            BEGET_S3_ACCESS_KEY,
+            BEGET_S3_SECRET_KEY,
+            'ru-1',
+            's3'
+        )
+        
+        # Отправляем запрос
+        response = requests.put(
+            url,
+            data=file_content,
+            headers=headers,
+            auth=auth
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"S3 upload failed: {response.status_code} - {response.text}")
+            raise HTTPException(500, detail=f"S3 upload failed: {response.text}")
+
+        photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
+
+        # Сохраняем в базу данных
+        with db.cursor() as cur:
+            cur.execute("""
+                INSERT INTO posts (
+                    photo_url,
+                    shooting_time,
+                    description,
+                    user_id,
+                    created_at,
+                    likes_count,
+                    comments_count,
+                    tags,
+                    altitude,
+                    latitude,
+                    camera_settings
+                ) VALUES (
+                    %s,  -- photo_url
+                    %s,  -- shooting_time
+                    %s,  -- description
+                    %s,  -- user_id
+                    NOW(),  -- created_at
+                    %s,  -- likes_count
+                    %s,  -- comments_count
+                    %s,  -- tags
+                    %s,  -- altitude
+                    %s,  -- latitude
+                    %s   -- camera_settings
+                )
+                RETURNING id, created_at
+            """, (
+                photo_url,
+                datetime.now().strftime('%H:%M'),
+                description,
+                current_user["id"],
+                0,  # likes_count
+                0,  # comments_count
+                tags,  # tags
+                altitude,
+                latitude,
+                "{}"  # camera_settings
+            ))
+            new_post = cur.fetchone()
+            db.commit()
+
+        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
+
+    except Exception as e:
+        logger.error(f"Upload error: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="File upload failed")
+
+@app.get("/profile/{username}")
+async def profile_page(username: str, db=Depends(get_db)):
+    # Проверяем существование пользователя
+    user = await get_user(db, username)
+    if not user:
+        raise HTTPException(status_code=404)
+    return FileResponse("static/profile.html")
+
+@app.get("/tape", response_class=HTMLResponse)
+async def tape(request: Request):
+    return templates.TemplateResponse("tape.html", {"request": request})
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/users/{username}/posts")
+async def get_user_posts(
+    username: str,
+    skip: int = 0,
+    limit: int = 10,
+    db=Depends(get_db)
+):
+    with db.cursor() as cur:
+        # Проверяем существование пользователя
+        cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        if not user:
+            raise HTTPException(404, "User not found")
+        
+        # Получаем количество постов пользователя
+        cur.execute("SELECT COUNT(*) FROM posts WHERE user_id = %s", (user["id"],))
+        total_posts = cur.fetchone()["count"]
+        
+        # Получаем посты пользователя
+        cur.execute("""
+            SELECT p.*, u.username, u.avatar_url as user_avatar
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.user_id = %s
+            ORDER BY p.created_at DESC
+            LIMIT %s OFFSET %s
+        """, (user["id"], limit, skip))
+        posts = cur.fetchall()
+        
+        return {
+            "posts": posts,
+            "total": total_posts,
+            "skip": skip,
+            "limit": limit
+        }
+
+@app.delete("/posts/{post_id}")
+async def delete_post(
+    post_id: int,
+    db=Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    with db.cursor() as cur:
+        # Проверяем, что пост существует и принадлежит пользователю
+        cur.execute("""
+            SELECT id, user_id, photo_url FROM posts WHERE id = %s
+        """, (post_id,))
+        post = cur.fetchone()
+        
+        if not post:
+            raise HTTPException(404, "Post not found")
+        
+        if post["user_id"] != current_user["id"]:
+            raise HTTPException(403, "You can delete only your own posts")
+        
+        # Удаляем файл из S3
+        try:
+            if post["photo_url"].startswith(os.getenv("BEGET_S3_ENDPOINT")):
+                file_name = post["photo_url"].split('/')[-1]
+                s3.delete_object(
+                    Bucket=os.getenv("BEGET_S3_BUCKET_NAME"),
+                    Key=file_name
+                )
+        except Exception as e:
+            logger.error(f"Error deleting file from S3: {str(e)}")
+        
+        # Удаляем пост из БД
+        cur.execute("DELETE FROM posts WHERE id = %s RETURNING id", (post_id,))
+        deleted_post = cur.fetchone()
+        db.commit()
+        
+        if not deleted_post:
+            raise HTTPException(500, "Failed to delete post")
+        
+        return {"status": "ok", "post_id": post_id}
+
+@app.get("/posts/{post_id}/{optional_slug}")
+async def get_post(
+    post_id: int,
+    optional_slug: Optional[str] = None,
+    db=Depends(get_db)
+):
+    with db.cursor() as cur:
+        cur.execute("""
+            SELECT p.*, u.username, u.avatar_url as user_avatar
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.id = %s
+        """, (post_id,))
+        post = cur.fetchone()
+        if not post:
+            raise HTTPException(404, "Post not found")
+
+        # Редирект на URL с slug, если его нет
+        if not optional_slug:
+            slug = slugify(post["description"]) if post["description"] else f"post-{post_id}"
+            return RedirectResponse(f"/posts/{post_id}/{slug}")
+
+        return post
+
+# Эндпоинт для лайка поста
 @app.post("/posts/{post_id}/like")
 async def like_post(
     post_id: int,
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    with db.cursor() as cur:
-        # Проверяем существование поста
-        cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
-        if not cur.fetchone():
-            raise HTTPException(404, "Post not found")
-        
-        # Проверяем, не лайкал ли уже пользователь
-        cur.execute("""
-            SELECT id FROM likes 
-            WHERE user_id = %s AND post_id = %s
-        """, (current_user["id"], post_id))
-        
-        if cur.fetchone():
-            raise HTTPException(400, "You already liked this post")
-        
-        # Добавляем лайк
-        cur.execute("""
-            INSERT INTO likes (user_id, post_id)
-            VALUES (%s, %s)
-        """, (current_user["id"], post_id))
-        
-        # Обновляем счетчик лайков
-        cur.execute("""
-            UPDATE posts 
-            SET likes_count = likes_count + 1 
-            WHERE id = %s
-            RETURNING likes_count
-        """, (post_id,))
-        
-        updated_count = cur.fetchone()["likes_count"]
-        db.commit()
-        
-        return {"status": "success", "likes_count": updated_count}
+    try:
+        with db.cursor() as cur:
+            # Проверяем, существует ли пост
+            cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Post not found")
+            
+            # Проверяем, не лайкал ли уже пользователь
+            cur.execute("""
+                SELECT id FROM likes 
+                WHERE user_id = %s AND post_id = %s
+            """, (current_user["id"], post_id))
+            
+            if cur.fetchone():
+                raise HTTPException(400, "You already liked this post")
+            
+            # Добавляем лайк
+            cur.execute("""
+                INSERT INTO likes (user_id, post_id)
+                VALUES (%s, %s)
+            """, (current_user["id"], post_id))
+            
+            # Обновляем счетчик лайков
+            cur.execute("""
+                UPDATE posts 
+                SET likes_count = likes_count + 1 
+                WHERE id = %s
+                RETURNING likes_count
+            """, (post_id,))
+            
+            updated_count = cur.fetchone()["likes_count"]
+            db.commit()
+            
+            return {"status": "success", "likes_count": updated_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, detail=f"Database error: {str(e)}")
 
+# Эндпоинт для удаления лайка
 @app.post("/posts/{post_id}/unlike")
 async def unlike_post(
     post_id: int,
     db=Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    try:
+        with db.cursor() as cur:
+            # Проверяем, существует ли пост
+            cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Post not found")
+            
+            # Удаляем лайк
+            cur.execute("""
+                DELETE FROM likes 
+                WHERE user_id = %s AND post_id = %s
+                RETURNING id
+            """, (current_user["id"], post_id))
+            
+            if not cur.fetchone():
+                raise HTTPException(400, "You haven't liked this post yet")
+            
+            # Обновляем счетчик лайков
+            cur.execute("""
+                UPDATE posts 
+                SET likes_count = likes_count - 1 
+                WHERE id = %s
+                RETURNING likes_count
+            """, (post_id,))
+            
+            updated_count = cur.fetchone()["likes_count"]
+            db.commit()
+            
+            return {"status": "success", "likes_count": updated_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, detail=f"Database error: {str(e)}")
+
+# Эндпоинт для получения ленты постов
+@app.get("/tape/posts")
+async def get_tape_posts(db=Depends(get_db)):
+    try:
+        with db.cursor() as cur:
+            # Базовый запрос для всех пользователей (авторизованных и нет)
+            cur.execute("""
+                SELECT 
+                    p.id,
+                    p.photo_url,
+                    p.description,
+                    p.created_at,
+                    p.likes_count,
+                    p.comments_count,
+                    p.latitude,
+                    p.altitude,
+                    u.username,
+                    u.avatar_url as user_avatar,
+                    FALSE as is_liked
+                FROM posts p
+                JOIN users u ON p.user_id = u.id
+                ORDER BY p.created_at DESC
+                LIMIT 20
+            """)
+            
+            posts = cur.fetchall()
+            
+            # Преобразование типов данных
+            for post in posts:
+                post['latitude'] = float(post.get('latitude', 0))
+                post['altitude'] = float(post.get('altitude', 0))
+                post['is_liked'] = bool(post.get('is_liked', False))
+            
+            return posts
+            
+    except Exception as e:
+        logger.error(f"Error in get_tape_posts: {str(e)}", exc_info=True)
+        raise HTTPException(500, detail="Ошибка при загрузке ленты")
+
+@app.get("/post/{post_id}")
+async def get_single_post_page(request: Request, post_id: int, db=Depends(get_db)):
+    # Проверяем существование поста
     with db.cursor() as cur:
-        # Проверяем существование поста
-        cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
-        if not cur.fetchone():
-            raise HTTPException(404, "Post not found")
-        
-        # Удаляем лайк
         cur.execute("""
-            DELETE FROM likes 
-            WHERE user_id = %s AND post_id = %s
-            RETURNING id
-        """, (current_user["id"], post_id))
-        
-        if not cur.fetchone():
-            raise HTTPException(400, "You haven't liked this post yet")
-        
-        # Обновляем счетчик лайков
-        cur.execute("""
-            UPDATE posts 
-            SET likes_count = likes_count - 1 
-            WHERE id = %s
-            RETURNING likes_count
+            SELECT p.*, u.username, u.avatar_url as user_avatar
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.id = %s
         """, (post_id,))
+        post = cur.fetchone()
         
-        updated_count = cur.fetchone()["likes_count"]
-        db.commit()
-        
-        return {"status": "success", "likes_count": updated_count}
+        if not post:
+            raise HTTPException(404, "Post not found")
+    
+    return templates.TemplateResponse("post.html", {
+        "request": request,
+        "post": post
+    })
 
-# Остальные роуты
-@app.get("/")
-async def root():
-    return {"status": "ok"}
 
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
+@app.get("/check-s3")
+async def check_s3():
+    try:
+        # Пробуем просто получить список бакетов
+        response = s3.list_buckets()
+        return {
+            "status": "success",
+            "buckets": [b['Name'] for b in response['Buckets']],
+            "bucket_exists": BEGET_S3_BUCKET_NAME in [b['Name'] for b in response['Buckets']]
+        }
+    except Exception as e:
+        logger.error(f"S3 connection error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "details": {
+                "endpoint": BEGET_S3_ENDPOINT,
+                "bucket": BEGET_S3_BUCKET_NAME,
+                "region": "ru-1"
+            }
+        }
+    
 
+#исключение ошибок
 @app.exception_handler(500)
 async def internal_server_error_handler(request: Request, exc: Exception):
     return PlainTextResponse("Internal Server Error", status_code=500)
@@ -687,8 +1162,15 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 async def not_found_handler(request: Request, exc: Exception):
     return FileResponse("static/404.html", status_code=404)
 
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-    #sdsds
