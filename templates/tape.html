@@ -1388,117 +1388,173 @@
                         }
                     });
                 });
-               // ==================== ФУНКЦИИ КОММЕНТАРИЕВ ====================
-
-                // 1. Загрузка и отображение комментариев
-                async function loadAndDisplayComments(postId) {
-                    const container = document.querySelector(`.comments-container[data-post-id="${postId}"]`);
-                    if (!container) return;
-
-                    try {
-                        // Показываем загрузку
-                        container.innerHTML = '<div class="loading-comments">Загрузка комментариев...</div>';
-
-                        // Запрашиваем комментарии с бэкенда
-                        const response = await fetch(`${API_URL}/posts/${postId}/comments?limit=5`);
-                        if (!response.ok) throw new Error('Ошибка загрузки');
+                // Обработчик клика на кнопку комментариев
+                document.addEventListener('click', async function(e) {
+                    if (e.target.closest('.action-button') && e.target.closest('.action-button').querySelector('.fa-comment')) {
+                        const postId = e.target.closest('.post').dataset.postId;
+                        const commentsContainer = e.target.closest('.post').querySelector('.comments-container');
                         
-                        const comments = await response.json();
-
-                        // Формируем HTML
-                        let html = '';
-                        if (comments.length === 0) {
-                            html = '<p class="no-comments">Пока нет комментариев</p>';
-                        } else {
-                            html = comments.map(comment => `
-                                <div class="comment">
-                                    <div class="comment-avatar">${comment.username?.charAt(0)?.toUpperCase() || 'U'}</div>
-                                    <div class="comment-content">
-                                        <div class="comment-header">
-                                            <span class="comment-username">${comment.username}</span>
-                                            <span class="comment-time">${new Date(comment.created_at).toLocaleString()}</span>
+                        if (commentsContainer) {
+                            // Переключаем видимость комментариев
+                            commentsContainer.style.display = commentsContainer.style.display === 'block' ? 'none' : 'block';
+                            
+                            // Если комментарии скрыты, ничего не делаем
+                            if (commentsContainer.style.display !== 'block') return;
+                            
+                            // Если комментарии уже загружены, ничего не делаем
+                            if (commentsContainer.dataset.loaded === 'true') return;
+                            
+                            // Загружаем комментарии
+                            try {
+                                commentsContainer.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Загрузка комментариев...</div>';
+                                
+                                const response = await fetch(`${API_URL}/posts/${postId}/comments?limit=5`);
+                                if (!response.ok) throw new Error('Ошибка загрузки комментариев');
+                                
+                                const comments = await response.json();
+                                
+                                let commentsHTML = '';
+                                
+                                if (comments.length === 0) {
+                                    commentsHTML = '<p style="text-align: center; color: var(--text-light);">Пока нет комментариев</p>';
+                                } else {
+                                    comments.forEach(comment => {
+                                        const commentDate = new Date(comment.created_at).toLocaleString('ru-RU');
+                                        commentsHTML += `
+                                            <div class="comment">
+                                                <div class="comment-avatar">${comment.username?.charAt(0)?.toUpperCase() || 'U'}</div>
+                                                <div class="comment-content">
+                                                    <div class="comment-header">
+                                                        <div class="comment-username">${comment.username || 'Аноним'}</div>
+                                                        <div class="comment-time">${commentDate}</div>
+                                                    </div>
+                                                    <div class="comment-text">${comment.content}</div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    });
+                                }
+                                
+                                // Добавляем форму для нового комментария, если пользователь авторизован
+                                if (currentUser) {
+                                    commentsHTML += `
+                                        <div class="add-comment">
+                                            <textarea placeholder="Напишите комментарий..." id="comment-text-${postId}"></textarea>
+                                            <button onclick="addCommentHandler(${postId})">Отправить</button>
                                         </div>
-                                        <p class="comment-text">${comment.content}</p>
+                                    `;
+                                }
+                                
+                                commentsContainer.innerHTML = commentsHTML;
+                                commentsContainer.dataset.loaded = 'true';
+                                
+                            } catch (error) {
+                                console.error('Ошибка загрузки комментариев:', error);
+                                commentsContainer.innerHTML = `
+                                    <div style="text-align: center; color: var(--text-light); padding: 20px;">
+                                        Не удалось загрузить комментарии
+                                        <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                            Попробовать снова
+                                        </button>
                                     </div>
-                                </div>
-                            `).join('');
+                                `;
+                            }
+                        } else {
+                            // Создаем контейнер для комментариев, если его нет
+                            const postElement = e.target.closest('.post');
+                            postElement.insertAdjacentHTML('beforeend', `
+                                <div class="comments-container" data-post-id="${postId}"></div>
+                            `);
+                            
+                            // Имитируем клик, чтобы открыть и загрузить комментарии
+                            e.target.closest('.action-button').click();
                         }
+                    }
+                });
 
-                        // Добавляем форму (только для авторизованных)
-                        if (currentUser) {
-                            html += `
-                                <div class="add-comment">
-                                    <textarea 
-                                        id="comment-input-${postId}" 
-                                        placeholder="Напишите комментарий..."
-                                        rows="3"></textarea>
-                                    <button class="send-comment-btn" data-post-id="${postId}">
-                                        <i class="fas fa-paper-plane"></i> Отправить
-                                    </button>
-                                </div>
-                            `;
+                                // Функция для добавления комментария
+                async function addCommentHandler(postId) {
+                    if (!currentUser) {
+                        showModal(profileModal);
+                        alert('Для комментирования необходимо войти в систему');
+                        return;
+                    }
+                    
+                    const textarea = document.querySelector(`#comment-text-${postId}`);
+                    if (!textarea) {
+                        console.error('Textarea not found for postId:', postId);
+                        return;
+                    }
+                    
+                    const content = textarea.value.trim();
+                    if (!content) {
+                        alert('Комментарий не может быть пустым');
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch(`${API_URL}/posts/${postId}/comments`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                            },
+                            body: JSON.stringify({ content })
+                        });
+                        
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.detail || 'Ошибка при отправке комментария');
                         }
-
-                        container.innerHTML = html;
-
+                        
+                        // Очищаем поле и обновляем комментарии
+                        textarea.value = '';
+                        await loadAndDisplayComments(postId);
+                        
                     } catch (error) {
-                        container.innerHTML = '<p class="error">Ошибка загрузки комментариев</p>';
-                        console.error(error);
+                        console.error('Ошибка при добавлении комментария:', error);
+                        alert(error.message || 'Не удалось добавить комментарий');
                     }
                 }
 
-                // 2. Обработчик отправки комментария
-                document.addEventListener('click', async (e) => {
-                    if (e.target.closest('.send-comment-btn')) {
-                        const postId = e.target.dataset.postId;
-                        const textarea = document.querySelector(`#comment-input-${postId}`);
+                async function loadAndDisplayComments(postId) {
+                    const commentsContainer = document.querySelector(`.comments-container[data-post-id="${postId}"]`);
+                    if (!commentsContainer) return;
+                    
+                    try {
+                        commentsContainer.innerHTML = '<div class="loading">Загрузка...</div>';
+                        const response = await fetch(`${API_URL}/posts/${postId}/comments?limit=5`);
+                        const comments = await response.json();
                         
-                        if (!textarea || !textarea.value.trim()) {
-                            alert('Комментарий не может быть пустым');
-                            return;
+                        let commentsHTML = comments.map(comment => `
+                            <div class="comment">
+                                <div class="comment-avatar">${comment.username?.charAt(0)?.toUpperCase() || 'U'}</div>
+                                <div class="comment-content">
+                                    <div class="comment-header">
+                                        <div class="comment-username">${comment.username || 'Аноним'}</div>
+                                        <div class="comment-time">${new Date(comment.created_at).toLocaleString()}</div>
+                                    </div>
+                                    <div class="comment-text">${comment.content}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        if (currentUser) {
+                            commentsHTML += `
+                                <div class="add-comment">
+                                    <textarea id="comment-text-${postId}" placeholder="Напишите комментарий..."></textarea>
+                                    <button>Отправить</button>
+                                </div>
+                            `;
                         }
-
-                        try {
-                            const response = await fetch(`${API_URL}/posts/${postId}/comments`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                                },
-                                body: JSON.stringify({ content: textarea.value.trim() })
-                            });
-
-                            if (!response.ok) throw new Error('Ошибка отправки');
-
-                            // Очищаем поле и обновляем список
-                            textarea.value = '';
-                            await loadAndDisplayComments(postId);
-
-                        } catch (error) {
-                            alert(error.message || 'Ошибка!');
-                            console.error(error);
-                        }
+                        
+                        commentsContainer.innerHTML = commentsHTML || '<p>Нет комментариев</p>';
+                        
+                    } catch (error) {
+                        commentsContainer.innerHTML = '<p>Ошибка загрузки комментариев</p>';
+                        console.error(error);
                     }
-                });
-
-                // 3. Обработчик открытия/закрытия комментариев
-                document.addEventListener('click', async (e) => {
-                    if (e.target.closest('.action-button .fa-comment')) {
-                        const postId = e.target.closest('.post').dataset.postId;
-                        const container = document.querySelector(`.comments-container[data-post-id="${postId}"]`);
-
-                        if (container) {
-                            // Переключаем видимость
-                            container.style.display = container.style.display === 'block' ? 'none' : 'block';
-                            
-                            // Загружаем комментарии при первом открытии
-                            if (container.style.display === 'block' && !container.dataset.loaded) {
-                                await loadAndDisplayComments(postId);
-                                container.dataset.loaded = 'true';
-                            }
-                        }
-                    }
-                });
+                }
     
                 // Обработчики для изображений
                 document.querySelectorAll('.post-image').forEach(img => {
