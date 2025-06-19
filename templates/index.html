@@ -441,6 +441,9 @@
             <i class="fas fa-stream"></i> Лента
         </button>
     </form>
+    <button id="routes-button" class="control-button" style="left: 220px;">
+        <i class="fas fa-route"></i> Маршруты
+    </button>
     
     <button id="filters-button" class="control-button">
         <i class="fas fa-filter"></i> Фильтры
@@ -1240,6 +1243,10 @@
         // Инициализация при загрузке страницы
         document.addEventListener('DOMContentLoaded', () => {
             loadPosts();
+        });
+
+        document.getElementById('routes-button').addEventListener('click', () => {
+            window.location.href = '/routes';
         });
     </script>
 </body>

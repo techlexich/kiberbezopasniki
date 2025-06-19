@@ -539,7 +539,78 @@ def generate_photographer_message(weather: dict) -> str:
     )
     
     
-    
+# Модели для маршрутов
+class RoutePoint(BaseModel):
+    id: int
+    title: str
+    description: str
+    photo_url: str
+    latitude: float
+    longitude: float
+    order: int
+
+class PhotoRoute(BaseModel):
+    id: int
+    name: str
+    description: str
+    points: list[RoutePoint]
+
+# Эндпоинты API
+@app.get("/api/routes", response_model=list[PhotoRoute])
+async def get_routes(db=Depends(get_db)):
+    with db.cursor() as cur:
+        # Получаем список маршрутов
+        cur.execute("""
+            SELECT id, name, description 
+            FROM photo_routes 
+            WHERE is_active = TRUE
+            ORDER BY name
+        """)
+        routes = cur.fetchall()
+        
+        # Для каждого маршрута получаем точки
+        for route in routes:
+            cur.execute("""
+                SELECT id, title, description, photo_url, 
+                       latitude, longitude, point_order
+                FROM route_points
+                WHERE route_id = %s
+                ORDER BY point_order
+            """, (route["id"],))
+            route["points"] = cur.fetchall()
+        
+        return routes
+
+@app.get("/routes", response_class=HTMLResponse)
+async def routes_page(request: Request):
+    return templates.TemplateResponse("routes.html", {"request": request})
+
+@app.get("/api/routes/{route_id}", response_model=PhotoRoute)
+async def get_route(route_id: int, db=Depends(get_db)):
+    with db.cursor() as cur:
+        # Получаем маршрут
+        cur.execute("""
+            SELECT id, name, description 
+            FROM photo_routes 
+            WHERE id = %s AND is_active = TRUE
+        """, (route_id,))
+        route = cur.fetchone()
+        
+        if not route:
+            raise HTTPException(404, "Route not found")
+        
+        # Получаем точки маршрута
+        cur.execute("""
+            SELECT id, title, description, photo_url, 
+                   latitude, longitude, point_order
+            FROM route_points
+            WHERE route_id = %s
+            ORDER BY point_order
+        """, (route_id,))
+        route["points"] = cur.fetchall()
+        
+        return route
+
 
 @app.post("/token", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm=Depends(), db=Depends(get_db)):

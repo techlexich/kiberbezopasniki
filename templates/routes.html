@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Фотомаршруты</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #map {
+            flex: 1;
+            width: 100%;
+            height: 70vh;
+        }
+        
+        .route-controls {
+            padding: 15px;
+            background: white;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .route-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        select, button {
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        button {
+            background-color: #4361ee;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .route-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .photo-point {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .photo-point img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="route-controls">
+        <div class="route-selector">
+            <select id="route-select">
+                <option value="">Выберите маршрут</option>
+                <!-- Маршруты будут загружаться динамически -->
+            </select>
+            <button id="start-route">Начать маршрут</button>
+        </div>
+        
+        <div class="route-info" id="route-info" style="display: none;">
+            <h3 id="route-title"></h3>
+            <div id="route-description"></div>
+            <div id="route-points"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script>
+        // Инициализация карты
+        const map = L.map('map').setView([56.835184, 60.609573], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        // Переменные для маршрута
+        let currentRoute = null;
+        let routeControl = null;
+        let userMarker = null;
+        let watchId = null;
+        
+        // Загрузка маршрутов с сервера
+        async function loadRoutes() {
+            try {
+                const response = await fetch('/api/routes');
+                const routes = await response.json();
+                
+                const select = document.getElementById('route-select');
+                routes.forEach(route => {
+                    const option = document.createElement('option');
+                    option.value = route.id;
+                    option.textContent = route.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки маршрутов:', error);
+            }
+        }
+        
+        // Отображение информации о маршруте
+        function showRouteInfo(route) {
+            document.getElementById('route-info').style.display = 'block';
+            document.getElementById('route-title').textContent = route.name;
+            document.getElementById('route-description').textContent = route.description;
+            
+            const pointsContainer = document.getElementById('route-points');
+            pointsContainer.innerHTML = '';
+            
+            route.points.forEach(point => {
+                const pointElement = document.createElement('div');
+                pointElement.className = 'photo-point';
+                pointElement.innerHTML = `
+                    <img src="${point.photo_url}" alt="${point.description}">
+                    <div>
+                        <strong>${point.title || 'Точка съемки'}</strong>
+                        <p>${point.description || ''}</p>
+                    </div>
+                `;
+                pointsContainer.appendChild(pointElement);
+            });
+        }
+        
+        // Построение маршрута
+        function buildRoute(route) {
+            // Очищаем предыдущий маршрут
+            if (routeControl) {
+                map.removeControl(routeControl);
+            }
+            
+            // Создаем массив точек маршрута
+            const waypoints = route.points.map(point => L.latLng(point.latitude, point.longitude));
+            
+            // Добавляем маркеры для точек
+            route.points.forEach(point => {
+                L.marker([point.latitude, point.longitude])
+                    .addTo(map)
+                    .bindPopup(`
+                        <img src="${point.photo_url}" style="max-width: 200px; height: auto;">
+                        <h4>${point.title || 'Точка съемки'}</h4>
+                        <p>${point.description || ''}</p>
+                    `);
+            });
+            
+            // Создаем маршрутизатор
+            routeControl = L.Routing.control({
+                waypoints: waypoints,
+                routeWhileDragging: true,
+                showAlternatives: false,
+                addWaypoints: false,
+                draggableWaypoints: false,
+                fitSelectedRoutes: true,
+                lineOptions: {
+                    styles: [{color: '#4361ee', opacity: 0.7, weight: 5}]
+                }
+            }).addTo(map);
+            
+            // Центрируем карту на маршруте
+            const bounds = L.latLngBounds(waypoints);
+            map.fitBounds(bounds, {padding: [50, 50]});
+        }
+        
+        // Отслеживание местоположения пользователя
+        function startTracking() {
+            if (watchId) return;
+            
+            if (!userMarker) {
+                userMarker = L.circleMarker([0, 0], {
+                    radius: 8,
+                    fillColor: "#4361ee",
+                    color: "#fff",
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map);
+            }
+            
+            watchId = navigator.geolocation.watchPosition(
+                position => {
+                    const { latitude, longitude } = position.coords;
+                    userMarker.setLatLng([latitude, longitude]);
+                    
+                    // Обновляем первую точку маршрута (текущее положение)
+                    if (routeControl) {
+                        const waypoints = routeControl.getWaypoints();
+                        if (waypoints.length > 0) {
+                            waypoints[0].latLng = L.latLng(latitude, longitude);
+                            routeControl.setWaypoints(waypoints);
+                        }
+                    }
+                },
+                error => {
+                    console.error('Ошибка геолокации:', error);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+        
+        // Остановка отслеживания
+        function stopTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+        }
+        
+        // Обработчики событий
+        document.getElementById('start-route').addEventListener('click', async () => {
+            const routeId = document.getElementById('route-select').value;
+            if (!routeId) return;
+            
+            try {
+                const response = await fetch(`/api/routes/${routeId}`);
+                const route = await response.json();
+                
+                showRouteInfo(route);
+                buildRoute(route);
+                startTracking();
+                
+            } catch (error) {
+                console.error('Ошибка загрузки маршрута:', error);
+            }
+        });
+        
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRoutes();
+            
+            // Проверяем доступность геолокации
+            if (!navigator.geolocation) {
+                alert('Ваш браузер не поддерживает геолокацию');
+            }
+        });
+    </script>
+</body>
+</html>
