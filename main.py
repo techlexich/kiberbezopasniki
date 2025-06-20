@@ -890,6 +890,23 @@ async def create_post(
 
         photo_url = f"{BEGET_S3_ENDPOINT}/{BEGET_S3_BUCKET_NAME}/{file_name}"
 
+        # Преобразуем строку тегов в массив PostgreSQL
+        tag_array = []
+        if tags:
+            tag_array = [tag.strip() for tag in tags.split(',') if tag.strip()]
+
+        # Извлекаем EXIF данные
+        exif_data = extract_exif_data(file_content)
+        camera_settings = {
+            'model': exif_data.get('camera_model', ''),
+            'settings': {
+                'exposure': exif_data.get('exposure_time', ''),
+                'aperture': exif_data.get('f_number', ''),
+                'iso': exif_data.get('iso', ''),
+                'focal_length': exif_data.get('focal_length', '')
+            }
+        }
+
         # Сохраняем в базу данных
         with db.cursor() as cur:
             cur.execute("""
@@ -913,10 +930,10 @@ async def create_post(
                     NOW(),  -- created_at
                     %s,  -- likes_count
                     %s,  -- comments_count
-                    %s,  -- tags
+                    %s,  -- tags (массив)
                     %s,  -- altitude
                     %s,  -- latitude
-                    %s   -- camera_settings
+                    %s   -- camera_settings (JSON)
                 )
                 RETURNING id, created_at
             """, (
@@ -926,15 +943,20 @@ async def create_post(
                 current_user["id"],
                 0,  # likes_count
                 0,  # comments_count
-                tags,  # tags
+                tag_array,  # tags как массив
                 altitude,
                 latitude,
-                "{}"  # camera_settings
+                json.dumps(camera_settings)  # camera_settings как JSON
             ))
             new_post = cur.fetchone()
             db.commit()
 
-        return {"status": "success", "url": photo_url, "post_id": new_post["id"]}
+        return {
+            "status": "success", 
+            "url": photo_url, 
+            "post_id": new_post["id"],
+            "camera_data": camera_settings
+        }
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}", exc_info=True)
